@@ -101,18 +101,21 @@ Don't show information that matches the query (see below)
 
 Queries allows you to select which projects are interesting. The supported formats are:
 
-### Project query: `<root name>:<project name>` or `<project name>` or `<project simple name>`
+### Project query: `<project name>` or `<project simple name>`
 You can use `*` inside there to avoid some typing.
 
-### Any dependency query: `<project 1 query> -> <project 2query>`
+### Root query: `root:<root name>`
+You can use `*` inside there to avoid some typing.
+
+### Any dependency query: `<project 1 query> -> <project 2 query>`
 Shows any dependency chain that links project 1 to project 2
 
-### Max steps dependency query: `<project 1 query> -N-> <project 2query>`
+### Max steps dependency query: `<project 1 query> -N-> <project 2 query>`
 `N` is a number.
 
 Shows any dependency chain that links project 1 to project 2, with at most N hops.
 
-### Invert query: `not:<query>`
+### Invert query: `!<query>`
 Inverts the matching.
 
 ### Multiple matches required: `<query> & <query>`
