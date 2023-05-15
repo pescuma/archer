@@ -8,10 +8,10 @@ import (
 )
 
 type Workspace struct {
-	storage *Storage
+	storage Storage
 }
 
-func NewWorkspace(root string) (*Workspace, error) {
+func NewWorkspace(factory StorageFactory, root string) (*Workspace, error) {
 	if root == "" {
 		if _, err := os.Stat("./.archer"); err == nil {
 			root = "./.archer"
@@ -33,7 +33,7 @@ func NewWorkspace(root string) (*Workspace, error) {
 		}
 	}
 
-	storage, err := NewStorage(root)
+	storage, err := factory(root)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func (w *Workspace) SetConfigParameter(proj *Project, config string, value strin
 	changed := proj.SetConfig(config, value)
 
 	if changed {
-		err := w.storage.WriteConfigFile(proj)
+		err := w.storage.WriteConfig(proj)
 		if err != nil {
 			return false, err
 		}

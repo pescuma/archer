@@ -22,7 +22,7 @@ type Project struct {
 	size         map[string]Size
 	config       map[string]string
 
-	dataDir string
+	DataDir string
 }
 
 func NewProject(root, name string) *Project {

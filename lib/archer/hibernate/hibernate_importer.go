@@ -23,7 +23,7 @@ import (
 type hibernateImporter struct {
 	rootDirs []string
 	globs    []string
-	storage  *archer.Storage
+	storage  archer.Storage
 	rootName string
 }
 
@@ -35,7 +35,7 @@ func NewImporter(rootDirs, globs []string, rootName string) archer.Importer {
 	}
 }
 
-func (h *hibernateImporter) Import(projs *archer.Projects, storage *archer.Storage) error {
+func (h *hibernateImporter) Import(projs *archer.Projects, storage archer.Storage) error {
 	h.storage = storage
 
 	roots, err := h.computeRootDirs(projs)
@@ -215,19 +215,19 @@ func (h *hibernateImporter) Import(projs *archer.Projects, storage *archer.Stora
 	common.CreateTableNameParts(lo.Values(dbProjs))
 
 	for _, proj := range dbProjs {
-		err = storage.WriteBasicInfoFile(proj)
+		err = storage.WriteBasicInfo(proj)
 		if err != nil {
 			return err
 		}
 
-		err = storage.WriteDepsFile(proj)
+		err = storage.WriteDeps(proj)
 		if err != nil {
 			return err
 		}
 	}
 
 	for _, proj := range parentProjs {
-		err = storage.WriteDepsFile(proj)
+		err = storage.WriteDeps(proj)
 		if err != nil {
 			return err
 		}

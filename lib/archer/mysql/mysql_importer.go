@@ -15,7 +15,7 @@ import (
 
 type mysqlImporter struct {
 	connectionString string
-	storage          *archer.Storage
+	storage          archer.Storage
 }
 
 func NewImporter(connectionString string) archer.Importer {
@@ -24,7 +24,7 @@ func NewImporter(connectionString string) archer.Importer {
 	}
 }
 
-func (m *mysqlImporter) Import(projs *archer.Projects, storage *archer.Storage) error {
+func (m *mysqlImporter) Import(projs *archer.Projects, storage archer.Storage) error {
 	m.storage = storage
 
 	db, err := sql.Open("mysql", m.connectionString)
@@ -105,12 +105,12 @@ func (m *mysqlImporter) importTables(db *sql.DB, projs *archer.Projects) error {
 	common.CreateTableNameParts(changedProjs)
 
 	for _, proj := range changedProjs {
-		err = m.storage.WriteBasicInfoFile(proj)
+		err = m.storage.WriteBasicInfo(proj)
 		if err != nil {
 			return err
 		}
 
-		err = m.storage.WriteSizeFile(proj)
+		err = m.storage.WriteSize(proj)
 		if err != nil {
 			return err
 		}
@@ -164,7 +164,7 @@ func (m *mysqlImporter) importFKs(db *sql.DB, projs *archer.Projects) error {
 	for k := range toSave {
 		proj := projs.Get(k.root, k.name)
 
-		err = m.storage.WriteDepsFile(proj)
+		err = m.storage.WriteDeps(proj)
 		if err != nil {
 			return err
 		}

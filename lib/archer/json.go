@@ -64,7 +64,7 @@ func BasicInfoFromJson(result *Projects, content string, fileName string) error 
 	proj.RootDir = jps.RootDir
 	proj.Dir = jps.Dir
 	proj.ProjectFile = jps.ProjectFile
-	proj.dataDir = filepath.Dir(fileName)
+	proj.DataDir = filepath.Dir(fileName)
 
 	return nil
 }

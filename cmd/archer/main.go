@@ -4,6 +4,7 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/Faire/archer/lib/archer"
+	"github.com/Faire/archer/lib/archer/storage"
 )
 
 var cli struct {
@@ -30,7 +31,7 @@ type context struct {
 func main() {
 	ctx := kong.Parse(&cli, kong.ShortUsageOnError())
 
-	workspace, err := archer.NewWorkspace(cli.Workspace)
+	workspace, err := archer.NewWorkspace(storage.NewFilesStorage, cli.Workspace)
 	ctx.FatalIfErrorf(err)
 
 	err = ctx.Run(&context{

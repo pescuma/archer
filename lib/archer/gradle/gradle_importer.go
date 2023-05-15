@@ -18,7 +18,7 @@ import (
 
 type gradleImporter struct {
 	rootDir string
-	storage *archer.Storage
+	storage archer.Storage
 }
 
 func NewImporter(rootDir string) archer.Importer {
@@ -27,7 +27,7 @@ func NewImporter(rootDir string) archer.Importer {
 	}
 }
 
-func (g *gradleImporter) Import(projs *archer.Projects, storage *archer.Storage) error {
+func (g *gradleImporter) Import(projs *archer.Projects, storage archer.Storage) error {
 	g.storage = storage
 
 	fmt.Printf("Listing projects...\n")
@@ -88,7 +88,7 @@ func (g *gradleImporter) Import(projs *archer.Projects, storage *archer.Storage)
 			}
 		}
 
-		err = g.storage.WriteDepsFile(proj)
+		err = g.storage.WriteDeps(proj)
 		if err != nil {
 			return err
 		}
@@ -120,12 +120,7 @@ func (g *gradleImporter) importProjectNames() ([]string, error) {
 		return nil, err
 	}
 
-	fileName, err := g.storage.GetProjNamesFileName(g.rootDir)
-	if err != nil {
-		return nil, err
-	}
-
-	err = g.storage.WriteProjNamesFile(fileName, projNames[0], projNames)
+	err = g.storage.WriteProjNames(projNames[0], projNames)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +151,7 @@ func (g *gradleImporter) importBasicInfo(projs *archer.Projects, projName string
 		proj.Dir = ""
 	}
 
-	err = g.storage.WriteBasicInfoFile(proj)
+	err = g.storage.WriteBasicInfo(proj)
 	if err != nil {
 		return false, err
 	}
@@ -293,7 +288,7 @@ func (g *gradleImporter) importSize(projs *archer.Projects, rootProj, projName s
 		proj.AddSize(e.Name(), *size)
 	}
 
-	err = g.storage.WriteSizeFile(proj)
+	err = g.storage.WriteSize(proj)
 	if err != nil {
 		return false, err
 	}
