@@ -18,20 +18,18 @@ type Project struct {
 	Dir         string
 	ProjectFile string
 
-	dependencies map[string]*Dependency
-	size         map[string]Size
-	config       map[string]string
-
-	DataDir string
+	Dependencies map[string]*Dependency
+	Size         map[string]Size
+	Data         map[string]string
 }
 
 func NewProject(root, name string) *Project {
 	return &Project{
 		Root:         root,
 		Name:         name,
-		dependencies: map[string]*Dependency{},
-		size:         map[string]Size{},
-		config:       map[string]string{},
+		Dependencies: map[string]*Dependency{},
+		Size:         map[string]Size{},
+		Data:         map[string]string{},
 	}
 }
 
@@ -43,16 +41,16 @@ func (p *Project) AddDependency(d *Project) *Dependency {
 	result := &Dependency{
 		Source: p,
 		Target: d,
-		config: map[string]string{},
+		Data:   map[string]string{},
 	}
 
-	p.dependencies[d.Name] = result
+	p.Dependencies[d.Name] = result
 
 	return result
 }
 
 func (p *Project) AddSize(name string, size Size) {
-	p.size[name] = size
+	p.Size[name] = size
 }
 
 func (p *Project) GetSize() Size {
@@ -60,7 +58,7 @@ func (p *Project) GetSize() Size {
 		Other: map[string]int{},
 	}
 
-	for _, v := range p.size {
+	for _, v := range p.Size {
 		result.Add(v)
 	}
 
@@ -68,7 +66,7 @@ func (p *Project) GetSize() Size {
 }
 
 func (p *Project) GetSizeOf(name string) Size {
-	result, ok := p.size[name]
+	result, ok := p.Size[name]
 
 	if !ok {
 		result = Size{
@@ -117,7 +115,7 @@ func simplifyPrefixes(parts []string) []string {
 }
 
 func (p *Project) IsIgnored() bool {
-	return utils.IsTrue(p.GetConfig("ignore"))
+	return utils.IsTrue(p.GetData("ignore"))
 }
 
 func (p *Project) IsCode() bool {
@@ -129,9 +127,9 @@ func (p *Project) IsExternalDependency() bool {
 }
 
 func (p *Project) ListDependencies(filter FilterType) []*Dependency {
-	result := make([]*Dependency, 0, len(p.dependencies))
+	result := make([]*Dependency, 0, len(p.Dependencies))
 
-	for _, v := range p.dependencies {
+	for _, v := range p.Dependencies {
 		if filter == FilterExcludeExternal && v.Target.IsExternalDependency() {
 			continue
 		}
@@ -166,51 +164,51 @@ func sortDependencies(result []*Dependency) {
 	})
 }
 
-func (p *Project) SetConfig(config string, value string) bool {
-	if p.GetConfig(config) == value {
+func (p *Project) SetData(name string, value string) bool {
+	if p.GetData(name) == value {
 		return false
 	}
 
 	if value == "" {
-		delete(p.config, config)
+		delete(p.Data, name)
 	} else {
-		p.config[config] = value
+		p.Data[name] = value
 	}
 
 	return true
 }
 
-func (p *Project) GetConfig(config string) string {
-	v, _ := p.config[config]
+func (p *Project) GetData(name string) string {
+	v, _ := p.Data[name]
 	return v
 }
 
 type Dependency struct {
 	Source *Project
 	Target *Project
-	config map[string]string
+	Data   map[string]string
 }
 
 func (d *Dependency) String() string {
 	return fmt.Sprintf("%v -> %v", d.Source, d.Target)
 }
 
-func (d *Dependency) SetConfig(config string, value string) bool {
-	if d.GetConfig(config) == value {
+func (d *Dependency) SetData(name string, value string) bool {
+	if d.GetData(name) == value {
 		return false
 	}
 
 	if value == "" {
-		delete(d.config, config)
+		delete(d.Data, name)
 	} else {
-		d.config[config] = value
+		d.Data[name] = value
 	}
 
 	return true
 }
 
-func (d *Dependency) GetConfig(config string) string {
-	v, _ := d.config[config]
+func (d *Dependency) GetData(name string) string {
+	v, _ := d.Data[name]
 	return v
 }
 

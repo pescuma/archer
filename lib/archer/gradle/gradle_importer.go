@@ -79,12 +79,12 @@ func (g *gradleImporter) Import(projs *archer.Projects, storage archer.Storage) 
 
 		for _, d := range proj.ListDependencies(archer.FilterAll) {
 			if d.Source.IsCode() && strings.HasSuffix(d.Source.Name, "-api") {
-				d.SetConfig("source", strings.TrimSuffix(d.Source.Name, "-api"))
+				d.SetData("source", strings.TrimSuffix(d.Source.Name, "-api"))
 			}
 			if d.Target.IsCode() && strings.HasSuffix(d.Target.Name, "-api") {
-				d.SetConfig("target", strings.TrimSuffix(d.Target.Name, "-api"))
-				d.SetConfig("type", "api")
-				d.SetConfig("style", "dashed")
+				d.SetData("target", strings.TrimSuffix(d.Target.Name, "-api"))
+				d.SetData("type", "api")
+				d.SetData("style", "dashed")
 			}
 		}
 
@@ -271,21 +271,21 @@ func (g *gradleImporter) importSize(projs *archer.Projects, rootProj, projName s
 		return false, nil
 	}
 
-	es, err := os.ReadDir(proj.Dir)
+	dirs, err := os.ReadDir(proj.Dir)
 	if err != nil {
 		return false, err
 	}
-	for _, e := range es {
-		if !e.IsDir() {
+	for _, dir := range dirs {
+		if !dir.IsDir() {
 			continue
 		}
 
-		size, err := g.computeCLOC(filepath.Join(proj.Dir, e.Name()))
+		size, err := g.computeCLOC(filepath.Join(proj.Dir, dir.Name()))
 		if err != nil {
 			return false, err
 		}
 
-		proj.AddSize(e.Name(), *size)
+		proj.AddSize(dir.Name(), *size)
 	}
 
 	err = g.storage.WriteSize(proj)

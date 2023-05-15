@@ -128,7 +128,7 @@ func (h *hibernateImporter) Import(projs *archer.Projects, storage archer.Storag
 	}()
 
 	classes := map[string]*classInfo{}
-	var errors []string
+	var es []string
 	for w := range group.Output {
 		for k, nv := range w.classes {
 			ov, ok := classes[k]
@@ -143,14 +143,14 @@ func (h *hibernateImporter) Import(projs *archer.Projects, storage archer.Storag
 			}
 		}
 
-		errors = append(errors, w.errors...)
+		es = append(es, w.errors...)
 	}
 
 	if err = <-group.Err; err != nil {
 		return err
 	}
 
-	for _, e := range errors {
+	for _, e := range es {
 		fmt.Printf("ERROR: %v\n", e)
 	}
 
@@ -206,8 +206,8 @@ func (h *hibernateImporter) Import(projs *archer.Projects, storage archer.Storag
 			d := proj.AddDependency(dp)
 
 			if di.Lazy {
-				d.SetConfig("type", "lazy")
-				d.SetConfig("style", "dashed")
+				d.SetData("type", "lazy")
+				d.SetData("style", "dashed")
 			}
 		}
 	}
@@ -293,7 +293,7 @@ func (h *hibernateImporter) computeRootDirs(projs *archer.Projects) ([]rootInfo,
 func (h *hibernateImporter) processKotlin(fileContents string, fileName string, root rootInfo) (map[string]*classInfo, []string, error) {
 	l := newTreeListener(fileName, root)
 
-	l.Printfln("Parsing %v ...", fileName)
+	l.printfln("Parsing %v ...", fileName)
 	l.IncreasePrefix()
 	defer func() {
 		l.DecreasePrefix()
@@ -347,7 +347,7 @@ type dependencyInfo struct {
 }
 
 var tableRE = regexp.MustCompile(`name\s*=\s*"([^'"]+)"`)
-var genericContainterRE = regexp.MustCompile(`Of<([^>]+)>\(`)
+var genericContainerRE = regexp.MustCompile(`Of<([^>]+)>\(`)
 
 func newTreeListener(path string, root rootInfo) *treeListener {
 	return &treeListener{
@@ -357,7 +357,7 @@ func newTreeListener(path string, root rootInfo) *treeListener {
 	}
 }
 
-func (l *treeListener) Printfln(format string, a ...any) {
+func (l *treeListener) printfln(format string, a ...any) {
 	l.sb.WriteString(fmt.Sprintf(l.prefix+format+"\n", a...))
 }
 
@@ -378,7 +378,7 @@ func (l *treeListener) EnterClassDeclaration(ctx *kotlin_parser.ClassDeclaration
 	l.currentClassName = append(l.currentClassName, name)
 	l.currentClass = append(l.currentClass, nil)
 
-	l.Printfln("found class %v", name)
+	l.printfln("found class %v", name)
 	l.IncreasePrefix()
 }
 
@@ -426,7 +426,7 @@ func (l *treeListener) ExitPropertyDeclaration(ctx *kotlin_parser.PropertyDeclar
 	if l.currentVariableType == "" {
 		if ctx.Expression() != nil {
 			exp := ctx.Expression().GetText()
-			ms := genericContainterRE.FindStringSubmatch(exp)
+			ms := genericContainerRE.FindStringSubmatch(exp)
 			if ms != nil {
 				l.currentVariableType = ms[1]
 			}
@@ -437,11 +437,11 @@ func (l *treeListener) ExitPropertyDeclaration(ctx *kotlin_parser.PropertyDeclar
 
 	varDecl := ctx.VariableDeclaration()
 
-	l.Printfln("found field %v", varDecl.GetText())
+	l.printfln("found field %v", varDecl.GetText())
 	l.IncreasePrefix()
 
 	if l.currentVariableType == "" {
-		l.Printfln("could not find type of field")
+		l.printfln("could not find type of field")
 		l.Errors = append(l.Errors, fmt.Sprintf("Could not find type of field %v %v %v",
 			l.currentPath, utils.Last(l.currentClassName), varDecl.GetText()))
 
@@ -480,7 +480,7 @@ func (l *treeListener) EnterUnescapedAnnotation(ctx *kotlin_parser.UnescapedAnno
 }
 
 func (l *treeListener) addTable(tableName string) {
-	l.Printfln("adding table: %v", tableName)
+	l.printfln("adding table: %v", tableName)
 
 	cls := l.getClass(utils.Last(l.currentClassName))
 	cls.Root = append(cls.Root, l.root)
@@ -491,7 +491,7 @@ func (l *treeListener) addTable(tableName string) {
 }
 
 func (l *treeListener) addDependency(dependencyTypeName string, lazy bool) {
-	l.Printfln("adding dep: %v%v", dependencyTypeName, utils.IIf(lazy, " (lazy)", ""))
+	l.printfln("adding dep: %v%v", dependencyTypeName, utils.IIf(lazy, " (lazy)", ""))
 
 	cls := utils.Last(l.currentClass)
 	cls.Dependencies = append(cls.Dependencies, &dependencyInfo{

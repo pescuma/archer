@@ -1,7 +1,6 @@
 package archer
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/Faire/archer/lib/archer/utils"
@@ -14,23 +13,15 @@ type Workspace struct {
 func NewWorkspace(factory StorageFactory, root string) (*Workspace, error) {
 	if root == "" {
 		if _, err := os.Stat("./.archer"); err == nil {
-			root = "./.archer"
+			root = "./.archer/"
 		} else {
-			root = "~/.archer"
+			root = "~/.archer/"
 		}
 	}
 
 	root, err := utils.PathAbs(root)
 	if err != nil {
 		return nil, err
-	}
-
-	if _, err := os.Stat(root); err != nil {
-		fmt.Printf("Creating workspace at %v\n", root)
-		err := os.MkdirAll(root, 0o700)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	storage, err := factory(root)
@@ -66,7 +57,7 @@ func (w *Workspace) Import(importer Importer) error {
 }
 
 func (w *Workspace) SetConfigParameter(proj *Project, config string, value string) (bool, error) {
-	changed := proj.SetConfig(config, value)
+	changed := proj.SetData(config, value)
 
 	if changed {
 		err := w.storage.WriteConfig(proj)

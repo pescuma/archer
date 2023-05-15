@@ -130,7 +130,7 @@ func (c *GraphCmd) generateDot(projects *archer.Projects, filter archer.Filter) 
 			for _, dg := range pg.children {
 				e := newEdge(pg.fullName, dg.fullName)
 				e.attribs["color"] = colors[dg.fullName]
-				e.attribs["style"] = dg.dep.GetConfig("style")
+				e.attribs["style"] = dg.dep.GetData("style")
 
 				o.addLineDistinct(e)
 			}
@@ -233,7 +233,7 @@ func (c *GraphCmd) computeColors(ps []*archer.Project, getProjectName func(p *ar
 	for _, p := range ps {
 		pn := p.Root + ":" + getProjectName(p)
 
-		color := p.GetConfig("color")
+		color := p.GetData("color")
 		if color != "" {
 			colors[pn] = color
 

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -17,17 +18,25 @@ const (
 	configJson    = "config.json"
 )
 
-type FilesStorage struct {
+type jsonStorage struct {
 	root string
 }
 
-func NewFilesStorage(root string) (archer.Storage, error) {
-	return &FilesStorage{
+func NewJsonStorage(root string) (archer.Storage, error) {
+	if _, err := os.Stat(root); err != nil {
+		fmt.Printf("Creating workspace at %v\n", root)
+		err := os.MkdirAll(root, 0o700)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &jsonStorage{
 		root: root,
 	}, nil
 }
 
-func (s *FilesStorage) LoadProjects(result *archer.Projects) error {
+func (s *jsonStorage) LoadProjects(result *archer.Projects) error {
 	return filepath.WalkDir(s.root, func(path string, d fs.DirEntry, err error) error {
 		switch d.Name() {
 		case basicInfoJson:
@@ -59,7 +68,7 @@ func (s *FilesStorage) LoadProjects(result *archer.Projects) error {
 	})
 }
 
-func (s *FilesStorage) getProjNamesFileName(root string) (string, error) {
+func (s *jsonStorage) getProjNamesFileName(root string) (string, error) {
 	return filepath.Abs(filepath.Join(
 		s.root,
 		strings.ReplaceAll(root, ":", "_"),
@@ -67,7 +76,7 @@ func (s *FilesStorage) getProjNamesFileName(root string) (string, error) {
 	))
 }
 
-func (s *FilesStorage) WriteProjNames(projRoot string, projNames []string) error {
+func (s *jsonStorage) WriteProjNames(projRoot string, projNames []string) error {
 	fileName, err := s.getProjNamesFileName(s.root)
 	if err != nil {
 		return err
@@ -78,7 +87,7 @@ func (s *FilesStorage) WriteProjNames(projRoot string, projNames []string) error
 		return err
 	}
 
-	content, err := archer.ProjNamesToJson(projRoot, projNames)
+	content, err := ProjNamesToJson(projRoot, projNames)
 	if err != nil {
 		return err
 	}
@@ -91,7 +100,7 @@ func (s *FilesStorage) WriteProjNames(projRoot string, projNames []string) error
 	return nil
 }
 
-func (s *FilesStorage) ReadProjNames() ([]string, error) {
+func (s *jsonStorage) ReadProjNames() ([]string, error) {
 	fileName, err := s.getProjNamesFileName(s.root)
 	if err != nil {
 		return nil, err
@@ -102,7 +111,7 @@ func (s *FilesStorage) ReadProjNames() ([]string, error) {
 		return nil, err
 	}
 
-	_, result, err := archer.ProjNamesFromJson(string(contents))
+	_, result, err := ProjNamesFromJson(string(contents))
 	if err != nil {
 		return nil, err
 	}
@@ -110,31 +119,29 @@ func (s *FilesStorage) ReadProjNames() ([]string, error) {
 	return result, nil
 }
 
-func (s *FilesStorage) computeDataDir(proj *archer.Project) error {
+func (s *jsonStorage) computeDataDir(proj *archer.Project) (string, error) {
 	dir, err := filepath.Abs(filepath.Join(
 		s.root,
 		proj.Root,
 		strings.TrimLeft(strings.ReplaceAll(proj.Name, ":", string(os.PathSeparator)), string(os.PathSeparator)),
 	))
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	proj.DataDir = dir
-
-	return nil
+	return dir, nil
 }
 
-func (s *FilesStorage) getDepsFileName(proj *archer.Project) (string, error) {
-	err := s.computeDataDir(proj)
+func (s *jsonStorage) getDepsFileName(proj *archer.Project) (string, error) {
+	dataDir, err := s.computeDataDir(proj)
 	if err != nil {
 		return "", err
 	}
 
-	return filepath.Join(proj.DataDir, depsJson), nil
+	return filepath.Join(dataDir, depsJson), nil
 }
 
-func (s *FilesStorage) WriteDeps(proj *archer.Project) error {
+func (s *jsonStorage) WriteDeps(proj *archer.Project) error {
 	fileName, err := s.getDepsFileName(proj)
 	if err != nil {
 		return err
@@ -145,7 +152,7 @@ func (s *FilesStorage) WriteDeps(proj *archer.Project) error {
 		return err
 	}
 
-	jc, err := archer.DepsToJson(proj)
+	jc, err := DepsToJson(proj)
 	if err != nil {
 		return err
 	}
@@ -158,13 +165,13 @@ func (s *FilesStorage) WriteDeps(proj *archer.Project) error {
 	return nil
 }
 
-func (s *FilesStorage) ReadDeps(result *archer.Projects, fileName string) error {
+func (s *jsonStorage) ReadDeps(result *archer.Projects, fileName string) error {
 	contents, err := os.ReadFile(fileName)
 	if err != nil {
 		return err
 	}
 
-	err = archer.DepsFromJson(result, string(contents))
+	err = DepsFromJson(result, string(contents))
 	if err != nil {
 		return err
 	}
@@ -172,16 +179,16 @@ func (s *FilesStorage) ReadDeps(result *archer.Projects, fileName string) error 
 	return nil
 }
 
-func (s *FilesStorage) getSizeFileName(proj *archer.Project) (string, error) {
-	err := s.computeDataDir(proj)
+func (s *jsonStorage) getSizeFileName(proj *archer.Project) (string, error) {
+	dataDir, err := s.computeDataDir(proj)
 	if err != nil {
 		return "", err
 	}
 
-	return filepath.Join(proj.DataDir, sizeJson), nil
+	return filepath.Join(dataDir, sizeJson), nil
 }
 
-func (s *FilesStorage) WriteSize(proj *archer.Project) error {
+func (s *jsonStorage) WriteSize(proj *archer.Project) error {
 	fileName, err := s.getSizeFileName(proj)
 	if err != nil {
 		return err
@@ -192,7 +199,7 @@ func (s *FilesStorage) WriteSize(proj *archer.Project) error {
 		return err
 	}
 
-	jc, err := archer.SizeToJson(proj)
+	jc, err := SizeToJson(proj)
 	if err != nil {
 		return err
 	}
@@ -205,13 +212,13 @@ func (s *FilesStorage) WriteSize(proj *archer.Project) error {
 	return nil
 }
 
-func (s *FilesStorage) ReadSize(result *archer.Projects, fileName string) error {
+func (s *jsonStorage) ReadSize(result *archer.Projects, fileName string) error {
 	contents, err := os.ReadFile(fileName)
 	if err != nil {
 		return err
 	}
 
-	err = archer.SizeFromJson(result, string(contents))
+	err = SizeFromJson(result, string(contents))
 	if err != nil {
 		return err
 	}
@@ -219,16 +226,16 @@ func (s *FilesStorage) ReadSize(result *archer.Projects, fileName string) error 
 	return nil
 }
 
-func (s *FilesStorage) getBasicInfoFileName(proj *archer.Project) (string, error) {
-	err := s.computeDataDir(proj)
+func (s *jsonStorage) getBasicInfoFileName(proj *archer.Project) (string, error) {
+	dataDir, err := s.computeDataDir(proj)
 	if err != nil {
 		return "", err
 	}
 
-	return filepath.Join(proj.DataDir, basicInfoJson), nil
+	return filepath.Join(dataDir, basicInfoJson), nil
 }
 
-func (s *FilesStorage) WriteBasicInfo(proj *archer.Project) error {
+func (s *jsonStorage) WriteBasicInfo(proj *archer.Project) error {
 	fileName, err := s.getBasicInfoFileName(proj)
 	if err != nil {
 		return err
@@ -239,7 +246,7 @@ func (s *FilesStorage) WriteBasicInfo(proj *archer.Project) error {
 		return err
 	}
 
-	jc, err := archer.BasicInfoToJson(proj)
+	jc, err := BasicInfoToJson(proj)
 	if err != nil {
 		return err
 	}
@@ -252,13 +259,13 @@ func (s *FilesStorage) WriteBasicInfo(proj *archer.Project) error {
 	return nil
 }
 
-func (s *FilesStorage) ReadBasicInfo(result *archer.Projects, fileName string) error {
+func (s *jsonStorage) ReadBasicInfo(result *archer.Projects, fileName string) error {
 	contents, err := os.ReadFile(fileName)
 	if err != nil {
 		return err
 	}
 
-	err = archer.BasicInfoFromJson(result, string(contents), fileName)
+	err = BasicInfoFromJson(result, string(contents))
 	if err != nil {
 		return err
 	}
@@ -266,16 +273,16 @@ func (s *FilesStorage) ReadBasicInfo(result *archer.Projects, fileName string) e
 	return nil
 }
 
-func (s *FilesStorage) getConfigFileName(proj *archer.Project) (string, error) {
-	err := s.computeDataDir(proj)
+func (s *jsonStorage) getConfigFileName(proj *archer.Project) (string, error) {
+	dataDir, err := s.computeDataDir(proj)
 	if err != nil {
 		return "", err
 	}
 
-	return filepath.Join(proj.DataDir, configJson), nil
+	return filepath.Join(dataDir, configJson), nil
 }
 
-func (s *FilesStorage) WriteConfig(proj *archer.Project) error {
+func (s *jsonStorage) WriteConfig(proj *archer.Project) error {
 	fileName, err := s.getConfigFileName(proj)
 	if err != nil {
 		return err
@@ -286,7 +293,7 @@ func (s *FilesStorage) WriteConfig(proj *archer.Project) error {
 		return err
 	}
 
-	jc, err := archer.ConfigToJson(proj)
+	jc, err := ConfigToJson(proj)
 	if err != nil {
 		return err
 	}
@@ -299,13 +306,13 @@ func (s *FilesStorage) WriteConfig(proj *archer.Project) error {
 	return nil
 }
 
-func (s *FilesStorage) ReadConfig(result *archer.Projects, fileName string) error {
+func (s *jsonStorage) ReadConfig(result *archer.Projects, fileName string) error {
 	contents, err := os.ReadFile(fileName)
 	if err != nil {
 		return err
 	}
 
-	err = archer.ConfigFromJson(result, string(contents))
+	err = ConfigFromJson(result, string(contents))
 	if err != nil {
 		return err
 	}
