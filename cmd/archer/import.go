@@ -4,6 +4,7 @@ import (
 	"github.com/Faire/archer/lib/archer/gradle"
 	"github.com/Faire/archer/lib/archer/hibernate"
 	"github.com/Faire/archer/lib/archer/mysql"
+	"github.com/Faire/archer/lib/archer/size"
 )
 
 type ImportGradleCmd struct {
@@ -34,6 +35,16 @@ type ImportMySqlCmd struct {
 
 func (c *ImportMySqlCmd) Run(ctx *context) error {
 	g := mysql.NewImporter(c.ConnectionString)
+
+	return ctx.ws.Import(g)
+}
+
+type ImportSizeCmd struct {
+	Filters []string `default:"" help:"Filters to be applied to the projects. Empty means all."`
+}
+
+func (c *ImportSizeCmd) Run(ctx *context) error {
+	g := size.NewImporter(c.Filters)
 
 	return ctx.ws.Import(g)
 }

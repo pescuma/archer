@@ -16,6 +16,7 @@ const (
 	sizeJson      = "size.json"
 	basicInfoJson = "proj.json"
 	configJson    = "config.json"
+	filesJson     = "files.json"
 )
 
 type jsonStorage struct {
@@ -45,12 +46,6 @@ func (s *jsonStorage) LoadProjects(result *archer.Projects) error {
 				return err
 			}
 
-		case configJson:
-			err = s.ReadConfig(result, path)
-			if err != nil {
-				return err
-			}
-
 		case depsJson:
 			err = s.ReadDeps(result, path)
 			if err != nil {
@@ -58,7 +53,19 @@ func (s *jsonStorage) LoadProjects(result *archer.Projects) error {
 			}
 
 		case sizeJson:
-			err := s.ReadSize(result, path)
+			err = s.ReadSize(result, path)
+			if err != nil {
+				return err
+			}
+
+		case filesJson:
+			err = s.ReadFiles(result, path)
+			if err != nil {
+				return err
+			}
+
+		case configJson:
+			err = s.ReadConfig(result, path)
 			if err != nil {
 				return err
 			}
@@ -77,7 +84,7 @@ func (s *jsonStorage) getProjNamesFileName(root string) (string, error) {
 }
 
 func (s *jsonStorage) WriteProjNames(projRoot string, projNames []string) error {
-	fileName, err := s.getProjNamesFileName(s.root)
+	fileName, err := s.getProjNamesFileName(projRoot)
 	if err != nil {
 		return err
 	}
@@ -266,6 +273,53 @@ func (s *jsonStorage) ReadBasicInfo(result *archer.Projects, fileName string) er
 	}
 
 	err = BasicInfoFromJson(result, string(contents))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *jsonStorage) getFilesFileName(proj *archer.Project) (string, error) {
+	dataDir, err := s.computeDataDir(proj)
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(dataDir, filesJson), nil
+}
+
+func (s *jsonStorage) WriteFiles(proj *archer.Project) error {
+	fileName, err := s.getFilesFileName(proj)
+	if err != nil {
+		return err
+	}
+
+	err = os.MkdirAll(filepath.Dir(fileName), 0o700)
+	if err != nil {
+		return err
+	}
+
+	jc, err := FilesToJson(proj)
+	if err != nil {
+		return err
+	}
+
+	err = os.WriteFile(fileName, []byte(jc), 0o600)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *jsonStorage) ReadFiles(result *archer.Projects, fileName string) error {
+	contents, err := os.ReadFile(fileName)
+	if err != nil {
+		return err
+	}
+
+	err = FilesFromJson(result, string(contents))
 	if err != nil {
 		return err
 	}

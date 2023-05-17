@@ -36,9 +36,7 @@ func (r *RootsFinder) ComputeRootDirs(projs *archer.Projects) ([]RootDir, error)
 			}
 
 			for _, p := range ps {
-				for _, dir := range p.Dirs {
-					paths[dir] = NewRootDir(p, dir, r.globs)
-				}
+				paths[p.FullName()] = RootDir{Project: p, globs: r.globs}
 			}
 
 		default:
@@ -47,7 +45,7 @@ func (r *RootsFinder) ComputeRootDirs(projs *archer.Projects) ([]RootDir, error)
 				return nil, err
 			}
 
-			paths[dir] = NewRootDir(nil, dir, r.globs)
+			paths[dir] = RootDir{Dir: &dir, globs: r.globs}
 		}
 	}
 
@@ -57,7 +55,7 @@ func (r *RootsFinder) ComputeRootDirs(projs *archer.Projects) ([]RootDir, error)
 	}
 
 	sort.Slice(result, func(i, j int) bool {
-		return result[i].Dir < result[j].Dir
+		return result[i].String() < result[j].String()
 	})
 
 	return result, nil
@@ -65,53 +63,98 @@ func (r *RootsFinder) ComputeRootDirs(projs *archer.Projects) ([]RootDir, error)
 
 type RootDir struct {
 	Project *archer.Project
-	Dir     string
+	Dir     *string
 	globs   []string
 }
 
-func NewRootDir(proj *archer.Project, dir string, globs []string) RootDir {
-	gs := make([]string, len(globs))
-	for i, g := range globs {
-		if !filepath.IsAbs(g) {
-			g = filepath.Join(dir, g)
-		}
-
-		gs[i] = g
+func (r *RootDir) String() string {
+	if r.Dir != nil {
+		return *r.Dir
+	} else {
+		return r.Project.FullName()
 	}
-
-	return RootDir{Project: proj, Dir: dir, globs: gs}
 }
 
-func (r *RootDir) String() string {
-	return r.Dir
+func (r *RootDir) createGlobsMatcher(path string) func(string) (bool, error) {
+	if len(r.globs) == 0 {
+		return func(_ string) (bool, error) { return true, nil }
+	}
+
+	globs := make([]string, len(r.globs))
+	for i, g := range r.globs {
+		if !filepath.IsAbs(g) {
+			g = filepath.Join(path, g)
+		}
+
+		globs[i] = g
+	}
+
+	return func(path string) (bool, error) {
+		for _, g := range globs {
+			m, err := doublestar.PathMatch(g, path)
+			if err != nil {
+				return false, err
+			}
+			if m {
+				return true, nil
+			}
+		}
+
+		return false, nil
+	}
 }
 
 func (r *RootDir) WalkDir(cb func(proj *archer.Project, path string) error) error {
-	return filepath.WalkDir(r.Dir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return filepath.SkipDir
-		}
+	if r.Dir != nil {
+		globsMatch := r.createGlobsMatcher(*r.Dir)
 
-		if d.IsDir() && strings.HasPrefix(d.Name(), ".") {
-			return filepath.SkipDir
-		}
+		return filepath.WalkDir(*r.Dir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return filepath.SkipDir
+			}
 
-		match := len(r.globs) == 0
-		for _, g := range r.globs {
-			m, err := doublestar.PathMatch(g, path)
+			if d.IsDir() && strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir
+			}
+
+			match, err := globsMatch(path)
 			if err != nil {
 				return err
 			}
-			if m {
-				match = true
+
+			if !match {
+				return nil
+			}
+
+			return cb(r.Project, path)
+		})
+
+	} else {
+		for _, dir := range r.Project.Dirs {
+			dirPath, err := filepath.Abs(filepath.Join(r.Project.RootDir, dir.RelativePath))
+			if err != nil {
+				return err
+			}
+
+			globsMatch := r.createGlobsMatcher(dirPath)
+
+			for _, file := range dir.Files {
+				filePath := filepath.Join(dirPath, file.RelativePath)
+
+				match, err := globsMatch(filePath)
+				if err != nil {
+					return err
+				}
+
+				if match {
+					err = cb(r.Project, filePath)
+					if err != nil {
+						return err
+					}
+				}
 			}
 		}
 
-		if !match {
-			return nil
-		}
-
-		return cb(r.Project, path)
-	})
-
+		return nil
+	}
 }

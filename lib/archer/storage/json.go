@@ -39,7 +39,6 @@ func BasicInfoToJson(proj *archer.Project) (string, error) {
 		Type:      proj.Type,
 
 		RootDir:     proj.RootDir,
-		Dirs:        proj.Dirs,
 		ProjectFile: proj.ProjectFile,
 	}
 
@@ -63,7 +62,6 @@ func BasicInfoFromJson(result *archer.Projects, content string) error {
 	proj.NameParts = jps.NameParts
 	proj.Type = jps.Type
 	proj.RootDir = jps.RootDir
-	proj.Dirs = jps.Dirs
 	proj.ProjectFile = jps.ProjectFile
 
 	return nil
@@ -117,9 +115,26 @@ func DepsFromJson(result *archer.Projects, content string) error {
 
 func SizeToJson(proj *archer.Project) (string, error) {
 	jps := jsonSize{
-		Root: proj.Root,
-		Name: proj.Name,
-		Size: proj.Size,
+		Root:  proj.Root,
+		Name:  proj.Name,
+		Sizes: map[string]map[string]*archer.Size{},
+	}
+
+	jps.Sizes[""] = proj.Sizes
+
+	for _, dir := range proj.Dirs {
+		if dir.Size.IsEmpty() {
+			continue
+		}
+
+		jps.Sizes[dir.RelativePath] = map[string]*archer.Size{}
+		jps.Sizes[dir.RelativePath][""] = dir.Size
+
+		for _, file := range dir.Files {
+			if !file.Size.IsEmpty() {
+				jps.Sizes[dir.RelativePath][file.RelativePath] = file.Size
+			}
+		}
 	}
 
 	marshaled, err := json.Marshal(jps)
@@ -140,8 +155,76 @@ func SizeFromJson(result *archer.Projects, content string) error {
 
 	proj := result.Get(jps.Root, jps.Name)
 
-	for k, v := range jps.Size {
-		proj.AddSize(k, v)
+	for dirPath, files := range jps.Sizes {
+		if dirPath == "" {
+			for k, v := range files {
+				proj.AddSize(k, v)
+			}
+
+		} else {
+			dir := proj.GetDirectory(dirPath)
+
+			for filePath, size := range files {
+				if filePath == "" {
+					dir.Size = size
+				} else {
+					file := dir.GetFile(filePath)
+					file.Size = size
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func FilesToJson(proj *archer.Project) (string, error) {
+	jps := jsonFiles{
+		Root:    proj.Root,
+		Name:    proj.Name,
+		RootDir: proj.RootDir,
+	}
+
+	for _, dir := range proj.Dirs {
+		jd := jsonDir{
+			Path: dir.RelativePath,
+			Type: dir.Type,
+		}
+
+		for _, file := range dir.Files {
+			jd.Files = append(jd.Files, jsonFile{
+				Path: file.RelativePath,
+			})
+		}
+
+		jps.Dirs = append(jps.Dirs, jd)
+	}
+
+	marshaled, err := json.Marshal(jps)
+	if err != nil {
+		return "", err
+	}
+
+	return string(marshaled), nil
+}
+
+func FilesFromJson(result *archer.Projects, content string) error {
+	var jps jsonFiles
+
+	err := json.Unmarshal([]byte(content), &jps)
+	if err != nil {
+		return err
+	}
+
+	proj := result.Get(jps.Root, jps.Name)
+
+	for _, jd := range jps.Dirs {
+		dir := proj.GetDirectory(jd.Path)
+		dir.Type = jd.Type
+
+		for _, jf := range jd.Files {
+			dir.GetFile(jf.Path)
+		}
 	}
 
 	return nil
@@ -191,7 +274,6 @@ type jsonBasicInfo struct {
 	Type      archer.ProjectType
 
 	RootDir     string
-	Dirs        map[string]string
 	ProjectFile string
 }
 
@@ -208,9 +290,26 @@ type jsonDep struct {
 }
 
 type jsonSize struct {
-	Root string
-	Name string
-	Size map[string]archer.Size
+	Root  string
+	Name  string
+	Sizes map[string]map[string]*archer.Size
+}
+
+type jsonFiles struct {
+	Root    string
+	Name    string
+	RootDir string
+	Dirs    []jsonDir
+}
+
+type jsonDir struct {
+	Path  string
+	Type  archer.ProjectDirectoryType
+	Files []jsonFile
+}
+
+type jsonFile struct {
+	Path string
 }
 
 type jsonConfig struct {

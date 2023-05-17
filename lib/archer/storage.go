@@ -10,6 +10,7 @@ type Storage interface {
 	ReadSize(result *Projects, fileName string) error
 	WriteBasicInfo(proj *Project) error
 	ReadBasicInfo(result *Projects, fileName string) error
+	WriteFiles(proj *Project) error
 	WriteConfig(proj *Project) error
 	ReadConfig(result *Projects, fileName string) error
 }

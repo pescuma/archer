@@ -21,6 +21,7 @@ var cli struct {
 		Gradle    ImportGradleCmd    `cmd:"" help:"Import information from gradle project."`
 		Hibernate ImportHibernateCmd `cmd:"" help:"Import information from hibernate annotation in classes."`
 		Mysql     ImportMySqlCmd     `cmd:"" help:"Import information from MySQL schema."`
+		Size      ImportSizeCmd      `cmd:"" help:"Import size information to existing projects."`
 	} `cmd:""`
 }
 

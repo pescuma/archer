@@ -2,12 +2,12 @@ package size
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 
 	"github.com/hhatto/gocloc"
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 
 	"github.com/Faire/archer/lib/archer"
 	"github.com/Faire/archer/lib/archer/utils"
@@ -18,7 +18,7 @@ type sizeImporter struct {
 	filters []string
 }
 
-func NewSizeImporter(filters []string) archer.Importer {
+func NewImporter(filters []string) archer.Importer {
 	return &sizeImporter{
 		filters: filters,
 	}
@@ -51,13 +51,15 @@ func (s *sizeImporter) importSize(proj *archer.Project) (bool, error) {
 		return false, nil
 	}
 
-	for t, dir := range proj.Dirs {
-		size, err := s.computeCLOC(dir)
+	proj.Sizes = map[string]*archer.Size{}
+
+	for _, dir := range proj.Dirs {
+		err := s.computeCLOC(proj, dir)
 		if err != nil {
 			return false, err
 		}
 
-		proj.AddSize(t, *size)
+		proj.AddSize(dir.Type.String(), dir.Size)
 	}
 
 	err := s.storage.WriteSize(proj)
@@ -68,56 +70,54 @@ func (s *sizeImporter) importSize(proj *archer.Project) (bool, error) {
 	return true, nil
 }
 
-func (s *sizeImporter) computeCLOC(path string) (*archer.Size, error) {
-	result := archer.Size{
-		Other: map[string]int{},
-	}
-
-	_, err := os.Stat(path)
-	switch {
-	case os.IsNotExist(err):
-		return nil, nil
-	case err != nil:
-		return nil, err
-	}
-
+func (s *sizeImporter) computeCLOC(proj *archer.Project, dir *archer.ProjectDirectory) error {
 	languages := gocloc.NewDefinedLanguages()
 	options := gocloc.NewClocOptions()
-	paths := []string{
-		path,
+
+	paths := map[string]*archer.ProjectFile{}
+	for _, f := range dir.Files {
+		path, err := filepath.Abs(filepath.Join(proj.RootDir, dir.RelativePath, f.RelativePath))
+		if err != nil {
+			return err
+		}
+
+		paths[path] = f
 	}
 
 	processor := gocloc.NewProcessor(languages, options)
-	loc, err := processor.Analyze(paths)
+	loc, err := processor.Analyze(lo.Keys(paths))
 	if err != nil {
-		return nil, errors.Wrapf(err, "error computing lones of code")
+		return errors.Wrapf(err, "error computing lones of code")
 	}
 
-	files := 0
-	bytes := 0
-	err = filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
-		if !d.IsDir() {
-			info, err := d.Info()
-			if err != nil {
-				return err
-			}
+	dir.Size.Clear()
 
-			files += 1
-			bytes += int(info.Size())
+	for path, file := range paths {
+		file.Size.Clear()
+
+		file.Size.Files = 1
+		dir.Size.Files += 1
+
+		info, err := os.Stat(path)
+		if err == nil {
+			size := int(info.Size())
+			file.Size.Bytes = size
+			dir.Size.Bytes += size
 		}
 
-		return nil
-	})
-	if err != nil {
-		return nil, err
+		floc, ok := loc.Files[path]
+		if ok {
+			file.Size.Lines = int(floc.Code + floc.Comments + floc.Blanks)
+			file.Size.Other["Code"] = int(floc.Code)
+			file.Size.Other["Comments"] = int(floc.Comments)
+			file.Size.Other["Blanks"] = int(floc.Blanks)
+
+			dir.Size.Lines += file.Size.Lines
+			dir.Size.Other["Code"] += file.Size.Other["Code"]
+			dir.Size.Other["Comments"] += file.Size.Other["Comments"]
+			dir.Size.Other["Blanks"] += file.Size.Other["Blanks"]
+		}
 	}
 
-	result.Bytes = bytes
-	result.Files = files
-	result.Other["Code"] = int(loc.Total.Code)
-	result.Other["Comments"] = int(loc.Total.Comments)
-	result.Other["Blanks"] = int(loc.Total.Blanks)
-	result.Lines = int(loc.Total.Code + loc.Total.Comments + loc.Total.Blanks)
-
-	return &result, nil
+	return nil
 }

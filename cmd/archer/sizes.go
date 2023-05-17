@@ -20,7 +20,7 @@ func (s *sizes) isEmpty() bool {
 	return s.get() == 0
 }
 
-func (s *sizes) add(size archer.Size) {
+func (s *sizes) add(size *archer.Size) {
 	s.elements++
 	s.lines += size.Lines
 	s.files += size.Files

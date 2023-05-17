@@ -122,26 +122,43 @@ func (g *gradleImporter) importBasicInfo(projs *archer.Projects, projName string
 	proj.NameParts = utils.IIf(projName == rootProj, []string{rootProj}, strings.Split(projName[1:], ":"))
 	proj.Root = rootProj
 	proj.Type = archer.CodeType
-	proj.RootDir = g.rootDir
+	proj.RootDir = projDir
 	proj.ProjectFile = projFile
-
-	addDirIfExists(&proj.Dirs, "config", projDir, "config")
-	addDirIfExists(&proj.Dirs, "code", projDir, "src/main")
-	addDirIfExists(&proj.Dirs, "test", projDir, "src/test")
 
 	err = g.storage.WriteBasicInfo(proj)
 	if err != nil {
 		return false, err
 	}
 
-	return true, nil
-}
-
-func addDirIfExists(result *map[string]string, name string, root string, dir string) {
-	path := filepath.Join(root, dir)
-	if _, err := os.Stat(path); err != nil {
-		(*result)[name] = path
+	_, err = proj.SetDirectoryAndFiles(projDir, archer.ConfigDir, false)
+	if err != nil {
+		return false, err
 	}
+
+	var candidates = []struct {
+		Path string
+		Type archer.ProjectDirectoryType
+	}{
+		{"config", archer.ConfigDir},
+		{"src/main/kotlin", archer.SourceDir},
+		{"src/test/kotlin", archer.TestsDir},
+		{"src/main/java", archer.SourceDir},
+		{"src/test/java", archer.TestsDir},
+	}
+
+	for _, c := range candidates {
+		_, err = proj.SetDirectoryAndFiles(filepath.Join(projDir, c.Path), c.Type, true)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	err = g.storage.WriteFiles(proj)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 func (g *gradleImporter) getProjectDir(projName string) (string, error) {

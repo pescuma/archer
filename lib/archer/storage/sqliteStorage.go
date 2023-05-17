@@ -85,6 +85,11 @@ func (s *sqliteStorage) ReadBasicInfo(result *archer.Projects, fileName string) 
 	panic("implement me")
 }
 
+func (s *sqliteStorage) WriteFiles(proj *archer.Project) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (s *sqliteStorage) WriteConfig(proj *archer.Project) error {
 	// TODO implement me
 	panic("implement me")

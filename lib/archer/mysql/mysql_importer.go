@@ -90,7 +90,7 @@ func (m *mysqlImporter) importTables(db *sql.DB, projs *archer.Projects) error {
 		proj := projs.Get(table.schemaName, table.tableName)
 		proj.Type = archer.DatabaseType
 
-		proj.AddSize("table", archer.Size{
+		proj.AddSize("table", &archer.Size{
 			Lines: table.rows,
 			Bytes: table.dataSize + table.indexSize,
 			Other: map[string]int{

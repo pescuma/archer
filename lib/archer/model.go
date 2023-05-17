@@ -2,6 +2,9 @@ package archer
 
 import (
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -17,9 +20,9 @@ type Project struct {
 	RootDir     string
 	ProjectFile string
 
-	Dirs         map[string]string
+	Dirs         map[string]*ProjectDirectory
 	Dependencies map[string]*Dependency
-	Size         map[string]Size
+	Sizes        map[string]*Size
 	Data         map[string]string
 }
 
@@ -27,8 +30,9 @@ func NewProject(root, name string) *Project {
 	return &Project{
 		Root:         root,
 		Name:         name,
+		Dirs:         map[string]*ProjectDirectory{},
 		Dependencies: map[string]*Dependency{},
-		Size:         map[string]Size{},
+		Sizes:        map[string]*Size{},
 		Data:         map[string]string{},
 	}
 }
@@ -49,29 +53,127 @@ func (p *Project) AddDependency(d *Project) *Dependency {
 	return result
 }
 
-func (p *Project) AddSize(name string, size Size) {
-	p.Size[name] = size
-}
-
-func (p *Project) GetSize() Size {
-	result := Size{
-		Other: map[string]int{},
+func (p *Project) AddSize(name string, size *Size) {
+	old, ok := p.Sizes[name]
+	if !ok {
+		old = NewSize()
+		p.Sizes[name] = old
 	}
 
-	for _, v := range p.Size {
+	old.Add(size)
+}
+
+func (p *Project) GetSize() *Size {
+	result := NewSize()
+
+	for _, v := range p.Sizes {
 		result.Add(v)
 	}
 
 	return result
 }
 
-func (p *Project) GetSizeOf(name string) Size {
-	result, ok := p.Size[name]
+func (p *Project) GetSizeOf(name string) *Size {
+	result, ok := p.Sizes[name]
 
 	if !ok {
-		result = Size{
-			Other: map[string]int{},
+		result = NewSize()
+	}
+
+	return result
+}
+
+func (p *Project) SetDirectoryAndFiles(root string, rootType ProjectDirectoryType, recursive bool) (*ProjectDirectory, error) {
+	// TODO Delete old files
+
+	root, err := utils.PathAbs(root)
+	if err != nil {
+		return nil, nil
+	}
+
+	_, err = os.Stat(root)
+	if err != nil {
+		return nil, nil
+	}
+
+	var dir *ProjectDirectory
+	if recursive {
+		err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return filepath.SkipDir
+			}
+
+			if d.IsDir() {
+				if strings.HasPrefix(d.Name(), ".") {
+					return filepath.SkipDir
+				} else {
+					return nil
+				}
+			}
+
+			if dir == nil {
+				rootRel, err := filepath.Rel(p.RootDir, root)
+				if err != nil {
+					return err
+				}
+
+				dir = p.GetDirectory(rootRel)
+				dir.Type = rootType
+			}
+
+			rel, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+
+			dir.GetFile(rel)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		})
+		if err == nil {
+			return nil, nil
 		}
+
+	} else {
+		entries, err := os.ReadDir(root)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+
+			if dir == nil {
+				rootRel, err := filepath.Rel(p.RootDir, root)
+				if err != nil {
+					return nil, err
+				}
+
+				dir = p.GetDirectory(rootRel)
+				dir.Type = rootType
+			}
+
+			dir.GetFile(entry.Name())
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return dir, nil
+}
+
+func (p *Project) GetDirectory(relativePath string) *ProjectDirectory {
+	result, ok := p.Dirs[relativePath]
+
+	if !ok {
+		result = NewProjectDirectory(relativePath)
+		p.Dirs[relativePath] = result
 	}
 
 	return result
@@ -281,7 +383,7 @@ func (ps *Projects) FilterProjects(filters []string, ft FilterType) ([]*Project,
 	}
 
 	result := make([]*Project, 0, len(matched))
-	for p, _ := range matched {
+	for p := range matched {
 		result = append(result, p)
 	}
 
@@ -330,14 +432,69 @@ type Size struct {
 	Other map[string]int
 }
 
-func (l *Size) Add(other Size) {
-	l.Lines += other.Lines
-	l.Files += other.Files
-	l.Bytes += other.Bytes
+func NewSize() *Size {
+	return &Size{
+		Other: map[string]int{},
+	}
+}
+
+func (s *Size) Add(other *Size) {
+	s.Lines += other.Lines
+	s.Files += other.Files
+	s.Bytes += other.Bytes
 
 	for k, v := range other.Other {
-		o, _ := l.Other[k]
-		l.Other[k] = o + v
+		o, _ := s.Other[k]
+		s.Other[k] = o + v
+	}
+}
+
+func (s *Size) IsEmpty() bool {
+	return s.Lines == 0 && s.Files == 0 && s.Bytes == 0 && len(s.Other) == 0
+}
+
+func (s *Size) Clear() {
+	s.Lines = 0
+	s.Files = 0
+	s.Bytes = 0
+	s.Other = map[string]int{}
+}
+
+type ProjectDirectory struct {
+	RelativePath string
+	Type         ProjectDirectoryType
+	Files        map[string]*ProjectFile
+	Size         *Size
+}
+
+func NewProjectDirectory(relativePath string) *ProjectDirectory {
+	return &ProjectDirectory{
+		RelativePath: relativePath,
+		Size:         NewSize(),
+		Files:        map[string]*ProjectFile{},
+	}
+}
+
+func (d *ProjectDirectory) GetFile(relativePath string) *ProjectFile {
+	result, ok := d.Files[relativePath]
+
+	if !ok {
+		result = NewProjectFile(relativePath)
+		d.Files[relativePath] = result
+	}
+
+	return result
+}
+
+type ProjectFile struct {
+	RelativePath string
+	Size         *Size
+}
+
+func NewProjectFile(relativePath string) *ProjectFile {
+	return &ProjectFile{
+		RelativePath: relativePath,
+		Size:         NewSize(),
 	}
 }
 
@@ -355,3 +512,22 @@ const (
 	CodeType
 	DatabaseType
 )
+
+type ProjectDirectoryType int
+
+const (
+	SourceDir ProjectDirectoryType = iota
+	TestsDir
+	ConfigDir
+)
+
+func (t ProjectDirectoryType) String() string {
+	switch t {
+	case TestsDir:
+		return "tests"
+	case ConfigDir:
+		return "config"
+	default:
+		return "source"
+	}
+}

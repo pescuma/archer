@@ -38,7 +38,7 @@ func (i *hibernateImporter) Import(projs *archer.Projects, storage archer.Storag
 	}
 
 	for _, r := range roots {
-		fmt.Printf("%v <- %v\n", r.Dir, r.Project)
+		fmt.Printf("%v\n", r)
 	}
 
 	type work struct {
@@ -115,8 +115,8 @@ func (i *hibernateImporter) Import(projs *archer.Projects, storage archer.Storag
 		fmt.Printf("ERROR: %v\n", e)
 	}
 
-	dbProjs := map[string]*archer.Project{}
-	parentProjs := map[string]*archer.Project{}
+	dbProjs := map[*archer.Project]bool{}
+	parentProjs := map[*archer.Project]bool{}
 
 	for _, c := range classes {
 		if len(c.Paths) != 1 {
@@ -131,15 +131,18 @@ func (i *hibernateImporter) Import(projs *archer.Projects, storage archer.Storag
 		root := c.Root[0]
 
 		proj := projs.Get(i.rootName, c.Tables[0])
-		dbProjs[proj.FullName()] = proj
+		dbProjs[proj] = true
 
 		proj.Type = archer.DatabaseType
-		proj.RootDir = root.Dir
 		proj.ProjectFile = c.Paths[0]
 
-		if root.Project != nil {
+		if root.Dir != nil {
+			proj.RootDir = *root.Dir
+		} else {
+			proj.RootDir = root.Project.RootDir
+
 			parent := root.Project
-			parentProjs[parent.FullName()] = parent
+			parentProjs[parent] = true
 
 			parent.AddDependency(proj)
 		}
@@ -161,7 +164,7 @@ func (i *hibernateImporter) Import(projs *archer.Projects, storage archer.Storag
 			}
 
 			dp := projs.Get(i.rootName, dc.Tables[0])
-			dbProjs[dp.FullName()] = dp
+			dbProjs[dp] = true
 
 			d := proj.AddDependency(dp)
 
@@ -172,9 +175,9 @@ func (i *hibernateImporter) Import(projs *archer.Projects, storage archer.Storag
 		}
 	}
 
-	common.CreateTableNameParts(lo.Values(dbProjs))
+	common.CreateTableNameParts(lo.Keys(dbProjs))
 
-	for _, proj := range dbProjs {
+	for proj := range dbProjs {
 		err = storage.WriteBasicInfo(proj)
 		if err != nil {
 			return err
@@ -186,7 +189,7 @@ func (i *hibernateImporter) Import(projs *archer.Projects, storage archer.Storag
 		}
 	}
 
-	for _, proj := range parentProjs {
+	for proj := range parentProjs {
 		err = storage.WriteDeps(proj)
 		if err != nil {
 			return err
