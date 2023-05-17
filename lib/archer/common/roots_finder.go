@@ -8,7 +8,7 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 
-	"github.com/Faire/archer/lib/archer"
+	"github.com/Faire/archer/lib/archer/model"
 	"github.com/Faire/archer/lib/archer/utils"
 )
 
@@ -24,13 +24,13 @@ func NewRootsFinder(rootDirs, globs []string) RootsFinder {
 	}
 }
 
-func (r *RootsFinder) ComputeRootDirs(projs *archer.Projects) ([]RootDir, error) {
+func (r *RootsFinder) ComputeRootDirs(projs *model.Projects) ([]RootDir, error) {
 	paths := map[string]RootDir{}
 
 	for _, rootDir := range r.rootDirs {
 		switch {
 		case strings.HasPrefix(rootDir, "archer:"):
-			ps, err := projs.FilterProjects([]string{strings.TrimPrefix(rootDir, "archer:")}, archer.FilterExcludeExternal)
+			ps, err := projs.FilterProjects([]string{strings.TrimPrefix(rootDir, "archer:")}, model.FilterExcludeExternal)
 			if err != nil {
 				return nil, err
 			}
@@ -62,7 +62,7 @@ func (r *RootsFinder) ComputeRootDirs(projs *archer.Projects) ([]RootDir, error)
 }
 
 type RootDir struct {
-	Project *archer.Project
+	Project *model.Project
 	Dir     *string
 	globs   []string
 }
@@ -104,7 +104,7 @@ func (r *RootDir) createGlobsMatcher(path string) func(string) (bool, error) {
 	}
 }
 
-func (r *RootDir) WalkDir(cb func(proj *archer.Project, path string) error) error {
+func (r *RootDir) WalkDir(cb func(proj *model.Project, path string) error) error {
 	if r.Dir != nil {
 		globsMatch := r.createGlobsMatcher(*r.Dir)
 

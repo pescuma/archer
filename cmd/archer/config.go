@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/Faire/archer/lib/archer"
+	"github.com/Faire/archer/lib/archer/model"
 )
 
 type ConfigSetCmd struct {
@@ -18,13 +18,13 @@ func (c *ConfigSetCmd) Run(ctx *context) error {
 		return err
 	}
 
-	filter, err := archer.ParseFilter(projects, c.Project, archer.Include)
+	filter, err := model.ParseFilter(projects, c.Project, model.Include)
 	if err != nil {
 		return err
 	}
 
-	for _, p := range projects.ListProjects(archer.FilterExcludeExternal) {
-		if filter.FilterProject(p) != archer.Include {
+	for _, p := range projects.ListProjects(model.FilterExcludeExternal) {
+		if filter.FilterProject(p) != model.Include {
 			continue
 		}
 

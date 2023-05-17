@@ -3,7 +3,7 @@ package storage
 import (
 	"encoding/json"
 
-	"github.com/Faire/archer/lib/archer"
+	"github.com/Faire/archer/lib/archer/model"
 )
 
 func ProjNamesToJson(root string, names []string) (string, error) {
@@ -31,7 +31,7 @@ func ProjNamesFromJson(content string) (string, []string, error) {
 	return jps.Root, jps.Names, nil
 }
 
-func ProjBasicInfoToJson(proj *archer.Project) (string, error) {
+func ProjBasicInfoToJson(proj *model.Project) (string, error) {
 	jps := jsonBasicInfo{
 		Root:      proj.Root,
 		Name:      proj.Name,
@@ -51,7 +51,7 @@ func ProjBasicInfoToJson(proj *archer.Project) (string, error) {
 	return string(marshaled), nil
 }
 
-func ProjBasicInfoFromJson(result *archer.Projects, content string) error {
+func ProjBasicInfoFromJson(result *model.Projects, content string) error {
 	var jps jsonBasicInfo
 
 	err := json.Unmarshal([]byte(content), &jps)
@@ -69,8 +69,8 @@ func ProjBasicInfoFromJson(result *archer.Projects, content string) error {
 	return nil
 }
 
-func ProjDepsToJson(proj *archer.Project) (string, error) {
-	ds := proj.ListDependencies(archer.FilterAll)
+func ProjDepsToJson(proj *model.Project) (string, error) {
+	ds := proj.ListDependencies(model.FilterAll)
 
 	jps := jsonDeps{
 		Root: proj.Root,
@@ -97,7 +97,7 @@ func ProjDepsToJson(proj *archer.Project) (string, error) {
 	return string(marshaled), nil
 }
 
-func ProjDepsFromJson(result *archer.Projects, content string) error {
+func ProjDepsFromJson(result *model.Projects, content string) error {
 	var jps jsonDeps
 
 	err := json.Unmarshal([]byte(content), &jps)
@@ -117,11 +117,11 @@ func ProjDepsFromJson(result *archer.Projects, content string) error {
 	return nil
 }
 
-func SizeToJson(proj *archer.Project) (string, error) {
+func SizeToJson(proj *model.Project) (string, error) {
 	jps := jsonSize{
 		Root:  proj.Root,
 		Name:  proj.Name,
-		Sizes: map[string]map[string]*archer.Size{},
+		Sizes: map[string]map[string]*model.Size{},
 	}
 
 	jps.Sizes[""] = proj.Sizes
@@ -131,7 +131,7 @@ func SizeToJson(proj *archer.Project) (string, error) {
 			continue
 		}
 
-		jps.Sizes[dir.RelativePath] = map[string]*archer.Size{}
+		jps.Sizes[dir.RelativePath] = map[string]*model.Size{}
 		jps.Sizes[dir.RelativePath][""] = dir.Size
 
 		for _, file := range dir.Files {
@@ -149,7 +149,7 @@ func SizeToJson(proj *archer.Project) (string, error) {
 	return string(marshaled), nil
 }
 
-func SizeFromJson(result *archer.Projects, content string) error {
+func SizeFromJson(result *model.Projects, content string) error {
 	var jps jsonSize
 
 	err := json.Unmarshal([]byte(content), &jps)
@@ -182,7 +182,7 @@ func SizeFromJson(result *archer.Projects, content string) error {
 	return nil
 }
 
-func FilesToJson(proj *archer.Project) (string, error) {
+func FilesToJson(proj *model.Project) (string, error) {
 	jps := jsonFiles{
 		Root:    proj.Root,
 		Name:    proj.Name,
@@ -214,7 +214,7 @@ func FilesToJson(proj *archer.Project) (string, error) {
 	return string(marshaled), nil
 }
 
-func FilesFromJson(result *archer.Projects, content string) error {
+func FilesFromJson(result *model.Projects, content string) error {
 	var jps jsonFiles
 
 	err := json.Unmarshal([]byte(content), &jps)
@@ -236,7 +236,7 @@ func FilesFromJson(result *archer.Projects, content string) error {
 	return nil
 }
 
-func ConfigToJson(proj *archer.Project) (string, error) {
+func ConfigToJson(proj *model.Project) (string, error) {
 	jps := jsonConfig{
 		Root:   proj.Root,
 		Name:   proj.Name,
@@ -251,7 +251,7 @@ func ConfigToJson(proj *archer.Project) (string, error) {
 	return string(marshaled), nil
 }
 
-func ConfigFromJson(result *archer.Projects, content string) error {
+func ConfigFromJson(result *model.Projects, content string) error {
 	var jps jsonConfig
 
 	err := json.Unmarshal([]byte(content), &jps)
@@ -277,8 +277,8 @@ type jsonBasicInfo struct {
 	Root      string
 	Name      string
 	NameParts []string
-	Type      archer.ProjectType
-	ID        archer.UUID
+	Type      model.ProjectType
+	ID        model.UUID
 
 	RootDir     string
 	ProjectFile string
@@ -293,7 +293,7 @@ type jsonDeps struct {
 type jsonDep struct {
 	TargetRoot string
 	TargetName string
-	ID         archer.UUID
+	ID         model.UUID
 
 	Config map[string]string
 }
@@ -301,7 +301,7 @@ type jsonDep struct {
 type jsonSize struct {
 	Root  string
 	Name  string
-	Sizes map[string]map[string]*archer.Size
+	Sizes map[string]map[string]*model.Size
 }
 
 type jsonFiles struct {
@@ -313,15 +313,15 @@ type jsonFiles struct {
 
 type jsonDir struct {
 	Path string
-	Type archer.ProjectDirectoryType
-	ID   archer.UUID
+	Type model.ProjectDirectoryType
+	ID   model.UUID
 
 	Files []jsonFile
 }
 
 type jsonFile struct {
 	Path string
-	ID   archer.UUID
+	ID   model.UUID
 }
 
 type jsonConfig struct {

@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/Faire/archer/lib/archer"
+	"github.com/Faire/archer/lib/archer/model"
 )
 
 type ShowCmd struct {
@@ -29,10 +29,10 @@ func (c *ShowCmd) Run(ctx *context) error {
 	return nil
 }
 
-func (c *ShowCmd) print(projects *archer.Projects, filter archer.Filter) {
-	ps := projects.ListProjects(archer.FilterExcludeExternal)
+func (c *ShowCmd) print(projects *model.Projects, filter model.Filter) {
+	ps := projects.ListProjects(model.FilterExcludeExternal)
 
-	tg := groupByRoot(ps, filter, false, func(p *archer.Project) string {
+	tg := groupByRoot(ps, filter, false, func(p *model.Project) string {
 		return p.LevelSimpleName(c.Levels)
 	})
 
@@ -57,7 +57,7 @@ func (c *ShowCmd) print(projects *archer.Projects, filter archer.Filter) {
 	}
 }
 
-func (c *ShowCmd) computeNodesShow(ps []*archer.Project, filter archer.Filter) map[string]bool {
+func (c *ShowCmd) computeNodesShow(ps []*model.Project, filter model.Filter) map[string]bool {
 	show := map[string]bool{}
 
 	for _, p := range ps {
@@ -66,11 +66,11 @@ func (c *ShowCmd) computeNodesShow(ps []*archer.Project, filter archer.Filter) m
 
 	for _, p := range ps {
 		if !show[p.Name] {
-			show[p.Name] = filter.Decide(filter.FilterProject(p)) != archer.Exclude
+			show[p.Name] = filter.Decide(filter.FilterProject(p)) != model.Exclude
 		}
 
-		for _, d := range p.ListDependencies(archer.FilterExcludeExternal) {
-			if filter.Decide(filter.FilterDependency(d)) == archer.Exclude {
+		for _, d := range p.ListDependencies(model.FilterExcludeExternal) {
+			if filter.Decide(filter.FilterDependency(d)) == model.Exclude {
 				continue
 			}
 

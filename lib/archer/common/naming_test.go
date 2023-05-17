@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/Faire/archer/lib/archer"
 	"github.com/Faire/archer/lib/archer/common"
+	"github.com/Faire/archer/lib/archer/model"
 )
 
 func TestCreateTableNameParts(t *testing.T) {
@@ -18,11 +18,11 @@ func TestCreateTableNameParts(t *testing.T) {
 }
 
 func createTableNameParts(name string) []string {
-	projs := archer.NewProjects()
+	projs := model.NewProjects()
 
 	proj := projs.Get("r", name)
 
-	common.CreateTableNameParts(projs.ListProjects(archer.FilterAll))
+	common.CreateTableNameParts(projs.ListProjects(model.FilterAll))
 
 	return proj.NameParts
 }

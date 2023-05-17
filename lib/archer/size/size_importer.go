@@ -10,6 +10,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/Faire/archer/lib/archer"
+	"github.com/Faire/archer/lib/archer/model"
 	"github.com/Faire/archer/lib/archer/utils"
 )
 
@@ -24,10 +25,10 @@ func NewImporter(filters []string) archer.Importer {
 	}
 }
 
-func (s *sizeImporter) Import(projs *archer.Projects, storage archer.Storage) error {
+func (s *sizeImporter) Import(projs *model.Projects, storage archer.Storage) error {
 	s.storage = storage
 
-	projects, err := projs.FilterProjects(s.filters, archer.FilterExcludeExternal)
+	projects, err := projs.FilterProjects(s.filters, model.FilterExcludeExternal)
 	if err != nil {
 		return err
 	}
@@ -46,12 +47,12 @@ func (s *sizeImporter) Import(projs *archer.Projects, storage archer.Storage) er
 	return nil
 }
 
-func (s *sizeImporter) importSize(proj *archer.Project) (bool, error) {
+func (s *sizeImporter) importSize(proj *model.Project) (bool, error) {
 	if len(proj.Dirs) == 0 {
 		return false, nil
 	}
 
-	proj.Sizes = map[string]*archer.Size{}
+	proj.Sizes = map[string]*model.Size{}
 
 	for _, dir := range proj.Dirs {
 		err := s.computeCLOC(proj, dir)
@@ -70,11 +71,11 @@ func (s *sizeImporter) importSize(proj *archer.Project) (bool, error) {
 	return true, nil
 }
 
-func (s *sizeImporter) computeCLOC(proj *archer.Project, dir *archer.ProjectDirectory) error {
+func (s *sizeImporter) computeCLOC(proj *model.Project, dir *model.ProjectDirectory) error {
 	languages := gocloc.NewDefinedLanguages()
 	options := gocloc.NewClocOptions()
 
-	paths := map[string]*archer.ProjectFile{}
+	paths := map[string]*model.ProjectFile{}
 	for _, f := range dir.Files {
 		path, err := filepath.Abs(filepath.Join(proj.RootDir, dir.RelativePath, f.RelativePath))
 		if err != nil {

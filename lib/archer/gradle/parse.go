@@ -8,7 +8,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/Faire/archer/lib/archer"
+	"github.com/Faire/archer/lib/archer/model"
 	"github.com/Faire/archer/lib/archer/utils"
 )
 
@@ -55,7 +55,7 @@ func parseProjects(content string) ([]string, error) {
 	return result, nil
 }
 
-func parseDeps(projects *archer.Projects, content string, rootProj string) error {
+func parseDeps(projects *model.Projects, content string, rootProj string) error {
 	rootProjRE := regexp.MustCompile(`^(?:Root project|Project) '([^']+)'$`)
 	depRE := regexp.MustCompile(`^([-+\\| ]+)(?:project )?([a-zA-Z0-9:._-]+)`)
 
@@ -116,6 +116,6 @@ const (
 )
 
 type pd struct {
-	proj  *archer.Project
+	proj  *model.Project
 	depth int
 }

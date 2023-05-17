@@ -13,6 +13,7 @@ import (
 	"github.com/Faire/archer/lib/archer"
 	"github.com/Faire/archer/lib/archer/common"
 	"github.com/Faire/archer/lib/archer/kotlin_parser"
+	"github.com/Faire/archer/lib/archer/model"
 	"github.com/Faire/archer/lib/archer/utils"
 )
 
@@ -29,7 +30,7 @@ func NewImporter(rootDirs, globs []string, rootName string) archer.Importer {
 	}
 }
 
-func (i *hibernateImporter) Import(projs *archer.Projects, storage archer.Storage) error {
+func (i *hibernateImporter) Import(projs *model.Projects, storage archer.Storage) error {
 	i.storage = storage
 
 	roots, err := i.rootsFinder.ComputeRootDirs(projs)
@@ -57,7 +58,7 @@ func (i *hibernateImporter) Import(projs *archer.Projects, storage archer.Storag
 
 	go func() {
 		for _, root := range roots {
-			err = root.WalkDir(func(proj *archer.Project, path string) error {
+			err = root.WalkDir(func(proj *model.Project, path string) error {
 				if group.Aborted() {
 					return errors.New("aborted")
 				}
@@ -115,8 +116,8 @@ func (i *hibernateImporter) Import(projs *archer.Projects, storage archer.Storag
 		fmt.Printf("ERROR: %v\n", e)
 	}
 
-	dbProjs := map[*archer.Project]bool{}
-	parentProjs := map[*archer.Project]bool{}
+	dbProjs := map[*model.Project]bool{}
+	parentProjs := map[*model.Project]bool{}
 
 	for _, c := range classes {
 		if len(c.Paths) != 1 {
@@ -133,7 +134,7 @@ func (i *hibernateImporter) Import(projs *archer.Projects, storage archer.Storag
 		proj := projs.Get(i.rootName, c.Tables[0])
 		dbProjs[proj] = true
 
-		proj.Type = archer.DatabaseType
+		proj.Type = model.DatabaseType
 		proj.ProjectFile = c.Paths[0]
 
 		if root.Dir != nil {

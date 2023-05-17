@@ -5,16 +5,16 @@ import (
 
 	"github.com/samber/lo"
 
-	"github.com/Faire/archer/lib/archer"
+	"github.com/Faire/archer/lib/archer/model"
 	"github.com/Faire/archer/lib/archer/utils"
 )
 
-func groupByRoot(ps []*archer.Project, filter archer.Filter, forceShowDependentProjects bool, projGrouping func(project *archer.Project) string) *group {
+func groupByRoot(ps []*model.Project, filter model.Filter, forceShowDependentProjects bool, projGrouping func(project *model.Project) string) *group {
 	show := computeNodesShow(ps, filter, forceShowDependentProjects)
 
-	ps = lo.Filter(ps, func(p *archer.Project, _ int) bool { return show[p.FullName()] })
+	ps = lo.Filter(ps, func(p *model.Project, _ int) bool { return show[p.FullName()] })
 
-	rs := lo.GroupBy(ps, func(p *archer.Project) string { return p.Root })
+	rs := lo.GroupBy(ps, func(p *model.Project) string { return p.Root })
 
 	keys := lo.Keys(rs)
 	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
@@ -57,8 +57,8 @@ func groupByRoot(ps []*archer.Project, filter archer.Filter, forceShowDependentP
 			rg.size.add(size)
 			tg.size.add(size)
 
-			for _, d := range p.ListDependencies(archer.FilterExcludeExternal) {
-				if filter.Decide(filter.FilterDependency(d)) == archer.Exclude {
+			for _, d := range p.ListDependencies(model.FilterExcludeExternal) {
+				if filter.Decide(filter.FilterDependency(d)) == model.Exclude {
 					continue
 				}
 
@@ -104,7 +104,7 @@ func groupByRoot(ps []*archer.Project, filter archer.Filter, forceShowDependentP
 	return &tg
 }
 
-func computeNodesShow(ps []*archer.Project, filter archer.Filter, forceShowDependentProjects bool) map[string]bool {
+func computeNodesShow(ps []*model.Project, filter model.Filter, forceShowDependentProjects bool) map[string]bool {
 	show := map[string]bool{}
 
 	for _, p := range ps {
@@ -113,11 +113,11 @@ func computeNodesShow(ps []*archer.Project, filter archer.Filter, forceShowDepen
 
 	for _, p := range ps {
 		if !show[p.FullName()] {
-			show[p.FullName()] = filter.Decide(filter.FilterProject(p)) != archer.Exclude
+			show[p.FullName()] = filter.Decide(filter.FilterProject(p)) != model.Exclude
 		}
 
-		for _, d := range p.ListDependencies(archer.FilterExcludeExternal) {
-			if filter.Decide(filter.FilterDependency(d)) == archer.Exclude {
+		for _, d := range p.ListDependencies(model.FilterExcludeExternal) {
+			if filter.Decide(filter.FilterDependency(d)) == model.Exclude {
 				continue
 			}
 
@@ -139,8 +139,8 @@ type group struct {
 	size     sizes
 	children []*group
 
-	proj *archer.Project
-	dep  *archer.ProjectDependency
+	proj *model.Project
+	dep  *model.ProjectDependency
 }
 
 type groupCategory int

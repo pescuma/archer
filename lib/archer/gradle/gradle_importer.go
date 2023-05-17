@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Faire/archer/lib/archer"
+	"github.com/Faire/archer/lib/archer/model"
 	"github.com/Faire/archer/lib/archer/utils"
 )
 
@@ -23,7 +24,7 @@ func NewImporter(rootDir string) archer.Importer {
 	}
 }
 
-func (g *gradleImporter) Import(projs *archer.Projects, storage archer.Storage) error {
+func (g *gradleImporter) Import(projs *model.Projects, storage archer.Storage) error {
 	g.storage = storage
 
 	fmt.Printf("Listing projects...\n")
@@ -73,7 +74,7 @@ func (g *gradleImporter) Import(projs *archer.Projects, storage archer.Storage) 
 	for _, p := range queue {
 		proj := projs.Get(rootProj, p)
 
-		for _, d := range proj.ListDependencies(archer.FilterAll) {
+		for _, d := range proj.ListDependencies(model.FilterAll) {
 			if d.Source.IsCode() && strings.HasSuffix(d.Source.Name, "-api") {
 				d.SetData("source", strings.TrimSuffix(d.Source.Name, "-api"))
 			}
@@ -107,7 +108,7 @@ func (g *gradleImporter) importProjectNames() ([]string, error) {
 	return projNames, nil
 }
 
-func (g *gradleImporter) importBasicInfo(projs *archer.Projects, projName string, rootProj string) (bool, error) {
+func (g *gradleImporter) importBasicInfo(projs *model.Projects, projName string, rootProj string) (bool, error) {
 	projDir, err := g.getProjectDir(projName)
 	if err != nil {
 		return false, err
@@ -121,7 +122,7 @@ func (g *gradleImporter) importBasicInfo(projs *archer.Projects, projName string
 	proj := projs.Get(rootProj, projName)
 	proj.NameParts = utils.IIf(projName == rootProj, []string{rootProj}, strings.Split(projName[1:], ":"))
 	proj.Root = rootProj
-	proj.Type = archer.CodeType
+	proj.Type = model.CodeType
 	proj.RootDir = projDir
 	proj.ProjectFile = projFile
 
@@ -130,20 +131,20 @@ func (g *gradleImporter) importBasicInfo(projs *archer.Projects, projName string
 		return false, err
 	}
 
-	_, err = proj.SetDirectoryAndFiles(projDir, archer.ConfigDir, false)
+	_, err = proj.SetDirectoryAndFiles(projDir, model.ConfigDir, false)
 	if err != nil {
 		return false, err
 	}
 
 	var candidates = []struct {
 		Path string
-		Type archer.ProjectDirectoryType
+		Type model.ProjectDirectoryType
 	}{
-		{"config", archer.ConfigDir},
-		{"src/main/kotlin", archer.SourceDir},
-		{"src/test/kotlin", archer.TestsDir},
-		{"src/main/java", archer.SourceDir},
-		{"src/test/java", archer.TestsDir},
+		{"config", model.ConfigDir},
+		{"src/main/kotlin", model.SourceDir},
+		{"src/test/kotlin", model.TestsDir},
+		{"src/main/java", model.SourceDir},
+		{"src/test/java", model.TestsDir},
 	}
 
 	for _, c := range candidates {
@@ -193,7 +194,7 @@ func (g *gradleImporter) getProjectFile(projName string) (string, error) {
 	return "", nil
 }
 
-func (g *gradleImporter) loadDependencies(projs *archer.Projects, projNamesToImport []string, rootProj string) error {
+func (g *gradleImporter) loadDependencies(projs *model.Projects, projNamesToImport []string, rootProj string) error {
 	args := make([]string, 0, 3*len(projNamesToImport))
 	for _, projName := range projNamesToImport {
 		var target string

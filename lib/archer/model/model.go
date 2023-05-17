@@ -1,4 +1,4 @@
-package archer
+package model
 
 import (
 	"fmt"

@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/Faire/archer/lib/archer"
+	"github.com/Faire/archer/lib/archer/model"
 )
 
 type sqliteStorage struct {
@@ -40,7 +41,7 @@ func NewSqliteStorage(file string) (archer.Storage, error) {
 	}, nil
 }
 
-func (s *sqliteStorage) LoadProjects(result *archer.Projects) error {
+func (s *sqliteStorage) LoadProjects(result *model.Projects) error {
 	// TODO implement me
 	panic("implement me")
 }
@@ -55,47 +56,52 @@ func (s *sqliteStorage) ReadProjNames() ([]string, error) {
 	panic("implement me")
 }
 
-func (s *sqliteStorage) WriteDeps(proj *archer.Project) error {
+func (s *sqliteStorage) WriteDeps(proj *model.Project) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (s *sqliteStorage) ReadDeps(result *archer.Projects, fileName string) error {
+func (s *sqliteStorage) ReadDeps(result *model.Projects, fileName string) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (s *sqliteStorage) WriteSize(proj *archer.Project) error {
+func (s *sqliteStorage) WriteSize(proj *model.Project) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (s *sqliteStorage) ReadSize(result *archer.Projects, fileName string) error {
+func (s *sqliteStorage) ReadSize(result *model.Projects, fileName string) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (s *sqliteStorage) WriteBasicInfo(proj *archer.Project) error {
+func (s *sqliteStorage) WriteBasicInfo(proj *model.Project) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (s *sqliteStorage) ReadBasicInfo(result *archer.Projects, fileName string) error {
+func (s *sqliteStorage) ReadBasicInfo(result *model.Projects, fileName string) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (s *sqliteStorage) WriteFiles(proj *archer.Project) error {
+func (s *sqliteStorage) WriteFiles(proj *model.Project) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (s *sqliteStorage) WriteConfig(proj *archer.Project) error {
+func (s *sqliteStorage) ReadFiles(result *model.Projects, fileName string) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (s *sqliteStorage) ReadConfig(result *archer.Projects, fileName string) error {
+func (s *sqliteStorage) WriteConfig(proj *model.Project) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *sqliteStorage) ReadConfig(result *model.Projects, fileName string) error {
 	// TODO implement me
 	panic("implement me")
 }

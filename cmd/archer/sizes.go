@@ -6,7 +6,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 
-	"github.com/Faire/archer/lib/archer"
+	"github.com/Faire/archer/lib/archer/model"
 )
 
 type sizes struct {
@@ -20,7 +20,7 @@ func (s *sizes) isEmpty() bool {
 	return s.get() == 0
 }
 
-func (s *sizes) add(size *archer.Size) {
+func (s *sizes) add(size *model.Size) {
 	s.elements++
 	s.lines += size.Lines
 	s.files += size.Files

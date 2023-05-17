@@ -1,18 +1,23 @@
 package archer
 
+import (
+	"github.com/Faire/archer/lib/archer/model"
+)
+
 type Storage interface {
-	LoadProjects(result *Projects) error
+	LoadProjects(result *model.Projects) error
 	WriteProjNames(projRoot string, projNames []string) error
 	ReadProjNames() ([]string, error)
-	WriteDeps(proj *Project) error
-	ReadDeps(result *Projects, fileName string) error
-	WriteSize(proj *Project) error
-	ReadSize(result *Projects, fileName string) error
-	WriteBasicInfo(proj *Project) error
-	ReadBasicInfo(result *Projects, fileName string) error
-	WriteFiles(proj *Project) error
-	WriteConfig(proj *Project) error
-	ReadConfig(result *Projects, fileName string) error
+	WriteDeps(proj *model.Project) error
+	ReadDeps(result *model.Projects, fileName string) error
+	WriteSize(proj *model.Project) error
+	ReadSize(result *model.Projects, fileName string) error
+	WriteBasicInfo(proj *model.Project) error
+	ReadBasicInfo(result *model.Projects, fileName string) error
+	WriteFiles(proj *model.Project) error
+	ReadFiles(result *model.Projects, fileName string) error
+	WriteConfig(proj *model.Project) error
+	ReadConfig(result *model.Projects, fileName string) error
 }
 
 type StorageFactory = func(root string) (Storage, error)

@@ -5,10 +5,10 @@ import (
 
 	"github.com/gertd/go-pluralize"
 
-	"github.com/Faire/archer/lib/archer"
+	"github.com/Faire/archer/lib/archer/model"
 )
 
-func CreateTableNameParts(projs []*archer.Project) {
+func CreateTableNameParts(projs []*model.Project) {
 	pc := pluralize.NewClient()
 
 	plurals := 0

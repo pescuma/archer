@@ -11,6 +11,7 @@ import (
 
 	"github.com/Faire/archer/lib/archer"
 	"github.com/Faire/archer/lib/archer/common"
+	"github.com/Faire/archer/lib/archer/model"
 )
 
 type mysqlImporter struct {
@@ -24,7 +25,7 @@ func NewImporter(connectionString string) archer.Importer {
 	}
 }
 
-func (m *mysqlImporter) Import(projs *archer.Projects, storage archer.Storage) error {
+func (m *mysqlImporter) Import(projs *model.Projects, storage archer.Storage) error {
 	m.storage = storage
 
 	db, err := sql.Open("mysql", m.connectionString)
@@ -51,7 +52,7 @@ func (m *mysqlImporter) Import(projs *archer.Projects, storage archer.Storage) e
 	return nil
 }
 
-func (m *mysqlImporter) importTables(db *sql.DB, projs *archer.Projects) error {
+func (m *mysqlImporter) importTables(db *sql.DB, projs *model.Projects) error {
 	results, err := db.Query(`
 		select TABLE_SCHEMA schema_name,
 			   TABLE_NAME   table_name,
@@ -74,7 +75,7 @@ func (m *mysqlImporter) importTables(db *sql.DB, projs *archer.Projects) error {
 		indexSize  int
 	}
 
-	var changedProjs []*archer.Project
+	var changedProjs []*model.Project
 
 	for results.Next() {
 		var table tableInfo
@@ -88,9 +89,9 @@ func (m *mysqlImporter) importTables(db *sql.DB, projs *archer.Projects) error {
 			humanize.Bytes(uint64(table.dataSize)), humanize.Bytes(uint64(table.indexSize)))
 
 		proj := projs.Get(table.schemaName, table.tableName)
-		proj.Type = archer.DatabaseType
+		proj.Type = model.DatabaseType
 
-		proj.AddSize("table", &archer.Size{
+		proj.AddSize("table", &model.Size{
 			Lines: table.rows,
 			Bytes: table.dataSize + table.indexSize,
 			Other: map[string]int{
@@ -119,7 +120,7 @@ func (m *mysqlImporter) importTables(db *sql.DB, projs *archer.Projects) error {
 	return nil
 }
 
-func (m *mysqlImporter) importFKs(db *sql.DB, projs *archer.Projects) error {
+func (m *mysqlImporter) importFKs(db *sql.DB, projs *model.Projects) error {
 	results, err := db.Query(`
 		select CONSTRAINT_SCHEMA schema_name,
 			   TABLE_NAME,

@@ -11,7 +11,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 
-	"github.com/Faire/archer/lib/archer"
+	"github.com/Faire/archer/lib/archer/model"
 	"github.com/Faire/archer/lib/archer/utils"
 )
 
@@ -69,10 +69,10 @@ func (c *GraphCmd) Run(ctx *context) error {
 	return nil
 }
 
-func (c *GraphCmd) generateDot(projects *archer.Projects, filter archer.Filter) string {
-	ps := projects.ListProjects(archer.FilterExcludeExternal)
+func (c *GraphCmd) generateDot(projects *model.Projects, filter model.Filter) string {
+	ps := projects.ListProjects(model.FilterExcludeExternal)
 
-	getProjectName := func(p *archer.Project) string {
+	getProjectName := func(p *model.Project) string {
 		result := p.LevelSimpleName(c.Levels)
 		result = strings.TrimSuffix(result, "-api")
 		return result
@@ -178,7 +178,7 @@ func (c *GraphCmd) computeSizesConfig(tg *group) (bool, func(int) float64) {
 	}
 }
 
-func (c *GraphCmd) computeNodesShow(ps []*archer.Project, filter archer.Filter) map[string]bool {
+func (c *GraphCmd) computeNodesShow(ps []*model.Project, filter model.Filter) map[string]bool {
 	show := map[string]bool{}
 
 	for _, p := range ps {
@@ -187,11 +187,11 @@ func (c *GraphCmd) computeNodesShow(ps []*archer.Project, filter archer.Filter) 
 
 	for _, p := range ps {
 		if !show[p.Name] {
-			show[p.Name] = filter.Decide(filter.FilterProject(p)) != archer.Exclude
+			show[p.Name] = filter.Decide(filter.FilterProject(p)) != model.Exclude
 		}
 
-		for _, d := range p.ListDependencies(archer.FilterExcludeExternal) {
-			if filter.Decide(filter.FilterDependency(d)) == archer.Exclude {
+		for _, d := range p.ListDependencies(model.FilterExcludeExternal) {
+			if filter.Decide(filter.FilterDependency(d)) == model.Exclude {
 				continue
 			}
 
@@ -203,7 +203,7 @@ func (c *GraphCmd) computeNodesShow(ps []*archer.Project, filter archer.Filter) 
 	return show
 }
 
-func (c *GraphCmd) computeColors(ps []*archer.Project, getProjectName func(p *archer.Project) string) map[string]string {
+func (c *GraphCmd) computeColors(ps []*model.Project, getProjectName func(p *model.Project) string) map[string]string {
 	availableColors := []string{
 		"#1abc9c",
 		"#16a085",
