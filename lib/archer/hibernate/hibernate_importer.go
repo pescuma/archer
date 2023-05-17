@@ -2,15 +2,11 @@ package hibernate
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
-	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
-	"github.com/bmatcuk/doublestar/v4"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 
@@ -21,35 +17,32 @@ import (
 )
 
 type hibernateImporter struct {
-	rootDirs []string
-	globs    []string
-	storage  archer.Storage
-	rootName string
+	storage     archer.Storage
+	rootsFinder common.RootsFinder
+	rootName    string
 }
 
 func NewImporter(rootDirs, globs []string, rootName string) archer.Importer {
 	return &hibernateImporter{
-		rootDirs: rootDirs,
-		globs:    globs,
-		rootName: rootName,
+		rootsFinder: common.NewRootsFinder(rootDirs, globs),
+		rootName:    rootName,
 	}
 }
 
-func (h *hibernateImporter) Import(projs *archer.Projects, storage archer.Storage) error {
-	h.storage = storage
+func (i *hibernateImporter) Import(projs *archer.Projects, storage archer.Storage) error {
+	i.storage = storage
 
-	roots, err := h.computeRootDirs(projs)
+	roots, err := i.rootsFinder.ComputeRootDirs(projs)
 	if err != nil {
 		return err
 	}
 
 	for _, r := range roots {
-		fmt.Printf("%v %v %v\n", r.dir, r.parentRoot, r.parentName)
-
+		fmt.Printf("%v <- %v\n", r.Dir, r.Project)
 	}
 
 	type work struct {
-		root         rootInfo
+		root         common.RootDir
 		fileName     string
 		fileContents string
 		classes      map[string]*classInfo
@@ -58,50 +51,18 @@ func (h *hibernateImporter) Import(projs *archer.Projects, storage archer.Storag
 
 	group := utils.NewProcessGroup(func(w *work) (*work, error) {
 		var err error
-		w.classes, w.errors, err = h.processKotlin(w.fileContents, w.fileName, w.root)
+		w.classes, w.errors, err = i.processKotlin(w.fileContents, w.fileName, w.root)
 		return w, err
 	})
 
 	go func() {
 		for _, root := range roots {
-			globs := make([]string, len(h.globs))
-			for i, g := range h.globs {
-				if !filepath.IsAbs(g) {
-					g = filepath.Join(root.dir, g)
-				}
-
-				globs[i] = g
-			}
-
-			err = filepath.WalkDir(root.dir, func(path string, d fs.DirEntry, err error) error {
-				if err != nil {
-					return filepath.SkipDir
-				}
-
+			err = root.WalkDir(func(proj *archer.Project, path string) error {
 				if group.Aborted() {
 					return errors.New("aborted")
 				}
 
-				if d.IsDir() && strings.HasPrefix(d.Name(), ".") {
-					return filepath.SkipDir
-				}
-
 				if !strings.HasSuffix(path, ".kt") {
-					return nil
-				}
-
-				match := len(globs) == 0
-				for _, g := range globs {
-					m, err := doublestar.PathMatch(g, path)
-					if err != nil {
-						return err
-					}
-					if m {
-						match = true
-					}
-				}
-
-				if !match {
 					return nil
 				}
 
@@ -169,16 +130,15 @@ func (h *hibernateImporter) Import(projs *archer.Projects, storage archer.Storag
 
 		root := c.Root[0]
 
-		proj := projs.Get(h.rootName, c.Tables[0])
+		proj := projs.Get(i.rootName, c.Tables[0])
 		dbProjs[proj.FullName()] = proj
 
 		proj.Type = archer.DatabaseType
-		proj.RootDir = root.dir
-		proj.Dir = filepath.Dir(c.Paths[0])
+		proj.RootDir = root.Dir
 		proj.ProjectFile = c.Paths[0]
 
-		if root.parentName != "" {
-			parent := projs.Get(root.parentRoot, root.parentName)
+		if root.Project != nil {
+			parent := root.Project
 			parentProjs[parent.FullName()] = parent
 
 			parent.AddDependency(proj)
@@ -200,7 +160,7 @@ func (h *hibernateImporter) Import(projs *archer.Projects, storage archer.Storag
 				continue
 			}
 
-			dp := projs.Get(h.rootName, dc.Tables[0])
+			dp := projs.Get(i.rootName, dc.Tables[0])
 			dbProjs[dp.FullName()] = dp
 
 			d := proj.AddDependency(dp)
@@ -236,61 +196,7 @@ func (h *hibernateImporter) Import(projs *archer.Projects, storage archer.Storag
 	return nil
 }
 
-type rootInfo struct {
-	parentRoot string
-	parentName string
-	dir        string
-}
-
-func (h *hibernateImporter) computeRootDirs(projs *archer.Projects) ([]rootInfo, error) {
-	paths := map[rootInfo]bool{}
-
-	for _, rootDir := range h.rootDirs {
-		switch {
-		case strings.HasPrefix(rootDir, "archer:"):
-			filter, err := archer.ParseFilter(projs, strings.TrimPrefix(rootDir, "archer:"), archer.Include)
-			if err != nil {
-				return nil, err
-			}
-
-			for _, p := range projs.ListProjects(archer.FilterExcludeExternal) {
-				if filter.Decide(filter.FilterProject(p)) == archer.Include {
-					paths[rootInfo{p.Root, p.Name, p.Dir}] = true
-				}
-
-				for _, d := range p.ListDependencies(archer.FilterExcludeExternal) {
-					if filter.Decide(filter.FilterDependency(d)) == archer.Include {
-						paths[rootInfo{d.Source.Root, d.Source.Name, d.Source.Dir}] = true
-						paths[rootInfo{d.Target.Root, d.Target.Name, d.Target.Dir}] = true
-					}
-				}
-			}
-
-		default:
-			dir, err := utils.PathAbs(rootDir)
-			if err != nil {
-				return nil, err
-			}
-
-			paths[rootInfo{"", "", dir}] = true
-		}
-	}
-
-	result := make([]rootInfo, 0, len(paths))
-	for k := range paths {
-		if k.dir != "" {
-			result = append(result, k)
-		}
-	}
-
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].dir < result[j].dir
-	})
-
-	return result, nil
-}
-
-func (h *hibernateImporter) processKotlin(fileContents string, fileName string, root rootInfo) (map[string]*classInfo, []string, error) {
+func (i *hibernateImporter) processKotlin(fileContents string, fileName string, root common.RootDir) (map[string]*classInfo, []string, error) {
 	l := newTreeListener(fileName, root)
 
 	l.printfln("Parsing %v ...", fileName)
@@ -315,7 +221,7 @@ func (h *hibernateImporter) processKotlin(fileContents string, fileName string, 
 
 type treeListener struct {
 	*kotlin_parser.BaseKotlinParserListener
-	root             rootInfo
+	root             common.RootDir
 	currentPath      string
 	currentClassName []string
 	currentClass     []*classInfo
@@ -335,7 +241,7 @@ type treeListener struct {
 
 type classInfo struct {
 	Name         string
-	Root         []rootInfo
+	Root         []common.RootDir
 	Paths        []string
 	Tables       []string
 	Dependencies []*dependencyInfo
@@ -349,7 +255,7 @@ type dependencyInfo struct {
 var tableRE = regexp.MustCompile(`name\s*=\s*"([^'"]+)"`)
 var genericContainerRE = regexp.MustCompile(`Of<([^>]+)>\(`)
 
-func newTreeListener(path string, root rootInfo) *treeListener {
+func newTreeListener(path string, root common.RootDir) *treeListener {
 	return &treeListener{
 		currentPath: path,
 		root:        root,

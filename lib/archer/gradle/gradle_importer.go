@@ -2,15 +2,11 @@ package gradle
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	"github.com/hhatto/gocloc"
-	"github.com/pkg/errors"
 
 	"github.com/Faire/archer/lib/archer"
 	"github.com/Faire/archer/lib/archer/utils"
@@ -94,23 +90,6 @@ func (g *gradleImporter) Import(projs *archer.Projects, storage archer.Storage) 
 		}
 	}
 
-	fmt.Printf("Going to import lines of code from %v projects...\n", len(queue))
-
-	for i, p := range queue {
-		changed, err := g.importSize(projs, rootProj, p)
-		if err != nil {
-			return err
-		}
-
-		prefix := fmt.Sprintf("[%v / %v] ", i, len(queue))
-
-		if !changed {
-			fmt.Printf("%vSkipped import of lines of code from '%v'\n", prefix, p)
-		} else {
-			fmt.Printf("%vImported lines of code from '%v'\n", prefix, p)
-		}
-	}
-
 	return nil
 }
 
@@ -146,10 +125,9 @@ func (g *gradleImporter) importBasicInfo(projs *archer.Projects, projName string
 	proj.RootDir = g.rootDir
 	proj.ProjectFile = projFile
 
-	proj.Dir = filepath.Join(projDir, "src")
-	if _, err = os.Stat(proj.Dir); err != nil {
-		proj.Dir = ""
-	}
+	addDirIfExists(&proj.Dirs, "config", projDir, "config")
+	addDirIfExists(&proj.Dirs, "code", projDir, "src/main")
+	addDirIfExists(&proj.Dirs, "test", projDir, "src/test")
 
 	err = g.storage.WriteBasicInfo(proj)
 	if err != nil {
@@ -157,6 +135,13 @@ func (g *gradleImporter) importBasicInfo(projs *archer.Projects, projName string
 	}
 
 	return true, nil
+}
+
+func addDirIfExists(result *map[string]string, name string, root string, dir string) {
+	path := filepath.Join(root, dir)
+	if _, err := os.Stat(path); err != nil {
+		(*result)[name] = path
+	}
 }
 
 func (g *gradleImporter) getProjectDir(projName string) (string, error) {
@@ -262,90 +247,4 @@ func (g *gradleImporter) needsUpdate(projFile string, depsJson string) (bool, er
 	sd, err := os.Stat(depsJson)
 
 	return err != nil || sp.ModTime().After(sd.ModTime()), nil
-}
-
-func (g *gradleImporter) importSize(projs *archer.Projects, rootProj, projName string) (bool, error) {
-	proj := projs.Get(rootProj, projName)
-
-	if proj.Dir == "" {
-		return false, nil
-	}
-
-	dirs, err := os.ReadDir(proj.Dir)
-	if err != nil {
-		return false, err
-	}
-	for _, dir := range dirs {
-		if !dir.IsDir() {
-			continue
-		}
-
-		size, err := g.computeCLOC(filepath.Join(proj.Dir, dir.Name()))
-		if err != nil {
-			return false, err
-		}
-
-		proj.AddSize(dir.Name(), *size)
-	}
-
-	err = g.storage.WriteSize(proj)
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
-}
-
-func (g *gradleImporter) computeCLOC(path string) (*archer.Size, error) {
-	result := archer.Size{
-		Other: map[string]int{},
-	}
-
-	_, err := os.Stat(path)
-	switch {
-	case os.IsNotExist(err):
-		return nil, nil
-	case err != nil:
-		return nil, err
-	}
-
-	languages := gocloc.NewDefinedLanguages()
-	options := gocloc.NewClocOptions()
-	paths := []string{
-		path,
-	}
-
-	processor := gocloc.NewProcessor(languages, options)
-	loc, err := processor.Analyze(paths)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error computing lones of code")
-	}
-
-	files := 0
-	bytes := 0
-	err = filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
-		if !d.IsDir() {
-			info, err := d.Info()
-			if err != nil {
-				return err
-			}
-
-			files += 1
-			bytes += int(info.Size())
-		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	result.Bytes = bytes
-	result.Files = files
-	result.Other["Code"] = int(loc.Total.Code)
-	result.Other["Comments"] = int(loc.Total.Comments)
-	result.Other["Blanks"] = int(loc.Total.Blanks)
-	result.Lines = int(loc.Total.Code + loc.Total.Comments + loc.Total.Blanks)
-
-	return &result, nil
 }

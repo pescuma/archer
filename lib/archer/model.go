@@ -15,9 +15,9 @@ type Project struct {
 	Type      ProjectType
 
 	RootDir     string
-	Dir         string
 	ProjectFile string
 
+	Dirs         map[string]string
 	Dependencies map[string]*Dependency
 	Size         map[string]Size
 	Data         map[string]string
@@ -34,7 +34,7 @@ func NewProject(root, name string) *Project {
 }
 
 func (p *Project) String() string {
-	return fmt.Sprintf("%v[%v]", p.Name, p.Type)
+	return fmt.Sprintf("%v:%v[%v]", p.Root, p.Name, p.Type)
 }
 
 func (p *Project) AddDependency(d *Project) *Dependency {
@@ -254,11 +254,47 @@ func (ps *Projects) Get(root, name string) *Project {
 	return result
 }
 
-func (ps *Projects) ListProjects(filter FilterType) []*Project {
+func (ps *Projects) FilterProjects(filters []string, ft FilterType) ([]*Project, error) {
+	if len(filters) == 0 {
+		return ps.ListProjects(ft), nil
+	}
+
+	matched := map[*Project]bool{}
+	for _, fe := range filters {
+		filter, err := ParseFilter(ps, fe, Include)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, p := range ps.ListProjects(ft) {
+			if filter.Decide(filter.FilterProject(p)) == Include {
+				matched[p] = true
+			}
+
+			for _, d := range p.ListDependencies(ft) {
+				if filter.Decide(filter.FilterDependency(d)) == Include {
+					matched[d.Source] = true
+					matched[d.Target] = true
+				}
+			}
+		}
+	}
+
+	result := make([]*Project, 0, len(matched))
+	for p, _ := range matched {
+		result = append(result, p)
+	}
+
+	sortProjects(result)
+
+	return result, nil
+}
+
+func (ps *Projects) ListProjects(ft FilterType) []*Project {
 	result := make([]*Project, 0, len(ps.all))
 
 	for _, v := range ps.all {
-		if filter == FilterExcludeExternal && v.IsExternalDependency() {
+		if ft == FilterExcludeExternal && v.IsExternalDependency() {
 			continue
 		}
 

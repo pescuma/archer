@@ -39,7 +39,7 @@ func BasicInfoToJson(proj *archer.Project) (string, error) {
 		Type:      proj.Type,
 
 		RootDir:     proj.RootDir,
-		Dir:         proj.Dir,
+		Dirs:        proj.Dirs,
 		ProjectFile: proj.ProjectFile,
 	}
 
@@ -63,7 +63,7 @@ func BasicInfoFromJson(result *archer.Projects, content string) error {
 	proj.NameParts = jps.NameParts
 	proj.Type = jps.Type
 	proj.RootDir = jps.RootDir
-	proj.Dir = jps.Dir
+	proj.Dirs = jps.Dirs
 	proj.ProjectFile = jps.ProjectFile
 
 	return nil
@@ -191,7 +191,7 @@ type jsonBasicInfo struct {
 	Type      archer.ProjectType
 
 	RootDir     string
-	Dir         string
+	Dirs        map[string]string
 	ProjectFile string
 }
 
