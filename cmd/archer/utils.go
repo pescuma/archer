@@ -140,7 +140,7 @@ type group struct {
 	children []*group
 
 	proj *archer.Project
-	dep  *archer.Dependency
+	dep  *archer.ProjectDependency
 }
 
 type groupCategory int

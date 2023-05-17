@@ -144,7 +144,7 @@ func (i *hibernateImporter) Import(projs *archer.Projects, storage archer.Storag
 			parent := root.Project
 			parentProjs[parent] = true
 
-			parent.AddDependency(proj)
+			parent.GetDependency(proj)
 		}
 
 		for _, di := range c.Dependencies {
@@ -166,7 +166,7 @@ func (i *hibernateImporter) Import(projs *archer.Projects, storage archer.Storag
 			dp := projs.Get(i.rootName, dc.Tables[0])
 			dbProjs[dp] = true
 
-			d := proj.AddDependency(dp)
+			d := proj.GetDependency(dp)
 
 			if di.Lazy {
 				d.SetData("type", "lazy")

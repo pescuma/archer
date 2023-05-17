@@ -31,10 +31,11 @@ func ProjNamesFromJson(content string) (string, []string, error) {
 	return jps.Root, jps.Names, nil
 }
 
-func BasicInfoToJson(proj *archer.Project) (string, error) {
+func ProjBasicInfoToJson(proj *archer.Project) (string, error) {
 	jps := jsonBasicInfo{
 		Root:      proj.Root,
 		Name:      proj.Name,
+		ID:        proj.ID,
 		NameParts: proj.NameParts,
 		Type:      proj.Type,
 
@@ -50,7 +51,7 @@ func BasicInfoToJson(proj *archer.Project) (string, error) {
 	return string(marshaled), nil
 }
 
-func BasicInfoFromJson(result *archer.Projects, content string) error {
+func ProjBasicInfoFromJson(result *archer.Projects, content string) error {
 	var jps jsonBasicInfo
 
 	err := json.Unmarshal([]byte(content), &jps)
@@ -59,6 +60,7 @@ func BasicInfoFromJson(result *archer.Projects, content string) error {
 	}
 
 	proj := result.Get(jps.Root, jps.Name)
+	proj.ID = jps.ID
 	proj.NameParts = jps.NameParts
 	proj.Type = jps.Type
 	proj.RootDir = jps.RootDir
@@ -67,7 +69,7 @@ func BasicInfoFromJson(result *archer.Projects, content string) error {
 	return nil
 }
 
-func DepsToJson(proj *archer.Project) (string, error) {
+func ProjDepsToJson(proj *archer.Project) (string, error) {
 	ds := proj.ListDependencies(archer.FilterAll)
 
 	jps := jsonDeps{
@@ -80,6 +82,7 @@ func DepsToJson(proj *archer.Project) (string, error) {
 		jp := jsonDep{
 			TargetRoot: d.Target.Root,
 			TargetName: d.Target.Name,
+			ID:         d.ID,
 			Config:     d.Data,
 		}
 
@@ -94,7 +97,7 @@ func DepsToJson(proj *archer.Project) (string, error) {
 	return string(marshaled), nil
 }
 
-func DepsFromJson(result *archer.Projects, content string) error {
+func ProjDepsFromJson(result *archer.Projects, content string) error {
 	var jps jsonDeps
 
 	err := json.Unmarshal([]byte(content), &jps)
@@ -106,7 +109,8 @@ func DepsFromJson(result *archer.Projects, content string) error {
 	for _, jp := range jps.Deps {
 		target := result.Get(jp.TargetRoot, jp.TargetName)
 
-		d := proj.AddDependency(target)
+		d := proj.GetDependency(target)
+		d.ID = jp.ID
 		d.Data = jp.Config
 	}
 
@@ -189,11 +193,13 @@ func FilesToJson(proj *archer.Project) (string, error) {
 		jd := jsonDir{
 			Path: dir.RelativePath,
 			Type: dir.Type,
+			ID:   dir.ID,
 		}
 
 		for _, file := range dir.Files {
 			jd.Files = append(jd.Files, jsonFile{
 				Path: file.RelativePath,
+				ID:   file.ID,
 			})
 		}
 
@@ -272,6 +278,7 @@ type jsonBasicInfo struct {
 	Name      string
 	NameParts []string
 	Type      archer.ProjectType
+	ID        archer.UUID
 
 	RootDir     string
 	ProjectFile string
@@ -286,7 +293,9 @@ type jsonDeps struct {
 type jsonDep struct {
 	TargetRoot string
 	TargetName string
-	Config     map[string]string
+	ID         archer.UUID
+
+	Config map[string]string
 }
 
 type jsonSize struct {
@@ -303,13 +312,16 @@ type jsonFiles struct {
 }
 
 type jsonDir struct {
-	Path  string
-	Type  archer.ProjectDirectoryType
+	Path string
+	Type archer.ProjectDirectoryType
+	ID   archer.UUID
+
 	Files []jsonFile
 }
 
 type jsonFile struct {
 	Path string
+	ID   archer.UUID
 }
 
 type jsonConfig struct {

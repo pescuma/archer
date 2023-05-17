@@ -16,7 +16,7 @@ func CreateIgnoreFilter() Filter {
 		filterProject: func(proj *Project) UsageType {
 			return utils.IIf(proj.IsIgnored(), Exclude, DontCare)
 		},
-		filterDependency: func(dep *Dependency) UsageType {
+		filterDependency: func(dep *ProjectDependency) UsageType {
 			return utils.IIf(dep.Source.IsIgnored() || dep.Target.IsIgnored(), Exclude, DontCare)
 		},
 		filterType: Exclude,
@@ -49,7 +49,7 @@ func CreateRootsFilter(roots []string) (Filter, error) {
 		filterProject: func(proj *Project) UsageType {
 			return utils.IIf(matches(proj), DontCare, Exclude)
 		},
-		filterDependency: func(dep *Dependency) UsageType {
+		filterDependency: func(dep *ProjectDependency) UsageType {
 			return utils.IIf(matches(dep.Source) && matches(dep.Target), DontCare, Exclude)
 		},
 		filterType: Exclude,
@@ -102,7 +102,7 @@ func ParseProjectFilter(projs *Projects, filter string, filterType UsageType) (F
 
 			return filterType
 		},
-		filterDependency: func(dep *Dependency) UsageType {
+		filterDependency: func(dep *ProjectDependency) UsageType {
 			sm := projFilter(dep.Source)
 			dm := projFilter(dep.Target)
 
@@ -168,7 +168,7 @@ func ParseEdgeFilter(projs *Projects, filter string, filterType UsageType) (Filt
 	}
 
 	return &basicFilter{
-		filterDependency: func(dep *Dependency) UsageType {
+		filterDependency: func(dep *ProjectDependency) UsageType {
 			if filterType == Include && !onlyRequiredEdges {
 				return utils.IIf(utils.MapContains(nodes, dep.Source.Name) && utils.MapContains(nodes, dep.Target.Name), Include, DontCare)
 			} else {
@@ -307,7 +307,7 @@ func GroupFilters(filters ...Filter) Filter {
 type Filter interface {
 	FilterProject(proj *Project) UsageType
 
-	FilterDependency(dep *Dependency) UsageType
+	FilterDependency(dep *ProjectDependency) UsageType
 
 	// Decide does not return DontCase, so it should decide what to do in this case
 	Decide(u UsageType) UsageType
@@ -334,7 +334,7 @@ func (u UsageType) Merge(other UsageType) UsageType {
 
 type basicFilter struct {
 	filterProject    func(proj *Project) UsageType
-	filterDependency func(dep *Dependency) UsageType
+	filterDependency func(dep *ProjectDependency) UsageType
 	filterType       UsageType
 }
 
@@ -346,7 +346,7 @@ func (b *basicFilter) FilterProject(proj *Project) UsageType {
 	return b.filterProject(proj)
 }
 
-func (b *basicFilter) FilterDependency(dep *Dependency) UsageType {
+func (b *basicFilter) FilterDependency(dep *ProjectDependency) UsageType {
 	if b.filterDependency == nil {
 		return DontCare
 	}
@@ -380,7 +380,7 @@ func (m *andFilter) FilterProject(proj *Project) UsageType {
 	}
 }
 
-func (m *andFilter) FilterDependency(dep *Dependency) UsageType {
+func (m *andFilter) FilterDependency(dep *ProjectDependency) UsageType {
 	result := lo.Map(m.filters, func(f Filter, _ int) UsageType { return f.FilterDependency(dep) })
 	result = lo.Uniq(result)
 
@@ -411,7 +411,7 @@ func (m *multipleFilter) FilterProject(proj *Project) UsageType {
 	return result
 }
 
-func (m *multipleFilter) FilterDependency(dep *Dependency) UsageType {
+func (m *multipleFilter) FilterDependency(dep *ProjectDependency) UsageType {
 	result := DontCare
 	for _, f := range m.filters {
 		result = result.Merge(f.FilterDependency(dep))

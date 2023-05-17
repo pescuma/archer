@@ -99,7 +99,7 @@ func parseDeps(projects *archer.Projects, content string, rootProj string) error
 				lp = utils.Last(stack)
 			}
 
-			lp.proj.AddDependency(p)
+			lp.proj.GetDependency(p)
 			stack = append(stack, pd{p, depth})
 		}
 	}

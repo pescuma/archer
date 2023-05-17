@@ -156,7 +156,7 @@ func (m *mysqlImporter) importFKs(db *sql.DB, projs *archer.Projects) error {
 		proj := projs.Get(fk.schemaName, fk.tableName)
 
 		dep := projs.Get(fk.schemaName, fk.referencedTableName)
-		proj.AddDependency(dep)
+		proj.GetDependency(dep)
 
 		toSave[rootAndName{fk.schemaName, fk.tableName}] = true
 	}

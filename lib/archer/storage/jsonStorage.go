@@ -159,7 +159,7 @@ func (s *jsonStorage) WriteDeps(proj *archer.Project) error {
 		return err
 	}
 
-	jc, err := DepsToJson(proj)
+	jc, err := ProjDepsToJson(proj)
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,7 @@ func (s *jsonStorage) ReadDeps(result *archer.Projects, fileName string) error {
 		return err
 	}
 
-	err = DepsFromJson(result, string(contents))
+	err = ProjDepsFromJson(result, string(contents))
 	if err != nil {
 		return err
 	}
@@ -253,7 +253,7 @@ func (s *jsonStorage) WriteBasicInfo(proj *archer.Project) error {
 		return err
 	}
 
-	jc, err := BasicInfoToJson(proj)
+	jc, err := ProjBasicInfoToJson(proj)
 	if err != nil {
 		return err
 	}
@@ -272,7 +272,7 @@ func (s *jsonStorage) ReadBasicInfo(result *archer.Projects, fileName string) er
 		return err
 	}
 
-	err = BasicInfoFromJson(result, string(contents))
+	err = ProjBasicInfoFromJson(result, string(contents))
 	if err != nil {
 		return err
 	}

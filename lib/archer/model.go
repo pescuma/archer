@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/lithammer/shortuuid/v4"
+
 	"github.com/Faire/archer/lib/archer/utils"
 )
 
@@ -16,12 +18,13 @@ type Project struct {
 	Name      string
 	NameParts []string
 	Type      ProjectType
+	ID        UUID
 
 	RootDir     string
 	ProjectFile string
 
 	Dirs         map[string]*ProjectDirectory
-	Dependencies map[string]*Dependency
+	Dependencies map[string]*ProjectDependency
 	Sizes        map[string]*Size
 	Data         map[string]string
 }
@@ -30,8 +33,9 @@ func NewProject(root, name string) *Project {
 	return &Project{
 		Root:         root,
 		Name:         name,
+		ID:           NewUUID("p"),
 		Dirs:         map[string]*ProjectDirectory{},
-		Dependencies: map[string]*Dependency{},
+		Dependencies: map[string]*ProjectDependency{},
 		Sizes:        map[string]*Size{},
 		Data:         map[string]string{},
 	}
@@ -41,14 +45,13 @@ func (p *Project) String() string {
 	return fmt.Sprintf("%v:%v[%v]", p.Root, p.Name, p.Type)
 }
 
-func (p *Project) AddDependency(d *Project) *Dependency {
-	result := &Dependency{
-		Source: p,
-		Target: d,
-		Data:   map[string]string{},
-	}
+func (p *Project) GetDependency(d *Project) *ProjectDependency {
+	result, ok := p.Dependencies[d.Name]
 
-	p.Dependencies[d.Name] = result
+	if !ok {
+		result = NewDependency(p, d)
+		p.Dependencies[d.Name] = result
+	}
 
 	return result
 }
@@ -228,8 +231,8 @@ func (p *Project) IsExternalDependency() bool {
 	return p.Type == ExternalDependencyType
 }
 
-func (p *Project) ListDependencies(filter FilterType) []*Dependency {
-	result := make([]*Dependency, 0, len(p.Dependencies))
+func (p *Project) ListDependencies(filter FilterType) []*ProjectDependency {
+	result := make([]*ProjectDependency, 0, len(p.Dependencies))
 
 	for _, v := range p.Dependencies {
 		if filter == FilterExcludeExternal && v.Target.IsExternalDependency() {
@@ -244,7 +247,7 @@ func (p *Project) ListDependencies(filter FilterType) []*Dependency {
 	return result
 }
 
-func sortDependencies(result []*Dependency) {
+func sortDependencies(result []*ProjectDependency) {
 	sort.Slice(result, func(i, j int) bool {
 		pi := result[i].Source
 		pj := result[j].Source
@@ -285,17 +288,28 @@ func (p *Project) GetData(name string) string {
 	return v
 }
 
-type Dependency struct {
+type ProjectDependency struct {
 	Source *Project
 	Target *Project
-	Data   map[string]string
+	ID     UUID
+
+	Data map[string]string
 }
 
-func (d *Dependency) String() string {
+func NewDependency(source *Project, target *Project) *ProjectDependency {
+	return &ProjectDependency{
+		Source: source,
+		Target: target,
+		ID:     NewUUID("q"),
+		Data:   map[string]string{},
+	}
+}
+
+func (d *ProjectDependency) String() string {
 	return fmt.Sprintf("%v -> %v", d.Source, d.Target)
 }
 
-func (d *Dependency) SetData(name string, value string) bool {
+func (d *ProjectDependency) SetData(name string, value string) bool {
 	if d.GetData(name) == value {
 		return false
 	}
@@ -309,7 +323,7 @@ func (d *Dependency) SetData(name string, value string) bool {
 	return true
 }
 
-func (d *Dependency) GetData(name string) string {
+func (d *ProjectDependency) GetData(name string) string {
 	v, _ := d.Data[name]
 	return v
 }
@@ -463,15 +477,18 @@ func (s *Size) Clear() {
 type ProjectDirectory struct {
 	RelativePath string
 	Type         ProjectDirectoryType
-	Files        map[string]*ProjectFile
-	Size         *Size
+	ID           UUID
+
+	Files map[string]*ProjectFile
+	Size  *Size
 }
 
 func NewProjectDirectory(relativePath string) *ProjectDirectory {
 	return &ProjectDirectory{
 		RelativePath: relativePath,
-		Size:         NewSize(),
+		ID:           NewUUID("d"),
 		Files:        map[string]*ProjectFile{},
+		Size:         NewSize(),
 	}
 }
 
@@ -488,12 +505,15 @@ func (d *ProjectDirectory) GetFile(relativePath string) *ProjectFile {
 
 type ProjectFile struct {
 	RelativePath string
-	Size         *Size
+	ID           UUID
+
+	Size *Size
 }
 
 func NewProjectFile(relativePath string) *ProjectFile {
 	return &ProjectFile{
 		RelativePath: relativePath,
+		ID:           NewUUID("f"),
 		Size:         NewSize(),
 	}
 }
@@ -530,4 +550,10 @@ func (t ProjectDirectoryType) String() string {
 	default:
 		return "source"
 	}
+}
+
+type UUID string
+
+func NewUUID(t string) UUID {
+	return UUID(shortuuid.New() + t)
 }
