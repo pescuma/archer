@@ -533,6 +533,19 @@ const (
 	DatabaseType
 )
 
+func (t ProjectType) String() string {
+	switch t {
+	case ExternalDependencyType:
+		return "external dependency"
+	case CodeType:
+		return "code"
+	case DatabaseType:
+		return "db"
+	default:
+		return "<unknown>"
+	}
+}
+
 type ProjectDirectoryType int
 
 const (
@@ -543,12 +556,14 @@ const (
 
 func (t ProjectDirectoryType) String() string {
 	switch t {
+	case SourceDir:
+		return "source"
 	case TestsDir:
 		return "tests"
 	case ConfigDir:
 		return "config"
 	default:
-		return "source"
+		return "<unknown>"
 	}
 }
 
