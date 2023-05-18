@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/samber/lo"
+
 	"github.com/Faire/archer/lib/archer"
 	"github.com/Faire/archer/lib/archer/model"
 	"github.com/Faire/archer/lib/archer/utils"
@@ -15,7 +17,6 @@ import (
 
 type gradleImporter struct {
 	rootDir string
-	storage archer.Storage
 }
 
 func NewImporter(rootDir string) archer.Importer {
@@ -25,8 +26,6 @@ func NewImporter(rootDir string) archer.Importer {
 }
 
 func (g *gradleImporter) Import(projs *model.Projects, storage archer.Storage) error {
-	g.storage = storage
-
 	fmt.Printf("Listing projects...\n")
 
 	queue, err := g.importProjectNames()
@@ -84,8 +83,32 @@ func (g *gradleImporter) Import(projs *model.Projects, storage archer.Storage) e
 				d.SetData("style", "dashed")
 			}
 		}
+	}
 
-		err = g.storage.WriteDeps(proj)
+	all := projs.ListProjects(model.FilterAll)
+	all = lo.Filter(all, func(p *model.Project, _ int) bool { return p.Root == rootProj })
+
+	err = storage.WriteProjNames(rootProj, lo.Map(all, func(p *model.Project, _ int) string { return p.Name }))
+	if err != nil {
+		return err
+	}
+
+	for _, proj := range all {
+		err = storage.WriteBasicInfo(proj)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, proj := range all {
+		err = storage.WriteFiles(proj)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, proj := range all {
+		err = storage.WriteDeps(proj)
 		if err != nil {
 			return err
 		}
@@ -96,11 +119,6 @@ func (g *gradleImporter) Import(projs *model.Projects, storage archer.Storage) e
 
 func (g *gradleImporter) importProjectNames() ([]string, error) {
 	projNames, err := listProjects(g.rootDir)
-	if err != nil {
-		return nil, err
-	}
-
-	err = g.storage.WriteProjNames(projNames[0], projNames)
 	if err != nil {
 		return nil, err
 	}
@@ -126,11 +144,6 @@ func (g *gradleImporter) importBasicInfo(projs *model.Projects, projName string,
 	proj.RootDir = projDir
 	proj.ProjectFile = projFile
 
-	err = g.storage.WriteBasicInfo(proj)
-	if err != nil {
-		return false, err
-	}
-
 	_, err = proj.SetDirectoryAndFiles(projDir, model.ConfigDir, false)
 	if err != nil {
 		return false, err
@@ -152,11 +165,6 @@ func (g *gradleImporter) importBasicInfo(projs *model.Projects, projName string,
 		if err != nil {
 			return false, err
 		}
-	}
-
-	err = g.storage.WriteFiles(proj)
-	if err != nil {
-		return false, err
 	}
 
 	return true, nil

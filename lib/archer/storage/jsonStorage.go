@@ -140,6 +140,53 @@ func (s *jsonStorage) computeDataDir(proj *model.Project) (string, error) {
 	return dir, nil
 }
 
+func (s *jsonStorage) getBasicInfoFileName(proj *model.Project) (string, error) {
+	dataDir, err := s.computeDataDir(proj)
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(dataDir, basicInfoJson), nil
+}
+
+func (s *jsonStorage) WriteBasicInfo(proj *model.Project) error {
+	fileName, err := s.getBasicInfoFileName(proj)
+	if err != nil {
+		return err
+	}
+
+	err = os.MkdirAll(filepath.Dir(fileName), 0o700)
+	if err != nil {
+		return err
+	}
+
+	jc, err := ProjBasicInfoToJson(proj)
+	if err != nil {
+		return err
+	}
+
+	err = os.WriteFile(fileName, []byte(jc), 0o600)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *jsonStorage) ReadBasicInfo(result *model.Projects, fileName string) error {
+	contents, err := os.ReadFile(fileName)
+	if err != nil {
+		return err
+	}
+
+	err = ProjBasicInfoFromJson(result, string(contents))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (s *jsonStorage) getDepsFileName(proj *model.Project) (string, error) {
 	dataDir, err := s.computeDataDir(proj)
 	if err != nil {
@@ -227,53 +274,6 @@ func (s *jsonStorage) ReadSize(result *model.Projects, fileName string) error {
 	}
 
 	err = SizeFromJson(result, string(contents))
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *jsonStorage) getBasicInfoFileName(proj *model.Project) (string, error) {
-	dataDir, err := s.computeDataDir(proj)
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(dataDir, basicInfoJson), nil
-}
-
-func (s *jsonStorage) WriteBasicInfo(proj *model.Project) error {
-	fileName, err := s.getBasicInfoFileName(proj)
-	if err != nil {
-		return err
-	}
-
-	err = os.MkdirAll(filepath.Dir(fileName), 0o700)
-	if err != nil {
-		return err
-	}
-
-	jc, err := ProjBasicInfoToJson(proj)
-	if err != nil {
-		return err
-	}
-
-	err = os.WriteFile(fileName, []byte(jc), 0o600)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *jsonStorage) ReadBasicInfo(result *model.Projects, fileName string) error {
-	contents, err := os.ReadFile(fileName)
-	if err != nil {
-		return err
-	}
-
-	err = ProjBasicInfoFromJson(result, string(contents))
 	if err != nil {
 		return err
 	}
