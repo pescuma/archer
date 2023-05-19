@@ -1,10 +1,10 @@
 package main
 
 import (
-	"github.com/Faire/archer/lib/archer/gradle"
-	"github.com/Faire/archer/lib/archer/hibernate"
-	"github.com/Faire/archer/lib/archer/mysql"
-	"github.com/Faire/archer/lib/archer/size"
+	"github.com/Faire/archer/lib/archer/importers/gradle"
+	"github.com/Faire/archer/lib/archer/importers/hibernate"
+	"github.com/Faire/archer/lib/archer/importers/mysql"
+	"github.com/Faire/archer/lib/archer/importers/size"
 )
 
 type ImportGradleCmd struct {

@@ -12,7 +12,7 @@ import (
 
 	"github.com/Faire/archer/lib/archer"
 	"github.com/Faire/archer/lib/archer/common"
-	"github.com/Faire/archer/lib/archer/kotlin_parser"
+	"github.com/Faire/archer/lib/archer/languages/kotlin_parser"
 	"github.com/Faire/archer/lib/archer/model"
 	"github.com/Faire/archer/lib/archer/utils"
 )
