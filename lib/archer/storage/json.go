@@ -133,12 +133,6 @@ func SizeToJson(proj *model.Project) (string, error) {
 
 		jps.Sizes[dir.RelativePath] = map[string]*model.Size{}
 		jps.Sizes[dir.RelativePath][""] = dir.Size
-
-		for _, file := range dir.Files {
-			if !file.Size.IsEmpty() {
-				jps.Sizes[dir.RelativePath][file.RelativePath] = file.Size
-			}
-		}
 	}
 
 	marshaled, err := json.Marshal(jps)
@@ -171,9 +165,6 @@ func SizeFromJson(result *model.Projects, content string) error {
 			for filePath, size := range files {
 				if filePath == "" {
 					dir.Size = size
-				} else {
-					file := dir.GetFile(filePath)
-					file.Size = size
 				}
 			}
 		}
@@ -194,13 +185,6 @@ func FilesToJson(proj *model.Project) (string, error) {
 			Path: dir.RelativePath,
 			Type: dir.Type,
 			ID:   dir.ID,
-		}
-
-		for _, file := range dir.Files {
-			jd.Files = append(jd.Files, jsonFile{
-				Path: file.RelativePath,
-				ID:   file.ID,
-			})
 		}
 
 		jps.Dirs = append(jps.Dirs, jd)
@@ -227,10 +211,6 @@ func FilesFromJson(result *model.Projects, content string) error {
 	for _, jd := range jps.Dirs {
 		dir := proj.GetDirectory(jd.Path)
 		dir.Type = jd.Type
-
-		for _, jf := range jd.Files {
-			dir.GetFile(jf.Path)
-		}
 	}
 
 	return nil
@@ -315,8 +295,6 @@ type jsonDir struct {
 	Path string
 	Type model.ProjectDirectoryType
 	ID   model.UUID
-
-	Files []jsonFile
 }
 
 type jsonFile struct {

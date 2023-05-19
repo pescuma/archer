@@ -16,13 +16,13 @@ type sqlProject struct {
 	RootDir     string
 	ProjectFile string
 
-	Size  sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
+	Size  *sqlSize            `gorm:"embedded;embeddedPrefix:size_"`
 	Sizes map[string]*sqlSize `gorm:"serializer:json"`
 	Data  map[string]string   `gorm:"serializer:json"`
 
 	Dependencies []sqlProjectDependency `gorm:"foreignKey:SourceID;foreignKey:TargetID"`
 	Dirs         []sqlProjectDirectory  `gorm:"foreignKey:ProjectID"`
-	Files        []sqlProjectFile       `gorm:"foreignKey:ProjectID"`
+	Files        []sqlFile              `gorm:"foreignKey:ProjectID"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -45,21 +45,24 @@ type sqlProjectDirectory struct {
 	RelativePath string
 	Type         model.ProjectDirectoryType
 
-	Size sqlSize `gorm:"embedded;embeddedPrefix:size_"`
+	Size *sqlSize          `gorm:"embedded;embeddedPrefix:size_"`
+	Data map[string]string `gorm:"serializer:json"`
 
-	Files []sqlProjectFile `gorm:"foreignKey:DirectoryID"`
+	Files []sqlFile `gorm:"foreignKey:ProjectDirectoryID"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
 
-type sqlProjectFile struct {
-	ID           model.UUID
-	DirectoryID  model.UUID `gorm:"index"`
-	ProjectID    model.UUID `gorm:"index"`
-	RelativePath string
+type sqlFile struct {
+	ID   model.UUID
+	Path string
 
-	Size sqlSize `gorm:"embedded;embeddedPrefix:size_"`
+	ProjectID          *model.UUID `gorm:"index"`
+	ProjectDirectoryID *model.UUID `gorm:"index"`
+
+	Size *sqlSize          `gorm:"embedded;embeddedPrefix:size_"`
+	Data map[string]string `gorm:"serializer:json"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

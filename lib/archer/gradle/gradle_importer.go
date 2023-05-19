@@ -2,6 +2,7 @@ package gradle
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,7 +24,7 @@ func NewImporter(rootDir string) archer.Importer {
 	}
 }
 
-func (g *gradleImporter) Import(projs *model.Projects, storage archer.Storage) error {
+func (g *gradleImporter) Import(projs *model.Projects, files *model.Files, storage archer.Storage) error {
 	fmt.Printf("Listing projects...\n")
 
 	queue, err := g.importProjectNames()
@@ -36,18 +37,25 @@ func (g *gradleImporter) Import(projs *model.Projects, storage archer.Storage) e
 	rootProj := queue[0]
 
 	for i, p := range queue {
-		changed, err := g.importBasicInfo(projs, p, rootProj)
+		err = g.importBasicInfo(projs, p, rootProj)
 		if err != nil {
 			return err
 		}
 
-		prefix := fmt.Sprintf("[%v / %v] ", i, len(queue))
+		fmt.Printf("[%v / %v] Imported basic info from '%v'\n", i, len(queue), p)
+	}
 
-		if !changed {
-			fmt.Printf("%vSkipped import of basic info from '%v'\n", prefix, p)
-		} else {
-			fmt.Printf("%vImported basic info from '%v'\n", prefix, p)
+	fmt.Printf("Going to import files from %v projects...\n", len(queue))
+
+	for i, p := range queue {
+		proj := projs.Get(rootProj, p)
+
+		err = g.importDirectories(files, proj)
+		if err != nil {
+			return err
 		}
+
+		fmt.Printf("[%v / %v] Imported files from '%v'\n", i, len(queue), p)
 	}
 
 	fmt.Printf("Going to import dependencies from %v projects...\n", len(queue))
@@ -83,7 +91,19 @@ func (g *gradleImporter) Import(projs *model.Projects, storage archer.Storage) e
 		}
 	}
 
-	return storage.WriteProjects(projs, archer.ChangedProjectBasicInfo|archer.ChangedProjectConfig|archer.ChangedProjectDependencies)
+	fmt.Printf("Writing results...\n")
+
+	err = storage.WriteProjects(projs, archer.ChangedBasicInfo|archer.ChangedConfig|archer.ChangedDependencies)
+	if err != nil {
+		return err
+	}
+
+	err = storage.WriteFiles(files, archer.ChangedBasicInfo)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (g *gradleImporter) importProjectNames() ([]string, error) {
@@ -95,15 +115,15 @@ func (g *gradleImporter) importProjectNames() ([]string, error) {
 	return projNames, nil
 }
 
-func (g *gradleImporter) importBasicInfo(projs *model.Projects, projName string, rootProj string) (bool, error) {
+func (g *gradleImporter) importBasicInfo(projs *model.Projects, projName string, rootProj string) error {
 	projDir, err := g.getProjectDir(projName)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	projFile, err := g.getProjectFile(projName)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	proj := projs.Get(rootProj, projName)
@@ -113,9 +133,13 @@ func (g *gradleImporter) importBasicInfo(projs *model.Projects, projName string,
 	proj.RootDir = projDir
 	proj.ProjectFile = projFile
 
-	_, err = proj.SetDirectoryAndFiles(projDir, model.ConfigDir, false)
+	return nil
+}
+
+func (g *gradleImporter) importDirectories(files *model.Files, proj *model.Project) error {
+	err := g.importDirectory(files, proj, proj.RootDir, model.ConfigDir, false)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	var candidates = []struct {
@@ -130,13 +154,56 @@ func (g *gradleImporter) importBasicInfo(projs *model.Projects, projName string,
 	}
 
 	for _, c := range candidates {
-		_, err = proj.SetDirectoryAndFiles(filepath.Join(projDir, c.Path), c.Type, true)
+		err = g.importDirectory(files, proj, filepath.Join(proj.RootDir, c.Path), c.Type, true)
 		if err != nil {
-			return false, err
+			return err
 		}
 	}
 
-	return true, nil
+	return nil
+}
+
+func (g *gradleImporter) importDirectory(files *model.Files, proj *model.Project, dirPath string, dirType model.ProjectDirectoryType, recursive bool) error {
+	dirPath, err := utils.PathAbs(dirPath)
+	if err != nil {
+		return nil
+	}
+
+	_, err = os.Stat(dirPath)
+	if err != nil {
+		return nil
+	}
+
+	var dir *model.ProjectDirectory
+	return filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return filepath.SkipDir
+		}
+
+		if d.IsDir() {
+			if strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir
+			} else {
+				return utils.IIf(recursive, nil, filepath.SkipDir)
+			}
+		}
+
+		if dir == nil {
+			rootRel, err := filepath.Rel(proj.RootDir, dirPath)
+			if err != nil {
+				return err
+			}
+
+			dir = proj.GetDirectory(rootRel)
+			dir.Type = dirType
+		}
+
+		file := files.Get(path)
+		file.ProjectID = &proj.ID
+		file.ProjectDirectoryID = &dir.ID
+
+		return nil
+	})
 }
 
 func (g *gradleImporter) getProjectDir(projName string) (string, error) {

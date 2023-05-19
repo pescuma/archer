@@ -30,10 +30,10 @@ func NewImporter(rootDirs, globs []string, rootName string) archer.Importer {
 	}
 }
 
-func (i *hibernateImporter) Import(projs *model.Projects, storage archer.Storage) error {
+func (i *hibernateImporter) Import(projs *model.Projects, files *model.Files, storage archer.Storage) error {
 	i.storage = storage
 
-	roots, err := i.rootsFinder.ComputeRootDirs(projs)
+	roots, err := i.rootsFinder.ComputeRootDirs(projs, files)
 	if err != nil {
 		return err
 	}
@@ -176,7 +176,7 @@ func (i *hibernateImporter) Import(projs *model.Projects, storage archer.Storage
 
 	common.CreateTableNameParts(lo.Keys(dbProjs))
 
-	return storage.WriteProjects(projs, archer.ChangedProjectBasicInfo|archer.ChangedProjectDependencies)
+	return storage.WriteProjects(projs, archer.ChangedBasicInfo|archer.ChangedDependencies)
 }
 
 func (i *hibernateImporter) processKotlin(fileContents string, fileName string, root common.RootDir) (map[string]*classInfo, []string, error) {

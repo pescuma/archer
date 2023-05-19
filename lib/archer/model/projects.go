@@ -15,19 +15,6 @@ func NewProjects() *Projects {
 	}
 }
 
-func (ps *Projects) GetOrNil(name string) *Project {
-	if len(name) == 0 {
-		panic("empty name not supported")
-	}
-
-	result, ok := ps.all[name]
-	if !ok {
-		return nil
-	}
-
-	return result
-}
-
 func (ps *Projects) Get(root, name string) *Project {
 	if len(root) == 0 {
 		panic("empty root not supported")

@@ -44,31 +44,31 @@ func (s *jsonStorage) LoadProjects(result *model.Projects) error {
 	return filepath.WalkDir(s.root, func(path string, d fs.DirEntry, err error) error {
 		switch d.Name() {
 		case basicInfoJson:
-			err = s.ReadBasicInfo(result, path)
+			err = s.readBasicInfo(result, path)
 			if err != nil {
 				return err
 			}
 
 		case depsJson:
-			err = s.ReadDeps(result, path)
+			err = s.readDeps(result, path)
 			if err != nil {
 				return err
 			}
 
 		case sizeJson:
-			err = s.ReadSize(result, path)
+			err = s.readSize(result, path)
 			if err != nil {
 				return err
 			}
 
 		case filesJson:
-			err = s.ReadFiles(result, path)
+			err = s.readFiles(result, path)
 			if err != nil {
 				return err
 			}
 
 		case configJson:
-			err = s.ReadConfig(result, path)
+			err = s.readConfig(result, path)
 			if err != nil {
 				return err
 			}
@@ -82,7 +82,7 @@ func (s *jsonStorage) WriteProjects(projs *model.Projects, changes archer.Storag
 	byRoot := lo.GroupBy(projs.ListProjects(model.FilterAll), func(p *model.Project) string { return p.RootDir })
 
 	for root, projs := range byRoot {
-		err := s.WriteProjNames(root, lo.Map(projs, func(p *model.Project, _ int) string { return p.Name }))
+		err := s.writeProjNames(root, lo.Map(projs, func(p *model.Project, _ int) string { return p.Name }))
 		if err != nil {
 			return err
 		}
@@ -99,36 +99,29 @@ func (s *jsonStorage) WriteProjects(projs *model.Projects, changes archer.Storag
 }
 
 func (s *jsonStorage) WriteProject(proj *model.Project, changes archer.StorageChanges) error {
-	if changes&archer.ChangedProjectBasicInfo != 0 {
-		err := s.WriteBasicInfo(proj)
+	if changes&archer.ChangedBasicInfo != 0 {
+		err := s.writeBasicInfo(proj)
 		if err != nil {
 			return err
 		}
 	}
 
-	if changes&archer.ChangedProjectDependencies != 0 {
-		err := s.WriteDeps(proj)
+	if changes&archer.ChangedDependencies != 0 {
+		err := s.writeDeps(proj)
 		if err != nil {
 			return err
 		}
 	}
 
-	if changes&archer.ChangedProjectFiles != 0 {
-		err := s.WriteFiles(proj)
+	if changes&archer.ChangedSize != 0 {
+		err := s.writeSize(proj)
 		if err != nil {
 			return err
 		}
 	}
 
-	if changes&archer.ChangedProjectSize != 0 {
-		err := s.WriteSize(proj)
-		if err != nil {
-			return err
-		}
-	}
-
-	if changes&archer.ChangedProjectConfig != 0 {
-		err := s.WriteConfig(proj)
+	if changes&archer.ChangedConfig != 0 {
+		err := s.writeConfig(proj)
 		if err != nil {
 			return err
 		}
@@ -145,7 +138,7 @@ func (s *jsonStorage) getProjNamesFileName(root string) (string, error) {
 	))
 }
 
-func (s *jsonStorage) WriteProjNames(projRoot string, projNames []string) error {
+func (s *jsonStorage) writeProjNames(projRoot string, projNames []string) error {
 	fileName, err := s.getProjNamesFileName(projRoot)
 	if err != nil {
 		return err
@@ -169,7 +162,7 @@ func (s *jsonStorage) WriteProjNames(projRoot string, projNames []string) error 
 	return nil
 }
 
-func (s *jsonStorage) ReadProjNames() ([]string, error) {
+func (s *jsonStorage) readProjNames() ([]string, error) {
 	fileName, err := s.getProjNamesFileName(s.root)
 	if err != nil {
 		return nil, err
@@ -210,7 +203,7 @@ func (s *jsonStorage) getBasicInfoFileName(proj *model.Project) (string, error) 
 	return filepath.Join(dataDir, basicInfoJson), nil
 }
 
-func (s *jsonStorage) WriteBasicInfo(proj *model.Project) error {
+func (s *jsonStorage) writeBasicInfo(proj *model.Project) error {
 	fileName, err := s.getBasicInfoFileName(proj)
 	if err != nil {
 		return err
@@ -234,7 +227,7 @@ func (s *jsonStorage) WriteBasicInfo(proj *model.Project) error {
 	return nil
 }
 
-func (s *jsonStorage) ReadBasicInfo(result *model.Projects, fileName string) error {
+func (s *jsonStorage) readBasicInfo(result *model.Projects, fileName string) error {
 	contents, err := os.ReadFile(fileName)
 	if err != nil {
 		return err
@@ -257,7 +250,7 @@ func (s *jsonStorage) getDepsFileName(proj *model.Project) (string, error) {
 	return filepath.Join(dataDir, depsJson), nil
 }
 
-func (s *jsonStorage) WriteDeps(proj *model.Project) error {
+func (s *jsonStorage) writeDeps(proj *model.Project) error {
 	fileName, err := s.getDepsFileName(proj)
 	if err != nil {
 		return err
@@ -281,7 +274,7 @@ func (s *jsonStorage) WriteDeps(proj *model.Project) error {
 	return nil
 }
 
-func (s *jsonStorage) ReadDeps(result *model.Projects, fileName string) error {
+func (s *jsonStorage) readDeps(result *model.Projects, fileName string) error {
 	contents, err := os.ReadFile(fileName)
 	if err != nil {
 		return err
@@ -304,7 +297,7 @@ func (s *jsonStorage) getSizeFileName(proj *model.Project) (string, error) {
 	return filepath.Join(dataDir, sizeJson), nil
 }
 
-func (s *jsonStorage) WriteSize(proj *model.Project) error {
+func (s *jsonStorage) writeSize(proj *model.Project) error {
 	fileName, err := s.getSizeFileName(proj)
 	if err != nil {
 		return err
@@ -328,7 +321,7 @@ func (s *jsonStorage) WriteSize(proj *model.Project) error {
 	return nil
 }
 
-func (s *jsonStorage) ReadSize(result *model.Projects, fileName string) error {
+func (s *jsonStorage) readSize(result *model.Projects, fileName string) error {
 	contents, err := os.ReadFile(fileName)
 	if err != nil {
 		return err
@@ -351,7 +344,7 @@ func (s *jsonStorage) getFilesFileName(proj *model.Project) (string, error) {
 	return filepath.Join(dataDir, filesJson), nil
 }
 
-func (s *jsonStorage) WriteFiles(proj *model.Project) error {
+func (s *jsonStorage) writeFiles(proj *model.Project) error {
 	fileName, err := s.getFilesFileName(proj)
 	if err != nil {
 		return err
@@ -375,7 +368,7 @@ func (s *jsonStorage) WriteFiles(proj *model.Project) error {
 	return nil
 }
 
-func (s *jsonStorage) ReadFiles(result *model.Projects, fileName string) error {
+func (s *jsonStorage) readFiles(result *model.Projects, fileName string) error {
 	contents, err := os.ReadFile(fileName)
 	if err != nil {
 		return err
@@ -398,7 +391,7 @@ func (s *jsonStorage) getConfigFileName(proj *model.Project) (string, error) {
 	return filepath.Join(dataDir, configJson), nil
 }
 
-func (s *jsonStorage) WriteConfig(proj *model.Project) error {
+func (s *jsonStorage) writeConfig(proj *model.Project) error {
 	fileName, err := s.getConfigFileName(proj)
 	if err != nil {
 		return err
@@ -422,7 +415,7 @@ func (s *jsonStorage) WriteConfig(proj *model.Project) error {
 	return nil
 }
 
-func (s *jsonStorage) ReadConfig(result *model.Projects, fileName string) error {
+func (s *jsonStorage) readConfig(result *model.Projects, fileName string) error {
 	contents, err := os.ReadFile(fileName)
 	if err != nil {
 		return err
@@ -434,4 +427,14 @@ func (s *jsonStorage) ReadConfig(result *model.Projects, fileName string) error 
 	}
 
 	return nil
+}
+
+func (s *jsonStorage) LoadFiles(result *model.Files) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *jsonStorage) WriteFiles(files *model.Files, changes archer.StorageChanges) error {
+	// TODO implement me
+	panic("implement me")
 }

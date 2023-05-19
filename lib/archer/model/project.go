@@ -2,9 +2,6 @@ package model
 
 import (
 	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -82,91 +79,6 @@ func (p *Project) GetSizeOf(name string) *Size {
 	}
 
 	return result
-}
-
-func (p *Project) SetDirectoryAndFiles(root string, rootType ProjectDirectoryType, recursive bool) (*ProjectDirectory, error) {
-	// TODO Delete old files
-
-	root, err := utils.PathAbs(root)
-	if err != nil {
-		return nil, nil
-	}
-
-	_, err = os.Stat(root)
-	if err != nil {
-		return nil, nil
-	}
-
-	var dir *ProjectDirectory
-	if recursive {
-		err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return filepath.SkipDir
-			}
-
-			if d.IsDir() {
-				if strings.HasPrefix(d.Name(), ".") {
-					return filepath.SkipDir
-				} else {
-					return nil
-				}
-			}
-
-			if dir == nil {
-				rootRel, err := filepath.Rel(p.RootDir, root)
-				if err != nil {
-					return err
-				}
-
-				dir = p.GetDirectory(rootRel)
-				dir.Type = rootType
-			}
-
-			rel, err := filepath.Rel(root, path)
-			if err != nil {
-				return err
-			}
-
-			dir.GetFile(rel)
-			if err != nil {
-				return err
-			}
-
-			return nil
-		})
-		if err == nil {
-			return nil, nil
-		}
-
-	} else {
-		entries, err := os.ReadDir(root)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-
-			if dir == nil {
-				rootRel, err := filepath.Rel(p.RootDir, root)
-				if err != nil {
-					return nil, err
-				}
-
-				dir = p.GetDirectory(rootRel)
-				dir.Type = rootType
-			}
-
-			dir.GetFile(entry.Name())
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	return dir, nil
 }
 
 func (p *Project) GetDirectory(relativePath string) *ProjectDirectory {

@@ -54,22 +54,36 @@ func (w *Workspace) LoadProjects() (*model.Projects, error) {
 	return result, nil
 }
 
-func (w *Workspace) Import(importer Importer) error {
-	projs := model.NewProjects()
+func (w *Workspace) LoadFiles() (*model.Files, error) {
+	result := model.NewFiles()
 
-	err := w.storage.LoadProjects(projs)
+	err := w.storage.LoadFiles(result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (w *Workspace) Import(importer Importer) error {
+	projs, err := w.LoadProjects()
 	if err != nil {
 		return err
 	}
 
-	return importer.Import(projs, w.storage)
+	files, err := w.LoadFiles()
+	if err != nil {
+		return err
+	}
+
+	return importer.Import(projs, files, w.storage)
 }
 
 func (w *Workspace) SetConfigParameter(proj *model.Project, config string, value string) (bool, error) {
 	changed := proj.SetData(config, value)
 
 	if changed {
-		err := w.storage.WriteProject(proj, ChangedProjectConfig)
+		err := w.storage.WriteProject(proj, ChangedConfig)
 		if err != nil {
 			return false, err
 		}

@@ -3,7 +3,6 @@ package size
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/hhatto/gocloc"
 	"github.com/pkg/errors"
@@ -24,14 +23,14 @@ func NewImporter(filters []string) archer.Importer {
 	}
 }
 
-func (s *sizeImporter) Import(projs *model.Projects, storage archer.Storage) error {
+func (s *sizeImporter) Import(projs *model.Projects, files *model.Files, storage archer.Storage) error {
 	projects, err := projs.FilterProjects(s.filters, model.FilterExcludeExternal)
 	if err != nil {
 		return err
 	}
 
 	for i, proj := range projects {
-		changed, err := s.importSize(proj)
+		changed, err := s.importSize(files, proj)
 		if err != nil {
 			return err
 		}
@@ -41,10 +40,20 @@ func (s *sizeImporter) Import(projs *model.Projects, storage archer.Storage) err
 			proj)
 	}
 
-	return storage.WriteProjects(projs, archer.ChangedProjectSize)
+	err = storage.WriteProjects(projs, archer.ChangedSize)
+	if err != nil {
+		return err
+	}
+
+	err = storage.WriteFiles(files, archer.ChangedSize)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (s *sizeImporter) importSize(proj *model.Project) (bool, error) {
+func (s *sizeImporter) importSize(files *model.Files, proj *model.Project) (bool, error) {
 	if len(proj.Dirs) == 0 {
 		return false, nil
 	}
@@ -52,7 +61,7 @@ func (s *sizeImporter) importSize(proj *model.Project) (bool, error) {
 	proj.Sizes = map[string]*model.Size{}
 
 	for _, dir := range proj.Dirs {
-		err := s.computeCLOC(proj, dir)
+		err := s.computeCLOC(files, dir)
 		if err != nil {
 			return false, err
 		}
@@ -63,18 +72,13 @@ func (s *sizeImporter) importSize(proj *model.Project) (bool, error) {
 	return true, nil
 }
 
-func (s *sizeImporter) computeCLOC(proj *model.Project, dir *model.ProjectDirectory) error {
+func (s *sizeImporter) computeCLOC(files *model.Files, dir *model.ProjectDirectory) error {
 	languages := gocloc.NewDefinedLanguages()
 	options := gocloc.NewClocOptions()
 
-	paths := map[string]*model.ProjectFile{}
-	for _, f := range dir.Files {
-		path, err := filepath.Abs(filepath.Join(proj.RootDir, dir.RelativePath, f.RelativePath))
-		if err != nil {
-			return err
-		}
-
-		paths[path] = f
+	paths := map[string]*model.File{}
+	for _, f := range files.ListByProjectDirectory(dir) {
+		paths[f.Path] = f
 	}
 
 	processor := gocloc.NewProcessor(languages, options)

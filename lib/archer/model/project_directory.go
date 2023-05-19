@@ -5,26 +5,15 @@ type ProjectDirectory struct {
 	Type         ProjectDirectoryType
 	ID           UUID
 
-	Files map[string]*ProjectFile
-	Size  *Size
+	Size *Size
+	Data map[string]string
 }
 
 func NewProjectDirectory(relativePath string) *ProjectDirectory {
 	return &ProjectDirectory{
 		RelativePath: relativePath,
 		ID:           NewUUID("d"),
-		Files:        map[string]*ProjectFile{},
 		Size:         NewSize(),
+		Data:         map[string]string{},
 	}
-}
-
-func (d *ProjectDirectory) GetFile(relativePath string) *ProjectFile {
-	result, ok := d.Files[relativePath]
-
-	if !ok {
-		result = NewProjectFile(relativePath)
-		d.Files[relativePath] = result
-	}
-
-	return result
 }

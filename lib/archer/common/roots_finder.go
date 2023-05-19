@@ -24,7 +24,7 @@ func NewRootsFinder(rootDirs, globs []string) RootsFinder {
 	}
 }
 
-func (r *RootsFinder) ComputeRootDirs(projs *model.Projects) ([]RootDir, error) {
+func (r *RootsFinder) ComputeRootDirs(projs *model.Projects, files *model.Files) ([]RootDir, error) {
 	paths := map[string]RootDir{}
 
 	for _, rootDir := range r.rootDirs {
@@ -36,7 +36,7 @@ func (r *RootsFinder) ComputeRootDirs(projs *model.Projects) ([]RootDir, error) 
 			}
 
 			for _, p := range ps {
-				paths[p.FullName()] = RootDir{Project: p, globs: r.globs}
+				paths[p.FullName()] = RootDir{Project: p, files: files, globs: r.globs}
 			}
 
 		default:
@@ -63,6 +63,7 @@ func (r *RootsFinder) ComputeRootDirs(projs *model.Projects) ([]RootDir, error) 
 
 type RootDir struct {
 	Project *model.Project
+	files   *model.Files
 	Dir     *string
 	globs   []string
 }
@@ -130,27 +131,18 @@ func (r *RootDir) WalkDir(cb func(proj *model.Project, path string) error) error
 		})
 
 	} else {
-		for _, dir := range r.Project.Dirs {
-			dirPath, err := filepath.Abs(filepath.Join(r.Project.RootDir, dir.RelativePath))
+		globsMatch := r.createGlobsMatcher(r.Project.RootDir)
+
+		for _, file := range r.files.ListByProject(r.Project) {
+			match, err := globsMatch(file.Path)
 			if err != nil {
 				return err
 			}
 
-			globsMatch := r.createGlobsMatcher(dirPath)
-
-			for _, file := range dir.Files {
-				filePath := filepath.Join(dirPath, file.RelativePath)
-
-				match, err := globsMatch(filePath)
+			if match {
+				err = cb(r.Project, file.Path)
 				if err != nil {
 					return err
-				}
-
-				if match {
-					err = cb(r.Project, filePath)
-					if err != nil {
-						return err
-					}
 				}
 			}
 		}

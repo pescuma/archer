@@ -5,5 +5,5 @@ import (
 )
 
 type Importer interface {
-	Import(projs *model.Projects, storage Storage) error
+	Import(projs *model.Projects, files *model.Files, storage Storage) error
 }
