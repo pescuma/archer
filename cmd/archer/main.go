@@ -4,7 +4,7 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/Faire/archer/lib/archer"
-	"github.com/Faire/archer/lib/archer/storage"
+	"github.com/Faire/archer/lib/archer/storage/sqlite"
 )
 
 var cli struct {
@@ -21,7 +21,7 @@ var cli struct {
 		Gradle    ImportGradleCmd    `cmd:"" help:"Import information from gradle project."`
 		Hibernate ImportHibernateCmd `cmd:"" help:"Import information from hibernate annotation in classes."`
 		Mysql     ImportMySqlCmd     `cmd:"" help:"Import information from MySQL schema."`
-		Size      ImportSizeCmd      `cmd:"" help:"Import size information to existing projects."`
+		LOC       ImportLOCCmd       `cmd:"" help:"Import counts of lines of code to existing projects."`
 	} `cmd:""`
 }
 
@@ -32,7 +32,7 @@ type context struct {
 func main() {
 	ctx := kong.Parse(&cli, kong.ShortUsageOnError())
 
-	workspace, err := archer.NewWorkspace(storage.NewSqliteStorage, cli.Workspace)
+	workspace, err := archer.NewWorkspace(sqlite.NewSqliteStorage, cli.Workspace)
 	ctx.FatalIfErrorf(err)
 
 	err = ctx.Run(&context{

@@ -18,7 +18,6 @@ import (
 )
 
 type hibernateImporter struct {
-	storage     archer.Storage
 	rootsFinder common.RootsFinder
 	rootName    string
 }
@@ -30,10 +29,18 @@ func NewImporter(rootDirs, globs []string, rootName string) archer.Importer {
 	}
 }
 
-func (i *hibernateImporter) Import(projs *model.Projects, files *model.Files, storage archer.Storage) error {
-	i.storage = storage
+func (i *hibernateImporter) Import(storage archer.Storage) error {
+	projects, err := storage.LoadProjects()
+	if err != nil {
+		return err
+	}
 
-	roots, err := i.rootsFinder.ComputeRootDirs(projs, files)
+	files, err := storage.LoadFiles()
+	if err != nil {
+		return err
+	}
+
+	roots, err := i.rootsFinder.ComputeRootDirs(projects, files)
 	if err != nil {
 		return err
 	}
@@ -130,7 +137,7 @@ func (i *hibernateImporter) Import(projs *model.Projects, files *model.Files, st
 
 		root := c.Root[0]
 
-		proj := projs.Get(i.rootName, c.Tables[0])
+		proj := projects.Get(i.rootName, c.Tables[0])
 		dbProjs[proj] = true
 
 		proj.Type = model.DatabaseType
@@ -162,7 +169,7 @@ func (i *hibernateImporter) Import(projs *model.Projects, files *model.Files, st
 				continue
 			}
 
-			dp := projs.Get(i.rootName, dc.Tables[0])
+			dp := projects.Get(i.rootName, dc.Tables[0])
 			dbProjs[dp] = true
 
 			d := proj.GetDependency(dp)
@@ -176,7 +183,7 @@ func (i *hibernateImporter) Import(projs *model.Projects, files *model.Files, st
 
 	common.CreateTableNameParts(lo.Keys(dbProjs))
 
-	return storage.WriteProjects(projs, archer.ChangedBasicInfo|archer.ChangedDependencies)
+	return storage.WriteProjects(projects, archer.ChangedBasicInfo|archer.ChangedDependencies)
 }
 
 func (i *hibernateImporter) processKotlin(fileContents string, fileName string, root common.RootDir) (map[string]*classInfo, []string, error) {

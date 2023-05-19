@@ -24,7 +24,17 @@ func NewImporter(rootDir string) archer.Importer {
 	}
 }
 
-func (g *gradleImporter) Import(projs *model.Projects, files *model.Files, storage archer.Storage) error {
+func (g *gradleImporter) Import(storage archer.Storage) error {
+	projs, err := storage.LoadProjects()
+	if err != nil {
+		return err
+	}
+
+	files, err := storage.LoadFiles()
+	if err != nil {
+		return err
+	}
+
 	fmt.Printf("Listing projects...\n")
 
 	queue, err := g.importProjectNames()

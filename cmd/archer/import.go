@@ -3,8 +3,8 @@ package main
 import (
 	"github.com/Faire/archer/lib/archer/importers/gradle"
 	"github.com/Faire/archer/lib/archer/importers/hibernate"
+	"github.com/Faire/archer/lib/archer/importers/loc"
 	"github.com/Faire/archer/lib/archer/importers/mysql"
-	"github.com/Faire/archer/lib/archer/importers/size"
 )
 
 type ImportGradleCmd struct {
@@ -39,12 +39,12 @@ func (c *ImportMySqlCmd) Run(ctx *context) error {
 	return ctx.ws.Import(g)
 }
 
-type ImportSizeCmd struct {
+type ImportLOCCmd struct {
 	Filters []string `default:"" help:"Filters to be applied to the projects. Empty means all."`
 }
 
-func (c *ImportSizeCmd) Run(ctx *context) error {
-	g := size.NewImporter(c.Filters)
+func (c *ImportLOCCmd) Run(ctx *context) error {
+	g := loc.NewImporter(c.Filters)
 
 	return ctx.ws.Import(g)
 }

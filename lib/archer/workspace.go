@@ -44,39 +44,11 @@ func NewWorkspace(factory StorageFactory, root string) (*Workspace, error) {
 }
 
 func (w *Workspace) LoadProjects() (*model.Projects, error) {
-	result := model.NewProjects()
-
-	err := w.storage.LoadProjects(result)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-func (w *Workspace) LoadFiles() (*model.Files, error) {
-	result := model.NewFiles()
-
-	err := w.storage.LoadFiles(result)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return w.storage.LoadProjects()
 }
 
 func (w *Workspace) Import(importer Importer) error {
-	projs, err := w.LoadProjects()
-	if err != nil {
-		return err
-	}
-
-	files, err := w.LoadFiles()
-	if err != nil {
-		return err
-	}
-
-	return importer.Import(projs, files, w.storage)
+	return importer.Import(w.storage)
 }
 
 func (w *Workspace) SetConfigParameter(proj *model.Project, config string, value string) (bool, error) {

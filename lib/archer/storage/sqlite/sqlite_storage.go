@@ -1,4 +1,4 @@
-package storage
+package sqlite
 
 import (
 	"fmt"
@@ -55,23 +55,25 @@ func NewSqliteStorage(file string) (archer.Storage, error) {
 	}, nil
 }
 
-func (s *sqliteStorage) LoadProjects(result *model.Projects) error {
+func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
+	result := model.NewProjects()
+
 	var projs []*sqlProject
 	err := s.db.Find(&projs).Error
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var deps []*sqlProjectDependency
 	err = s.db.Find(&deps).Error
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var dirs []*sqlProjectDirectory
 	err = s.db.Find(&dirs).Error
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	projsByID := map[model.UUID]*model.Project{}
@@ -112,7 +114,7 @@ func (s *sqliteStorage) LoadProjects(result *model.Projects) error {
 		d.Data = sd.Data
 	}
 
-	return nil
+	return result, nil
 }
 
 func (s *sqliteStorage) WriteProjects(projs *model.Projects, changes archer.StorageChanges) error {
@@ -218,11 +220,13 @@ func (s *sqliteStorage) writeProjects(projs []*model.Project, changes archer.Sto
 	return nil
 }
 
-func (s *sqliteStorage) LoadFiles(result *model.Files) error {
+func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
+	result := model.NewFiles()
+
 	var files []*sqlFile
 	err := s.db.Find(&files).Error
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, sf := range files {
@@ -234,7 +238,7 @@ func (s *sqliteStorage) LoadFiles(result *model.Files) error {
 		f.Data = sf.Data
 	}
 
-	return nil
+	return result, nil
 }
 
 func (s *sqliteStorage) WriteFiles(files *model.Files, changes archer.StorageChanges) error {
@@ -267,6 +271,26 @@ func (s *sqliteStorage) WriteFiles(files *model.Files, changes archer.StorageCha
 	}
 
 	return nil
+}
+
+func (s *sqliteStorage) LoadRepositories() (*model.Repositories, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.StorageChanges) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *sqliteStorage) LoadPeople() (*model.People, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *sqliteStorage) WritePeople(people *model.People, changes archer.StorageChanges) error {
+	// TODO implement me
+	panic("implement me")
 }
 
 func toSqlSize(size *model.Size) *sqlSize {

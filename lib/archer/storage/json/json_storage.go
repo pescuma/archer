@@ -1,4 +1,4 @@
-package storage
+package json
 
 import (
 	"fmt"
@@ -40,8 +40,10 @@ func NewJsonStorage(root string) (archer.Storage, error) {
 	}, nil
 }
 
-func (s *jsonStorage) LoadProjects(result *model.Projects) error {
-	return filepath.WalkDir(s.root, func(path string, d fs.DirEntry, err error) error {
+func (s *jsonStorage) LoadProjects() (*model.Projects, error) {
+	result := model.NewProjects()
+
+	err := filepath.WalkDir(s.root, func(path string, d fs.DirEntry, err error) error {
 		switch d.Name() {
 		case basicInfoJson:
 			err = s.readBasicInfo(result, path)
@@ -76,6 +78,11 @@ func (s *jsonStorage) LoadProjects(result *model.Projects) error {
 
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 func (s *jsonStorage) WriteProjects(projs *model.Projects, changes archer.StorageChanges) error {
@@ -429,12 +436,32 @@ func (s *jsonStorage) readConfig(result *model.Projects, fileName string) error 
 	return nil
 }
 
-func (s *jsonStorage) LoadFiles(result *model.Files) error {
+func (s *jsonStorage) LoadFiles() (*model.Files, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
 func (s *jsonStorage) WriteFiles(files *model.Files, changes archer.StorageChanges) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *jsonStorage) LoadRepositories() (*model.Repositories, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *jsonStorage) WriteRepository(repo *model.Repository, changes archer.StorageChanges) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *jsonStorage) LoadPeople() (*model.People, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *jsonStorage) WritePeople(people *model.People, changes archer.StorageChanges) error {
 	// TODO implement me
 	panic("implement me")
 }

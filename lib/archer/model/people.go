@@ -1,0 +1,26 @@
+package model
+
+type People struct {
+	all map[string]*Person
+}
+
+func NewPeople() *People {
+	return &People{
+		all: map[string]*Person{},
+	}
+}
+
+func (ps *People) Get(name string) *Person {
+	if len(name) == 0 {
+		panic("empty name not supported")
+	}
+
+	result, ok := ps.all[name]
+
+	if !ok {
+		result = NewPerson(name)
+		ps.all[name] = result
+	}
+
+	return result
+}

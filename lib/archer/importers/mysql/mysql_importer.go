@@ -24,7 +24,12 @@ func NewImporter(connectionString string) archer.Importer {
 	}
 }
 
-func (m *mysqlImporter) Import(projs *model.Projects, files *model.Files, storage archer.Storage) error {
+func (m *mysqlImporter) Import(storage archer.Storage) error {
+	projects, err := storage.LoadProjects()
+	if err != nil {
+		return err
+	}
+
 	db, err := sql.Open("mysql", m.connectionString)
 	if err != nil {
 		return errors.Wrapf(err, "error connecting to MySQL using %v", m.connectionString)
@@ -36,17 +41,17 @@ func (m *mysqlImporter) Import(projs *model.Projects, files *model.Files, storag
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
-	err = m.importTables(db, projs)
+	err = m.importTables(db, projects)
 	if err != nil {
 		return err
 	}
 
-	err = m.importFKs(db, projs)
+	err = m.importFKs(db, projects)
 	if err != nil {
 		return err
 	}
 
-	return storage.WriteProjects(projs, archer.ChangedBasicInfo|archer.ChangedSize|archer.ChangedDependencies)
+	return storage.WriteProjects(projects, archer.ChangedBasicInfo|archer.ChangedSize|archer.ChangedDependencies)
 }
 
 func (m *mysqlImporter) importTables(db *sql.DB, projs *model.Projects) error {

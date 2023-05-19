@@ -7,6 +7,8 @@ type File struct {
 	ProjectID          *UUID
 	ProjectDirectoryID *UUID
 
+	RepositoryID *UUID
+
 	Size *Size
 	Data map[string]string
 }

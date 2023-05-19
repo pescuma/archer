@@ -1,4 +1,4 @@
-package size
+package loc
 
 import (
 	"fmt"
@@ -13,34 +13,44 @@ import (
 	"github.com/Faire/archer/lib/archer/utils"
 )
 
-type sizeImporter struct {
+type locImporter struct {
 	filters []string
 }
 
 func NewImporter(filters []string) archer.Importer {
-	return &sizeImporter{
+	return &locImporter{
 		filters: filters,
 	}
 }
 
-func (s *sizeImporter) Import(projs *model.Projects, files *model.Files, storage archer.Storage) error {
-	projects, err := projs.FilterProjects(s.filters, model.FilterExcludeExternal)
+func (l *locImporter) Import(storage archer.Storage) error {
+	projects, err := storage.LoadProjects()
 	if err != nil {
 		return err
 	}
 
-	for i, proj := range projects {
-		changed, err := s.importSize(files, proj)
+	files, err := storage.LoadFiles()
+	if err != nil {
+		return err
+	}
+
+	projs, err := projects.FilterProjects(l.filters, model.FilterExcludeExternal)
+	if err != nil {
+		return err
+	}
+
+	for i, proj := range projs {
+		changed, err := l.importSize(files, proj)
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("[%v / %v] %v lines of code from '%v'\n", i, len(projects),
+		fmt.Printf("[%v / %v] %v lines of code from '%v'\n", i, len(projs),
 			utils.IIf(changed, "Imported", "Skipped"),
 			proj)
 	}
 
-	err = storage.WriteProjects(projs, archer.ChangedSize)
+	err = storage.WriteProjects(projects, archer.ChangedSize)
 	if err != nil {
 		return err
 	}
@@ -53,7 +63,7 @@ func (s *sizeImporter) Import(projs *model.Projects, files *model.Files, storage
 	return nil
 }
 
-func (s *sizeImporter) importSize(files *model.Files, proj *model.Project) (bool, error) {
+func (l *locImporter) importSize(files *model.Files, proj *model.Project) (bool, error) {
 	if len(proj.Dirs) == 0 {
 		return false, nil
 	}
@@ -61,7 +71,7 @@ func (s *sizeImporter) importSize(files *model.Files, proj *model.Project) (bool
 	proj.Sizes = map[string]*model.Size{}
 
 	for _, dir := range proj.Dirs {
-		err := s.computeCLOC(files, dir)
+		err := l.computeLOC(files, dir)
 		if err != nil {
 			return false, err
 		}
@@ -72,7 +82,7 @@ func (s *sizeImporter) importSize(files *model.Files, proj *model.Project) (bool
 	return true, nil
 }
 
-func (s *sizeImporter) computeCLOC(files *model.Files, dir *model.ProjectDirectory) error {
+func (l *locImporter) computeLOC(files *model.Files, dir *model.ProjectDirectory) error {
 	languages := gocloc.NewDefinedLanguages()
 	options := gocloc.NewClocOptions()
 
