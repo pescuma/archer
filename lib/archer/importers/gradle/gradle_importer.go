@@ -46,18 +46,20 @@ func (g *gradleImporter) Import(storage archer.Storage) error {
 
 	rootProj := queue[0]
 
-	for i, p := range queue {
+	bar := utils.NewProgressBar(len(queue))
+	for _, p := range queue {
 		err = g.importBasicInfo(projs, p, rootProj)
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("[%v / %v] Imported basic info from '%v'\n", i, len(queue), p)
+		_ = bar.Add(1)
 	}
 
 	fmt.Printf("Going to import files from %v projects...\n", len(queue))
 
-	for i, p := range queue {
+	bar = utils.NewProgressBar(len(queue))
+	for _, p := range queue {
 		proj := projs.Get(rootProj, p)
 
 		err = g.importDirectories(files, proj)
@@ -65,25 +67,22 @@ func (g *gradleImporter) Import(storage archer.Storage) error {
 			return err
 		}
 
-		fmt.Printf("[%v / %v] Imported files from '%v'\n", i, len(queue), p)
+		_ = bar.Add(1)
 	}
 
 	fmt.Printf("Going to import dependencies from %v projects...\n", len(queue))
 
+	bar = utils.NewProgressBar(len(queue))
 	block := 100
-	for i := 0; i < len(queue); {
+	for i := 0; i < len(queue); i += block {
 		piece := utils.Take(queue[i:], block)
-
-		for _, p := range piece {
-			i++
-			prefix := fmt.Sprintf("[%v / %v] ", i, len(queue))
-			fmt.Printf("%vImporting dependencies from '%v' ...\n", prefix, p)
-		}
 
 		err = g.loadDependencies(projs, piece, rootProj)
 		if err != nil {
 			return err
 		}
+
+		_ = bar.Add(len(piece))
 	}
 
 	for _, p := range queue {
@@ -103,7 +102,7 @@ func (g *gradleImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Writing results...\n")
 
-	err = storage.WriteProjects(projs, archer.ChangedBasicInfo|archer.ChangedConfig|archer.ChangedDependencies)
+	err = storage.WriteProjects(projs, archer.ChangedBasicInfo|archer.ChangedData|archer.ChangedDependencies)
 	if err != nil {
 		return err
 	}

@@ -127,7 +127,7 @@ func (s *jsonStorage) WriteProject(proj *model.Project, changes archer.StorageCh
 		}
 	}
 
-	if changes&archer.ChangedConfig != 0 {
+	if changes&archer.ChangedData != 0 {
 		err := s.writeConfig(proj)
 		if err != nil {
 			return err
@@ -446,22 +446,22 @@ func (s *jsonStorage) WriteFiles(files *model.Files, changes archer.StorageChang
 	panic("implement me")
 }
 
-func (s *jsonStorage) LoadRepositories() (*model.Repositories, error) {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (s *jsonStorage) WriteRepository(repo *model.Repository, changes archer.StorageChanges) error {
-	// TODO implement me
-	panic("implement me")
-}
-
 func (s *jsonStorage) LoadPeople() (*model.People, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
 func (s *jsonStorage) WritePeople(people *model.People, changes archer.StorageChanges) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *jsonStorage) LoadRepository(rootDir string) (*model.Repository, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *jsonStorage) WriteRepository(repo *model.Repository, changes archer.StorageChanges) error {
 	// TODO implement me
 	panic("implement me")
 }

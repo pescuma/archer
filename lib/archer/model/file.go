@@ -9,15 +9,17 @@ type File struct {
 
 	RepositoryID *UUID
 
-	Size *Size
-	Data map[string]string
+	Exists bool
+	Size   *Size
+	Data   map[string]string
 }
 
 func NewFile(path string) *File {
 	return &File{
-		Path: path,
-		ID:   NewUUID("f"),
-		Size: NewSize(),
-		Data: map[string]string{},
+		Path:   path,
+		ID:     NewUUID("f"),
+		Exists: true,
+		Size:   NewSize(),
+		Data:   map[string]string{},
 	}
 }

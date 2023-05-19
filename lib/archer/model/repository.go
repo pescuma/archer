@@ -1,8 +1,12 @@
 package model
 
+import (
+	"github.com/samber/lo"
+)
+
 type Repository struct {
-	VCS     string
 	RootDir string
+	VCS     string
 	ID      UUID
 
 	Data map[string]string
@@ -10,16 +14,16 @@ type Repository struct {
 	Commits map[string]*RepositoryCommit
 }
 
-func NewRepository(vcs, rootDir string) *Repository {
+func NewRepository(rootDir string) *Repository {
 	return &Repository{
-		VCS:     vcs,
 		RootDir: rootDir,
 		ID:      NewUUID("r"),
 		Data:    map[string]string{},
+		Commits: map[string]*RepositoryCommit{},
 	}
 }
 
-func (r Repository) GetCommit(hash string) *RepositoryCommit {
+func (r *Repository) GetCommit(hash string) *RepositoryCommit {
 	result, ok := r.Commits[hash]
 
 	if !ok {
@@ -28,4 +32,13 @@ func (r Repository) GetCommit(hash string) *RepositoryCommit {
 	}
 
 	return result
+}
+
+func (r *Repository) ContainsCommit(hash string) bool {
+	_, ok := r.Commits[hash]
+	return ok
+}
+
+func (r *Repository) ListCommits() []*RepositoryCommit {
+	return lo.Values(r.Commits)
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/glebarez/sqlite"
+	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
@@ -45,6 +46,8 @@ func NewSqliteStorage(file string) (archer.Storage, error) {
 	err = db.AutoMigrate(
 		&sqlProject{}, &sqlProjectDependency{}, &sqlProjectDirectory{},
 		&sqlFile{},
+		&sqlPerson{},
+		&sqlRepository{}, &sqlRepositoryCommit{}, &sqlRepositoryCommitFile{},
 	)
 	if err != nil {
 		return nil, err
@@ -140,18 +143,18 @@ func (s *sqliteStorage) WriteProject(proj *model.Project, changes archer.Storage
 }
 
 func (s *sqliteStorage) writeProjects(projs []*model.Project, changes archer.StorageChanges, scope func(string) func(*gorm.DB) *gorm.DB) error {
-	changedProjs := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedConfig != 0 || changes&archer.ChangedSize != 0
-	changedDeps := changes&archer.ChangedDependencies != 0 || changes&archer.ChangedConfig != 0
+	changedProjs := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedData != 0 || changes&archer.ChangedSize != 0
+	changedDeps := changes&archer.ChangedDependencies != 0 || changes&archer.ChangedData != 0
 	changedDirs := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedSize != 0
 
-	sqlProjs := make([]sqlProject, 0, len(projs))
+	sqlProjs := make([]*sqlProject, 0, len(projs))
 	if changedProjs {
 		for _, p := range projs {
 			sqlProjs = append(sqlProjs, toSqlProject(p))
 		}
 	}
 
-	var sqlDeps []sqlProjectDependency
+	var sqlDeps []*sqlProjectDependency
 	if changedDeps {
 		for _, p := range projs {
 			for _, d := range p.Dependencies {
@@ -160,7 +163,7 @@ func (s *sqliteStorage) writeProjects(projs []*model.Project, changes archer.Sto
 		}
 	}
 
-	var sqlDirs []sqlProjectDirectory
+	var sqlDirs []*sqlProjectDirectory
 	if changedDirs {
 		for _, p := range projs {
 			for _, dir := range p.Dirs {
@@ -234,6 +237,8 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 		f.ID = sf.ID
 		f.ProjectID = sf.ProjectID
 		f.ProjectDirectoryID = sf.ProjectDirectoryID
+		f.RepositoryID = sf.RepositoryID
+		f.Exists = sf.Exists
 		f.Size = toModelSize(sf.Size)
 		f.Data = sf.Data
 	}
@@ -242,14 +247,14 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 }
 
 func (s *sqliteStorage) WriteFiles(files *model.Files, changes archer.StorageChanges) error {
-	changedFiles := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedConfig != 0 || changes&archer.ChangedSize != 0
-	if !changedFiles {
+	changed := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedData != 0 || changes&archer.ChangedSize != 0
+	if !changed {
 		return nil
 	}
 
 	all := files.List()
 
-	sqlFiles := make([]sqlFile, 0, len(all))
+	sqlFiles := make([]*sqlFile, 0, len(all))
 	for _, f := range all {
 		sqlFiles = append(sqlFiles, toSqlFile(f))
 	}
@@ -273,24 +278,179 @@ func (s *sqliteStorage) WriteFiles(files *model.Files, changes archer.StorageCha
 	return nil
 }
 
-func (s *sqliteStorage) LoadRepositories() (*model.Repositories, error) {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.StorageChanges) error {
-	// TODO implement me
-	panic("implement me")
-}
-
 func (s *sqliteStorage) LoadPeople() (*model.People, error) {
-	// TODO implement me
-	panic("implement me")
+	result := model.NewPeople()
+
+	var people []*sqlPerson
+	err := s.db.Find(&people).Error
+	if err != nil {
+		return nil, err
+	}
+
+	for _, sp := range people {
+		p := result.Get(sp.Name)
+		p.ID = sp.ID
+
+		for _, email := range sp.Emails {
+			p.AddEmail(email)
+		}
+		p.Data = sp.Data
+	}
+
+	return result, nil
 }
 
 func (s *sqliteStorage) WritePeople(people *model.People, changes archer.StorageChanges) error {
-	// TODO implement me
-	panic("implement me")
+	changed := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedData != 0
+	if !changed {
+		return nil
+	}
+
+	all := people.List()
+
+	sqlPeople := make([]*sqlPerson, 0, len(all))
+	for _, p := range all {
+		sqlPeople = append(sqlPeople, toSqlPerson(p))
+	}
+
+	now := time.Now().Local()
+	db := s.db.Session(&gorm.Session{
+		NowFunc:         func() time.Time { return now },
+		CreateBatchSize: 100,
+	})
+
+	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlPeople).Error
+	if err != nil {
+		return err
+	}
+
+	err = db.Where("updated_at != ?", now).Delete(&sqlPerson{}).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *sqliteStorage) LoadRepository(rootDir string) (*model.Repository, error) {
+	var sqlRepo *sqlRepository
+	err := s.db.Where("root_dir = ?", rootDir).Limit(1).Find(&sqlRepo).Error
+	if err != nil {
+		return nil, err
+	}
+	if sqlRepo.ID == "" {
+		return nil, nil
+	}
+
+	var sqlCommits []*sqlRepositoryCommit
+	err = s.db.Where("repository_id = ?", sqlRepo.ID).Find(&sqlCommits).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var sqlFiles []*sqlRepositoryCommitFile
+	err = s.db.Where("repository_id = ?", sqlRepo.ID).Find(&sqlFiles).Error
+	if err != nil {
+		return nil, err
+	}
+
+	filesByCommit := lo.GroupBy(sqlFiles, func(f *sqlRepositoryCommitFile) model.UUID { return f.CommitID })
+
+	result := model.NewRepository(rootDir)
+	result.VCS = sqlRepo.VCS
+	result.ID = sqlRepo.ID
+	result.Data = sqlRepo.Data
+
+	for _, sc := range sqlCommits {
+		c := result.GetCommit(sc.Hash)
+		c.ID = sc.ID
+		c.Hash = sc.Hash
+		c.Parents = sc.Parents
+		c.Date = sc.Date
+		c.CommitterID = sc.CommitterID
+		c.DateAuthored = sc.DateAuthored
+		c.AuthorID = sc.AuthorID
+		c.AddedLines = sc.AddedLines
+		c.DeletedLines = sc.DeletedLines
+
+		if sfs, ok := filesByCommit[sc.ID]; ok {
+			for _, sf := range sfs {
+				c.AddFile(sf.FileID, sf.AddedLines, sf.DeletedLines)
+			}
+		}
+	}
+
+	return result, nil
+}
+
+func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.StorageChanges) error {
+	changedRepo := changes&archer.ChangedBasicInfo != 0
+	changedCommits := changes&archer.ChangedHistory != 0
+	changedFiles := changes&archer.ChangedHistory != 0
+
+	var sqlRepo *sqlRepository
+	if changedRepo {
+		sqlRepo = toSqlRepository(repo)
+	}
+
+	var sqlCommits []*sqlRepositoryCommit
+	if changedCommits {
+		for _, c := range repo.ListCommits() {
+			sqlCommits = append(sqlCommits, toSqlRepositoryCommit(repo, c))
+		}
+	}
+
+	var sqlFiles []*sqlRepositoryCommitFile
+	if changedFiles {
+		for _, c := range repo.ListCommits() {
+			for _, f := range c.Files {
+				sqlFiles = append(sqlFiles, toSqlRepositoryCommitFile(repo, c, f))
+			}
+		}
+	}
+
+	now := time.Now().Local()
+	db := s.db.Session(&gorm.Session{
+		NowFunc:         func() time.Time { return now },
+		CreateBatchSize: 100,
+	})
+
+	if changedRepo {
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlRepo).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	if changedCommits {
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommits).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	if changedFiles {
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlFiles).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	if changedFiles {
+		err := db.Where("repository_id = ? and updated_at != ?", repo.ID, now).Delete(&sqlRepositoryCommitFile{}).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	if changedCommits {
+		err := db.Where("repository_id = ? and updated_at != ?", repo.ID, now).Delete(&sqlRepositoryCommit{}).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func toSqlSize(size *model.Size) *sqlSize {
@@ -311,10 +471,10 @@ func toModelSize(size *sqlSize) *model.Size {
 	}
 }
 
-func toSqlProject(p *model.Project) sqlProject {
+func toSqlProject(p *model.Project) *sqlProject {
 	size := p.GetSize()
 
-	sp := sqlProject{
+	sp := &sqlProject{
 		ID:          p.ID,
 		Root:        p.Root,
 		Name:        p.Name,
@@ -334,8 +494,8 @@ func toSqlProject(p *model.Project) sqlProject {
 	return sp
 }
 
-func toSqlProjectDependency(d *model.ProjectDependency) sqlProjectDependency {
-	return sqlProjectDependency{
+func toSqlProjectDependency(d *model.ProjectDependency) *sqlProjectDependency {
+	return &sqlProjectDependency{
 		ID:       d.ID,
 		SourceID: d.Source.ID,
 		TargetID: d.Target.ID,
@@ -343,8 +503,8 @@ func toSqlProjectDependency(d *model.ProjectDependency) sqlProjectDependency {
 	}
 }
 
-func toSqlProjectDirectory(d *model.ProjectDirectory, p *model.Project) sqlProjectDirectory {
-	return sqlProjectDirectory{
+func toSqlProjectDirectory(d *model.ProjectDirectory, p *model.Project) *sqlProjectDirectory {
+	return &sqlProjectDirectory{
 		ID:           d.ID,
 		ProjectID:    p.ID,
 		RelativePath: d.RelativePath,
@@ -354,14 +514,59 @@ func toSqlProjectDirectory(d *model.ProjectDirectory, p *model.Project) sqlProje
 	}
 }
 
-func toSqlFile(f *model.File) sqlFile {
-	return sqlFile{
+func toSqlFile(f *model.File) *sqlFile {
+	return &sqlFile{
 		ID:                 f.ID,
 		Path:               f.Path,
 		ProjectID:          f.ProjectID,
 		ProjectDirectoryID: f.ProjectDirectoryID,
+		RepositoryID:       f.RepositoryID,
+		Exists:             f.Exists,
 		Size:               toSqlSize(f.Size),
 		Data:               f.Data,
+	}
+}
+
+func toSqlPerson(p *model.Person) *sqlPerson {
+	return &sqlPerson{
+		ID:     p.ID,
+		Name:   p.Name,
+		Emails: p.ListEmails(),
+		Data:   p.Data,
+	}
+}
+
+func toSqlRepository(r *model.Repository) *sqlRepository {
+	return &sqlRepository{
+		ID:      r.ID,
+		RootDir: r.RootDir,
+		VCS:     r.VCS,
+		Data:    r.Data,
+	}
+}
+
+func toSqlRepositoryCommit(r *model.Repository, c *model.RepositoryCommit) *sqlRepositoryCommit {
+	return &sqlRepositoryCommit{
+		ID:           c.ID,
+		RepositoryID: r.ID,
+		Hash:         c.Hash,
+		Parents:      c.Parents,
+		Date:         c.Date,
+		CommitterID:  c.CommitterID,
+		DateAuthored: c.DateAuthored,
+		AuthorID:     c.AuthorID,
+		AddedLines:   c.AddedLines,
+		DeletedLines: c.DeletedLines,
+	}
+}
+
+func toSqlRepositoryCommitFile(r *model.Repository, c *model.RepositoryCommit, f *model.RepositoryCommitFile) *sqlRepositoryCommitFile {
+	return &sqlRepositoryCommitFile{
+		CommitID:     c.ID,
+		FileID:       f.FileID,
+		RepositoryID: r.ID,
+		AddedLines:   f.AddedLines,
+		DeletedLines: f.DeletedLines,
 	}
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/Faire/archer/lib/archer/importers/git"
 	"github.com/Faire/archer/lib/archer/importers/gradle"
 	"github.com/Faire/archer/lib/archer/importers/hibernate"
 	"github.com/Faire/archer/lib/archer/importers/loc"
@@ -45,6 +46,16 @@ type ImportLOCCmd struct {
 
 func (c *ImportLOCCmd) Run(ctx *context) error {
 	g := loc.NewImporter(c.Filters)
+
+	return ctx.ws.Import(g)
+}
+
+type ImportGitCmd struct {
+	Path string `arg:"" help:"Path with root of git repository." type:"existingpath"`
+}
+
+func (c *ImportGitCmd) Run(ctx *context) error {
+	g := git.NewImporter(c.Path)
 
 	return ctx.ws.Import(g)
 }

@@ -55,7 +55,7 @@ func (w *Workspace) SetConfigParameter(proj *model.Project, config string, value
 	changed := proj.SetData(config, value)
 
 	if changed {
-		err := w.storage.WriteProject(proj, ChangedConfig)
+		err := w.storage.WriteProject(proj, ChangedData)
 		if err != nil {
 			return false, err
 		}

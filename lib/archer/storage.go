@@ -8,7 +8,7 @@ type StorageChanges uint16
 
 const (
 	ChangedBasicInfo StorageChanges = 1 << iota
-	ChangedConfig
+	ChangedData
 	ChangedDependencies
 	ChangedSize
 	ChangedHistory
@@ -24,11 +24,11 @@ type Storage interface {
 	LoadFiles() (*model.Files, error)
 	WriteFiles(files *model.Files, changes StorageChanges) error
 
-	LoadRepositories() (*model.Repositories, error)
-	WriteRepository(repo *model.Repository, changes StorageChanges) error
-
 	LoadPeople() (*model.People, error)
 	WritePeople(people *model.People, changes StorageChanges) error
+
+	LoadRepository(rootDir string) (*model.Repository, error)
+	WriteRepository(repo *model.Repository, changes StorageChanges) error
 }
 
 type StorageFactory = func(path string) (Storage, error)

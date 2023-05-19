@@ -34,8 +34,17 @@ func (fs *Files) List() []*File {
 }
 
 func (fs *Files) ListByProject(proj *Project) []*File {
+	return fs.ListByProjects([]*Project{proj})
+}
+
+func (fs *Files) ListByProjects(ps []*Project) []*File {
+	consider := map[UUID]bool{}
+	for _, p := range ps {
+		consider[p.ID] = true
+	}
+
 	return lo.Filter(lo.Values(fs.all), func(f *File, _ int) bool {
-		return f.ProjectID != nil && *f.ProjectID == proj.ID
+		return f.ProjectID != nil && consider[*f.ProjectID]
 	})
 }
 

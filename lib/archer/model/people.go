@@ -1,5 +1,9 @@
 package model
 
+import (
+	"github.com/samber/lo"
+)
+
 type People struct {
 	all map[string]*Person
 }
@@ -23,4 +27,8 @@ func (ps *People) Get(name string) *Person {
 	}
 
 	return result
+}
+
+func (ps *People) List() []*Person {
+	return lo.Values(ps.all)
 }
