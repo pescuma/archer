@@ -8,8 +8,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/samber/lo"
-
 	"github.com/Faire/archer/lib/archer"
 	"github.com/Faire/archer/lib/archer/model"
 	"github.com/Faire/archer/lib/archer/utils"
@@ -85,36 +83,7 @@ func (g *gradleImporter) Import(projs *model.Projects, storage archer.Storage) e
 		}
 	}
 
-	all := projs.ListProjects(model.FilterAll)
-	all = lo.Filter(all, func(p *model.Project, _ int) bool { return p.Root == rootProj })
-
-	err = storage.WriteProjNames(rootProj, lo.Map(all, func(p *model.Project, _ int) string { return p.Name }))
-	if err != nil {
-		return err
-	}
-
-	for _, proj := range all {
-		err = storage.WriteBasicInfo(proj)
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, proj := range all {
-		err = storage.WriteFiles(proj)
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, proj := range all {
-		err = storage.WriteDeps(proj)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return storage.WriteProjects(projs, archer.ChangedProjectBasicInfo|archer.ChangedProjectConfig|archer.ChangedProjectDependencies)
 }
 
 func (g *gradleImporter) importProjectNames() ([]string, error) {

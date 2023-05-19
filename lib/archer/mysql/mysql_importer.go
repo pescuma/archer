@@ -16,7 +16,6 @@ import (
 
 type mysqlImporter struct {
 	connectionString string
-	storage          archer.Storage
 }
 
 func NewImporter(connectionString string) archer.Importer {
@@ -26,8 +25,6 @@ func NewImporter(connectionString string) archer.Importer {
 }
 
 func (m *mysqlImporter) Import(projs *model.Projects, storage archer.Storage) error {
-	m.storage = storage
-
 	db, err := sql.Open("mysql", m.connectionString)
 	if err != nil {
 		return errors.Wrapf(err, "error connecting to MySQL using %v", m.connectionString)
@@ -49,7 +46,7 @@ func (m *mysqlImporter) Import(projs *model.Projects, storage archer.Storage) er
 		return err
 	}
 
-	return nil
+	return storage.WriteProjects(projs, archer.ChangedProjectBasicInfo|archer.ChangedProjectSize|archer.ChangedProjectDependencies)
 }
 
 func (m *mysqlImporter) importTables(db *sql.DB, projs *model.Projects) error {
@@ -105,18 +102,6 @@ func (m *mysqlImporter) importTables(db *sql.DB, projs *model.Projects) error {
 
 	common.CreateTableNameParts(changedProjs)
 
-	for _, proj := range changedProjs {
-		err = m.storage.WriteBasicInfo(proj)
-		if err != nil {
-			return err
-		}
-
-		err = m.storage.WriteSize(proj)
-		if err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -160,15 +145,6 @@ func (m *mysqlImporter) importFKs(db *sql.DB, projs *model.Projects) error {
 		proj.GetDependency(dep)
 
 		toSave[rootAndName{fk.schemaName, fk.tableName}] = true
-	}
-
-	for k := range toSave {
-		proj := projs.Get(k.root, k.name)
-
-		err = m.storage.WriteDeps(proj)
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil

@@ -15,7 +15,6 @@ import (
 )
 
 type sizeImporter struct {
-	storage archer.Storage
 	filters []string
 }
 
@@ -26,8 +25,6 @@ func NewImporter(filters []string) archer.Importer {
 }
 
 func (s *sizeImporter) Import(projs *model.Projects, storage archer.Storage) error {
-	s.storage = storage
-
 	projects, err := projs.FilterProjects(s.filters, model.FilterExcludeExternal)
 	if err != nil {
 		return err
@@ -44,7 +41,7 @@ func (s *sizeImporter) Import(projs *model.Projects, storage archer.Storage) err
 			proj)
 	}
 
-	return nil
+	return storage.WriteProjects(projs, archer.ChangedProjectSize)
 }
 
 func (s *sizeImporter) importSize(proj *model.Project) (bool, error) {
@@ -61,11 +58,6 @@ func (s *sizeImporter) importSize(proj *model.Project) (bool, error) {
 		}
 
 		proj.AddSize(dir.Type.String(), dir.Size)
-	}
-
-	err := s.storage.WriteSize(proj)
-	if err != nil {
-		return false, err
 	}
 
 	return true, nil

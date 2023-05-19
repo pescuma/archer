@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/glebarez/sqlite"
-	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
@@ -128,23 +127,116 @@ func (s *sqliteStorage) LoadProjects(result *model.Projects) error {
 	return nil
 }
 
-func (s *sqliteStorage) WriteProjNames(projRoot string, projNames []string) error {
-	var old []*sqlProject
+func (s *sqliteStorage) WriteProjects(projs *model.Projects, changes archer.StorageChanges) error {
+	all := projs.ListProjects(model.FilterAll)
 
-	err := s.db.Select("id", "name").Where("root = ?", projRoot).Find(&old).Error
-	if err != nil {
-		return err
+	return s.writeProjects(all, changes,
+		func(string) func(db *gorm.DB) *gorm.DB {
+			return func(db *gorm.DB) *gorm.DB {
+				return db
+			}
+		})
+}
+
+func (s *sqliteStorage) WriteProject(proj *model.Project, changes archer.StorageChanges) error {
+	projs := []*model.Project{proj}
+
+	return s.writeProjects(projs, changes,
+		func(projectIDField string) func(db *gorm.DB) *gorm.DB {
+			return func(db *gorm.DB) *gorm.DB {
+				return db.Where(projectIDField+" = ?", proj.ID)
+			}
+		})
+}
+
+func (s *sqliteStorage) writeProjects(projs []*model.Project, changes archer.StorageChanges, scope func(string) func(*gorm.DB) *gorm.DB) error {
+	changedBasicInfo := changes&archer.ChangedProjectBasicInfo != 0 || changes&archer.ChangedProjectConfig != 0 || changes&archer.ChangedProjectSize != 0
+	changedDependencies := changes&archer.ChangedProjectDependencies != 0 || changes&archer.ChangedProjectConfig != 0
+	changedFiles := changes&archer.ChangedProjectFiles != 0 || changes&archer.ChangedProjectSize != 0
+
+	sqlProjs := make([]sqlProject, len(projs))
+	if changedBasicInfo {
+		for _, p := range projs {
+			sqlProjs = append(sqlProjs, toSqlProject(p))
+		}
 	}
 
-	oldByName := lo.Associate(old, func(p *sqlProject) (string, *sqlProject) { return p.Name, p })
-
-	for _, name := range projNames {
-		delete(oldByName, name)
+	var sqlDeps []sqlProjectDependency
+	if changedDependencies {
+		for _, p := range projs {
+			for _, d := range p.Dependencies {
+				sqlDeps = append(sqlDeps, toSqlProjectDependency(d))
+			}
+		}
 	}
 
-	toDelete := lo.Values(oldByName)
-	if len(toDelete) > 0 {
-		err = s.db.Delete(&toDelete).Error
+	var sqlDirs []sqlProjectDirectory
+	var sqlFiles []sqlProjectFile
+	if changedFiles {
+		for _, p := range projs {
+			for _, dir := range p.Dirs {
+				sqlDirs = append(sqlDirs, toSqlProjectDirectory(dir, p))
+
+				for _, file := range dir.Files {
+					sqlFiles = append(sqlFiles, toSqlProjectFile(file, dir, p))
+				}
+			}
+		}
+	}
+
+	now := time.Now().Local()
+	db := s.db.Session(&gorm.Session{
+		NowFunc:         func() time.Time { return now },
+		CreateBatchSize: 100,
+	})
+
+	if changedBasicInfo {
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlProjs).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	if changedDependencies {
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlDeps).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	if changedFiles {
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlDirs).Error
+		if err != nil {
+			return err
+		}
+
+		err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlFiles).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	if changedFiles {
+		err := db.Scopes(scope("project_id")).Where("updated_at != ?", now).Delete(&sqlProjectFile{}).Error
+		if err != nil {
+			return err
+		}
+
+		err = db.Scopes(scope("project_id")).Where("updated_at != ?", now).Delete(&sqlProjectDirectory{}).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	if changedDependencies {
+		err := db.Scopes(scope("source_id")).Where("updated_at != ?", now).Delete(&sqlProjectDependency{}).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	if changedBasicInfo {
+		err := db.Scopes(scope("project_id")).Where("updated_at != ?", now).Delete(&sqlProject{}).Error
 		if err != nil {
 			return err
 		}
@@ -153,147 +245,87 @@ func (s *sqliteStorage) WriteProjNames(projRoot string, projNames []string) erro
 	return nil
 }
 
-func (s *sqliteStorage) ReadProjNames() ([]string, error) {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (s *sqliteStorage) WriteBasicInfo(proj *model.Project) error {
-	size := proj.GetSize()
-
-	sp := sqlProject{
-		ID:          proj.ID,
-		Root:        proj.Root,
-		Name:        proj.Name,
-		NameParts:   proj.NameParts,
-		Type:        proj.Type,
-		RootDir:     proj.RootDir,
-		ProjectFile: proj.ProjectFile,
-		Size:        *toSqlSize(size),
-		Sizes:       map[string]*sqlSize{},
-		Data:        proj.Data,
+func (s *sqliteStorage) deleteNotUpdated(value interface{}, projectIDField string, proj *model.Project, updatedAts []time.Time) error {
+	var updatedAt time.Time
+	if len(updatedAts) != 0 {
+		updatedAt = updatedAts[0]
 	}
 
-	for k, v := range proj.Sizes {
+	result := s.db.Where(projectIDField+" = ? and updated_at != ?", proj.ID, updatedAt).Delete(value)
+
+	return result.Error
+}
+
+func toSqlSize(size *model.Size) *sqlSize {
+	return &sqlSize{
+		Lines: size.Lines,
+		Files: size.Files,
+		Bytes: size.Bytes,
+		Other: size.Other,
+	}
+}
+
+func toModelSize(size *sqlSize) *model.Size {
+	return &model.Size{
+		Lines: size.Lines,
+		Files: size.Files,
+		Bytes: size.Bytes,
+		Other: size.Other,
+	}
+}
+
+func toSqlProject(p *model.Project) sqlProject {
+	size := p.GetSize()
+
+	sp := sqlProject{
+		ID:          p.ID,
+		Root:        p.Root,
+		Name:        p.Name,
+		NameParts:   p.NameParts,
+		Type:        p.Type,
+		RootDir:     p.RootDir,
+		ProjectFile: p.ProjectFile,
+		Size:        *toSqlSize(size),
+		Sizes:       map[string]*sqlSize{},
+		Data:        p.Data,
+	}
+
+	for k, v := range p.Sizes {
 		sp.Sizes[k] = toSqlSize(v)
 	}
 
-	println("Writing %v %v %v", sp.ID, sp.Root, sp.Name)
-
-	return s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sp).Error
+	return sp
 }
 
-func (s *sqliteStorage) ReadBasicInfo(result *model.Projects, fileName string) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (s *sqliteStorage) WriteDeps(proj *model.Project) error {
-	var sds []sqlProjectDependency
-
-	for _, dep := range proj.Dependencies {
-		sd := sqlProjectDependency{
-			ID:       dep.ID,
-			SourceID: dep.Source.ID,
-			TargetID: dep.Target.ID,
-			Data:     dep.Data,
-		}
-
-		sds = append(sds, sd)
+func toSqlProjectDependency(d *model.ProjectDependency) sqlProjectDependency {
+	return sqlProjectDependency{
+		ID:       d.ID,
+		SourceID: d.Source.ID,
+		TargetID: d.Target.ID,
+		Data:     d.Data,
 	}
+}
 
-	err := s.db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(sds, len(sds)).Error
-	if err != nil {
-		return err
+func toSqlProjectDirectory(dir *model.ProjectDirectory, p *model.Project) sqlProjectDirectory {
+	sd := sqlProjectDirectory{
+		ID:           dir.ID,
+		ProjectID:    p.ID,
+		RelativePath: dir.RelativePath,
+		Type:         dir.Type,
+		Size:         *toSqlSize(dir.Size),
 	}
-
-	err = s.deleteNotUpdated(&sqlProjectDependency{}, "source_id", proj,
-		lo.Map(sds, func(s sqlProjectDependency, _ int) time.Time { return s.UpdatedAt }))
-
-	return nil
+	return sd
 }
 
-func (s *sqliteStorage) ReadDeps(result *model.Projects, fileName string) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (s *sqliteStorage) WriteSize(proj *model.Project) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (s *sqliteStorage) ReadSize(result *model.Projects, fileName string) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (s *sqliteStorage) WriteFiles(proj *model.Project) error {
-	var sds []sqlProjectDirectory
-	var sfs []sqlProjectFile
-
-	for _, dir := range proj.Dirs {
-		sd := sqlProjectDirectory{
-			ID:           dir.ID,
-			ProjectID:    proj.ID,
-			RelativePath: dir.RelativePath,
-			Type:         dir.Type,
-			Size:         *toSqlSize(dir.Size),
-		}
-
-		sds = append(sds, sd)
-
-		for _, file := range dir.Files {
-			sf := sqlProjectFile{
-				ID:           file.ID,
-				DirectoryID:  dir.ID,
-				ProjectID:    proj.ID,
-				RelativePath: file.RelativePath,
-				Size:         *toSqlSize(file.Size),
-			}
-
-			sfs = append(sfs, sf)
-		}
+func toSqlProjectFile(file *model.ProjectFile, dir *model.ProjectDirectory, p *model.Project) sqlProjectFile {
+	sf := sqlProjectFile{
+		ID:           file.ID,
+		DirectoryID:  dir.ID,
+		ProjectID:    p.ID,
+		RelativePath: file.RelativePath,
+		Size:         *toSqlSize(file.Size),
 	}
-
-	err := s.db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(sds, len(sds)).Error
-	if err != nil {
-		return err
-	}
-
-	err = s.db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(sfs, len(sfs)).Error
-	if err != nil {
-		return err
-	}
-
-	err = s.deleteNotUpdated(&sqlProjectFile{}, "project_id", proj,
-		lo.Map(sfs, func(s sqlProjectFile, _ int) time.Time { return s.UpdatedAt }))
-	if err != nil {
-		return err
-	}
-
-	err = s.deleteNotUpdated(&sqlProjectDirectory{}, "project_id", proj,
-		lo.Map(sds, func(s sqlProjectDirectory, _ int) time.Time { return s.UpdatedAt }))
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *sqliteStorage) ReadFiles(result *model.Projects, fileName string) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (s *sqliteStorage) WriteConfig(proj *model.Project) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (s *sqliteStorage) ReadConfig(result *model.Projects, fileName string) error {
-	// TODO implement me
-	panic("implement me")
+	return sf
 }
 
 type NamingStrategy struct {
@@ -326,33 +358,4 @@ func (n *NamingStrategy) CheckerName(table, column string) string {
 
 func (n *NamingStrategy) IndexName(table, column string) string {
 	return strings.ReplaceAll(n.inner.IndexName(table, column), "_sql_", "_")
-}
-
-func toSqlSize(size *model.Size) *sqlSize {
-	return &sqlSize{
-		Lines: size.Lines,
-		Files: size.Files,
-		Bytes: size.Bytes,
-		Other: size.Other,
-	}
-}
-
-func toModelSize(size *sqlSize) *model.Size {
-	return &model.Size{
-		Lines: size.Lines,
-		Files: size.Files,
-		Bytes: size.Bytes,
-		Other: size.Other,
-	}
-}
-
-func (s *sqliteStorage) deleteNotUpdated(value interface{}, projectIDField string, proj *model.Project, updatedAts []time.Time) error {
-	var updatedAt time.Time
-	if len(updatedAts) != 0 {
-		updatedAt = updatedAts[0]
-	}
-
-	result := s.db.Where(projectIDField+" = ? and updated_at != ?", proj.ID, updatedAt).Delete(value)
-
-	return result.Error
 }

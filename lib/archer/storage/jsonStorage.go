@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/samber/lo"
+
 	"github.com/Faire/archer/lib/archer"
 	"github.com/Faire/archer/lib/archer/model"
 )
@@ -74,6 +76,65 @@ func (s *jsonStorage) LoadProjects(result *model.Projects) error {
 
 		return nil
 	})
+}
+
+func (s *jsonStorage) WriteProjects(projs *model.Projects, changes archer.StorageChanges) error {
+	byRoot := lo.GroupBy(projs.ListProjects(model.FilterAll), func(p *model.Project) string { return p.RootDir })
+
+	for root, projs := range byRoot {
+		err := s.WriteProjNames(root, lo.Map(projs, func(p *model.Project, _ int) string { return p.Name }))
+		if err != nil {
+			return err
+		}
+
+		for _, proj := range projs {
+			err = s.WriteProject(proj, changes)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *jsonStorage) WriteProject(proj *model.Project, changes archer.StorageChanges) error {
+	if changes&archer.ChangedProjectBasicInfo != 0 {
+		err := s.WriteBasicInfo(proj)
+		if err != nil {
+			return err
+		}
+	}
+
+	if changes&archer.ChangedProjectDependencies != 0 {
+		err := s.WriteDeps(proj)
+		if err != nil {
+			return err
+		}
+	}
+
+	if changes&archer.ChangedProjectFiles != 0 {
+		err := s.WriteFiles(proj)
+		if err != nil {
+			return err
+		}
+	}
+
+	if changes&archer.ChangedProjectSize != 0 {
+		err := s.WriteSize(proj)
+		if err != nil {
+			return err
+		}
+	}
+
+	if changes&archer.ChangedProjectConfig != 0 {
+		err := s.WriteConfig(proj)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (s *jsonStorage) getProjNamesFileName(root string) (string, error) {

@@ -422,6 +422,26 @@ func (ps *Projects) ListProjects(ft FilterType) []*Project {
 	return result
 }
 
+func (ps *Projects) ListProjectsByRoot(root string, ft FilterType) []*Project {
+	result := make([]*Project, 0, len(ps.all))
+
+	for _, v := range ps.all {
+		if ft == FilterExcludeExternal && v.IsExternalDependency() {
+			continue
+		}
+
+		if v.Root != root {
+			continue
+		}
+
+		result = append(result, v)
+	}
+
+	sortProjects(result)
+
+	return result
+}
+
 func sortProjects(result []*Project) {
 	sort.Slice(result, func(i, j int) bool {
 		pi := result[i]

@@ -117,7 +117,6 @@ func (i *hibernateImporter) Import(projs *model.Projects, storage archer.Storage
 	}
 
 	dbProjs := map[*model.Project]bool{}
-	parentProjs := map[*model.Project]bool{}
 
 	for _, c := range classes {
 		if len(c.Paths) != 1 {
@@ -143,7 +142,6 @@ func (i *hibernateImporter) Import(projs *model.Projects, storage archer.Storage
 			proj.RootDir = root.Project.RootDir
 
 			parent := root.Project
-			parentProjs[parent] = true
 
 			parent.GetDependency(proj)
 		}
@@ -178,26 +176,7 @@ func (i *hibernateImporter) Import(projs *model.Projects, storage archer.Storage
 
 	common.CreateTableNameParts(lo.Keys(dbProjs))
 
-	for proj := range dbProjs {
-		err = storage.WriteBasicInfo(proj)
-		if err != nil {
-			return err
-		}
-
-		err = storage.WriteDeps(proj)
-		if err != nil {
-			return err
-		}
-	}
-
-	for proj := range parentProjs {
-		err = storage.WriteDeps(proj)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return storage.WriteProjects(projs, archer.ChangedProjectBasicInfo|archer.ChangedProjectDependencies)
 }
 
 func (i *hibernateImporter) processKotlin(fileContents string, fileName string, root common.RootDir) (map[string]*classInfo, []string, error) {
