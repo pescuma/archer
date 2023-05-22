@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/pkg/errors"
 
 	"github.com/Faire/archer/lib/archer"
 	"github.com/Faire/archer/lib/archer/model"
@@ -15,11 +17,21 @@ import (
 
 type gitImporter struct {
 	rootDir string
+	limits  Limits
 }
 
-func NewImporter(rootDir string) archer.Importer {
+type Limits struct {
+	MaxImportedCommits *int
+	MaxCommits         *int
+	After              *time.Time
+	Before             *time.Time
+	ReImportCommits    bool
+}
+
+func NewImporter(rootDir string, limits Limits) archer.Importer {
 	return &gitImporter{
 		rootDir: rootDir,
+		limits:  limits,
 	}
 }
 
@@ -35,6 +47,8 @@ func (g gitImporter) Import(storage archer.Storage) error {
 	if err != nil {
 		return err
 	}
+
+	fmt.Printf("Loading existing data...\n")
 
 	files, err := storage.LoadFiles()
 	if err != nil {
@@ -64,19 +78,60 @@ func (g gitImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
+	commitNumber := 0
+	imported := 0
+	abort := errors.New("ABORT")
+
 	grouper := newNameEmailGrouper()
+
+	for _, p := range people.List() {
+		emails := p.ListEmails()
+		if len(emails) == 0 {
+			continue
+		}
+
+		for _, email := range emails {
+			grouper.add(p.Name, email)
+		}
+		for _, name := range p.ListNames() {
+			grouper.add(name, emails[0])
+		}
+	}
 
 	total := 0
 	err = commitsIter.ForEach(func(gc *object.Commit) error {
+		commitNumber++
+		if !g.limits.ShouldContinue(gc.Committer.When, commitNumber, imported) {
+			return abort
+		}
+
+		total++
+
+		if !g.limits.ReImportCommits && repo.ContainsCommit(gc.Hash.String()) {
+			return nil
+		}
+
+		imported++
+
 		grouper.add(gc.Author.Name, gc.Author.Email)
 		grouper.add(gc.Committer.Name, gc.Committer.Email)
-		total++
 		return nil
 	})
+	if err != nil && err != abort {
+		return err
+	}
 
 	grouper.prepare()
 
 	fmt.Printf("Loading history...\n")
+
+	if imported == 0 {
+		fmt.Printf("No new commits to import.\n")
+		return nil
+	}
+
+	commitNumber = 0
+	imported = 0
 
 	commitsIter, err = gr.Log(&git.LogOptions{})
 	if err != nil {
@@ -85,17 +140,26 @@ func (g gitImporter) Import(storage archer.Storage) error {
 
 	bar := utils.NewProgressBar(total)
 	err = commitsIter.ForEach(func(gc *object.Commit) error {
-		_ = bar.Add(1)
-		bar.Describe(gc.Committer.When.Format("2006-01-02 15:04"))
+		commitNumber++
+		if !g.limits.ShouldContinue(gc.Committer.When, commitNumber, imported) {
+			return abort
+		}
 
-		if repo.ContainsCommit(gc.Hash.String()) {
+		bar.Describe(gc.Committer.When.Format("2006-01-02 15:04"))
+		_ = bar.Add(1)
+
+		if !g.limits.ReImportCommits && repo.ContainsCommit(gc.Hash.String()) {
 			return nil
 		}
 
+		imported++
+
 		author := people.Get(grouper.getName(gc.Author.Email))
+		author.AddName(gc.Author.Name)
 		author.AddEmail(gc.Author.Email)
 
 		committer := people.Get(grouper.getName(gc.Committer.Email))
+		committer.AddName(gc.Committer.Name)
 		committer.AddEmail(gc.Committer.Email)
 
 		commit := repo.GetCommit(gc.Hash.String())
@@ -134,7 +198,7 @@ func (g gitImporter) Import(storage archer.Storage) error {
 
 		return nil
 	})
-	if err != nil {
+	if err != nil && err != abort {
 		return err
 	}
 
@@ -156,4 +220,23 @@ func (g gitImporter) Import(storage archer.Storage) error {
 	}
 
 	return nil
+}
+
+func (l *Limits) ShouldContinue(date time.Time, commit int, imported int) bool {
+	if l.After != nil && date.Before(*l.After) {
+		return false
+	}
+	if l.Before != nil && !date.Before(*l.Before) {
+		return false
+	}
+
+	if l.MaxCommits != nil && commit >= *l.MaxCommits {
+		return false
+	}
+
+	if l.MaxImportedCommits != nil && imported >= *l.MaxImportedCommits {
+		return false
+	}
+
+	return true
 }

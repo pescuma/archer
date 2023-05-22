@@ -291,6 +291,9 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 		p := result.Get(sp.Name)
 		p.ID = sp.ID
 
+		for _, name := range sp.Names {
+			p.AddName(name)
+		}
 		for _, email := range sp.Emails {
 			p.AddEmail(email)
 		}
@@ -531,6 +534,7 @@ func toSqlPerson(p *model.Person) *sqlPerson {
 	return &sqlPerson{
 		ID:     p.ID,
 		Name:   p.Name,
+		Names:  p.ListNames(),
 		Emails: p.ListEmails(),
 		Data:   p.Data,
 	}

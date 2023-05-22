@@ -61,12 +61,8 @@ func (g *nameEmailGrouper) add(name string, email string) {
 }
 
 func (g *nameEmailGrouper) prepare() {
-	all := map[*namesEmails]bool{}
-	for _, v := range g.byName {
-		all[v] = true
-	}
+	nes := g.list()
 
-	nes := lo.Keys(all)
 	for _, ne := range nes {
 		ne.Name = lo.MaxBy(lo.Keys(ne.Names), func(a string, b string) bool {
 			aIsEmail := strings.Contains(a, "@")
@@ -82,6 +78,16 @@ func (g *nameEmailGrouper) prepare() {
 
 func (g *nameEmailGrouper) getName(email string) string {
 	return g.byEmail[email].Name
+}
+
+func (g *nameEmailGrouper) list() []*namesEmails {
+	result := map[*namesEmails]bool{}
+
+	for _, v := range g.byName {
+		result[v] = true
+	}
+
+	return lo.Keys(result)
 }
 
 type namesEmails struct {

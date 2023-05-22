@@ -81,6 +81,7 @@ type sqlPerson struct {
 	ID   model.UUID
 	Name string
 
+	Names  []string          `gorm:"serializer:json"`
 	Emails []string          `gorm:"serializer:json"`
 	Data   map[string]string `gorm:"serializer:json"`
 

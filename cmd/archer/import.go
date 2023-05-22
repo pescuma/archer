@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/Faire/archer/lib/archer/importers/git"
 	"github.com/Faire/archer/lib/archer/importers/gradle"
 	"github.com/Faire/archer/lib/archer/importers/hibernate"
@@ -51,11 +53,48 @@ func (c *ImportLOCCmd) Run(ctx *context) error {
 }
 
 type ImportGitCmd struct {
-	Path string `arg:"" help:"Path with root of git repository." type:"existingpath"`
+	Path          string        `arg:"" help:"Path with root of git repository." type:"existingpath"`
+	LimitImported int           `help:"Limit the number of imported commits. Can be used to incrementally import data. Counted from the latest commit."`
+	LimitCommits  int           `help:"Limit the number of commits to be imported. Counted from the latest commit."`
+	LimitDuration time.Duration `help:"Import commits only in this duration. Counted from current time."`
+	After         time.Time     `help:"Import commits after this date (inclusive)."`
+	Before        time.Time     `help:"Import commits before this date (exclusive)."`
+	Force         bool          `help:"Force re-import of commits that were already imported."`
 }
 
 func (c *ImportGitCmd) Run(ctx *context) error {
-	g := git.NewImporter(c.Path)
+	limits := git.Limits{
+		ReImportCommits: c.Force,
+	}
+
+	if c.LimitImported != 0 {
+		limits.MaxImportedCommits = &c.LimitImported
+	}
+	if c.LimitCommits != 0 {
+		limits.MaxCommits = &c.LimitCommits
+	}
+
+	emptyTime := time.Time{}
+	if c.After != emptyTime {
+		limits.After = &c.After
+	}
+	if c.Before != emptyTime {
+		limits.Before = &c.Before
+	}
+
+	if c.LimitDuration != 0 {
+		before := time.Now()
+		after := before.Add(-c.LimitDuration)
+
+		if limits.After == nil || limits.After.Before(after) {
+			limits.After = &after
+		}
+		if limits.Before == nil || limits.Before.After(before) {
+			limits.Before = &before
+		}
+	}
+
+	g := git.NewImporter(c.Path, limits)
 
 	return ctx.ws.Import(g)
 }
