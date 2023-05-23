@@ -51,6 +51,8 @@ func (m *mysqlImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
+	fmt.Printf("Writing results...\n")
+
 	return storage.WriteProjects(projects, archer.ChangedBasicInfo|archer.ChangedSize|archer.ChangedDependencies)
 }
 

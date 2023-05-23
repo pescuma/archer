@@ -8,6 +8,7 @@ import (
 
 	"github.com/Faire/archer/lib/archer/languages"
 	"github.com/Faire/archer/lib/archer/languages/kotlin_parser"
+	"github.com/Faire/archer/lib/archer/utils"
 )
 
 func ComputeKotlinGuiceDependencies(path string, file kotlin_parser.IKotlinFileContext) int {
@@ -26,10 +27,14 @@ type treeListener struct {
 	constructorDependencies int
 	fieldsDependencies      int
 
-	location             *languages.LocationTracker
+	location            *languages.LocationTracker
+	classes             []*classData
+	hasInjectAnnotation bool
+}
+
+type classData struct {
 	constructors         []int
 	constructorArguments int
-	hasInjectAnnotation  bool
 }
 
 func (l *treeListener) EnterClassDeclaration(ctx *kotlin_parser.ClassDeclarationContext) {
@@ -37,54 +42,74 @@ func (l *treeListener) EnterClassDeclaration(ctx *kotlin_parser.ClassDeclaration
 	if ctx.SimpleIdentifier() == nil {
 		name = "???"
 	} else {
-		ctx.SimpleIdentifier().GetText()
+		name = ctx.SimpleIdentifier().GetText()
 	}
 
 	l.location.EnterClass(name)
+
+	l.classes = append(l.classes, &classData{})
 }
 
 func (l *treeListener) ExitClassDeclaration(_ *kotlin_parser.ClassDeclarationContext) {
-	l.constructorDependencies += lo.Max(l.constructors)
+	cd := utils.Last(l.classes)
+	l.constructorDependencies += lo.Max(cd.constructors)
+	l.classes = utils.RemoveLast(l.classes)
 
 	l.location.ExitClass()
 }
 
 func (l *treeListener) EnterPrimaryConstructor(_ *kotlin_parser.PrimaryConstructorContext) {
-	l.location.EnterFunction("constructor")
+	l.location.EnterFunction("<constructor>")
 
-	l.constructorArguments = 0
+	cd := utils.Last(l.classes)
+	cd.constructorArguments = 0
 	l.hasInjectAnnotation = false
 }
 
 func (l *treeListener) ExitPrimaryConstructor(_ *kotlin_parser.PrimaryConstructorContext) {
 	if l.hasInjectAnnotation {
-		l.constructors = append(l.constructors, l.constructorArguments)
+		cd := utils.Last(l.classes)
+		cd.constructors = append(cd.constructors, cd.constructorArguments)
 	}
 
 	l.location.ExitFunction()
 }
 
 func (l *treeListener) EnterClassParameter(_ *kotlin_parser.ClassParameterContext) {
-	l.constructorArguments++
+	cd := utils.Last(l.classes)
+	cd.constructorArguments++
 }
 
 func (l *treeListener) EnterSecondaryConstructor(_ *kotlin_parser.SecondaryConstructorContext) {
-	l.location.EnterFunction("constructor")
+	l.location.EnterFunction("<constructor>")
 
-	l.constructorArguments = 0
+	cd := utils.Last(l.classes)
+	cd.constructorArguments = 0
 	l.hasInjectAnnotation = false
 }
 
 func (l *treeListener) ExitSecondaryConstructor(_ *kotlin_parser.SecondaryConstructorContext) {
 	if l.hasInjectAnnotation {
-		l.constructors = append(l.constructors, l.constructorArguments)
+		cd := utils.Last(l.classes)
+		cd.constructors = append(cd.constructors, cd.constructorArguments)
 	}
 
 	l.location.ExitFunction()
 }
 
-func (l *treeListener) EnterFunctionValueParameter(_ *kotlin_parser.FunctionValueParameterContext) {
-	l.constructorArguments++
+func (l *treeListener) EnterAnonymousInitializer(ctx *kotlin_parser.AnonymousInitializerContext) {
+	l.location.EnterFunction("<init>")
+}
+
+func (l *treeListener) ExitAnonymousInitializer(ctx *kotlin_parser.AnonymousInitializerContext) {
+	l.location.ExitFunction()
+}
+
+func (l *treeListener) EnterFunctionValueParameter(ctx *kotlin_parser.FunctionValueParameterContext) {
+	if l.location.CurrentFunctionName() == "<constructor>" {
+		cd := utils.Last(l.classes)
+		cd.constructorArguments++
+	}
 }
 
 func (l *treeListener) EnterFunctionDeclaration(ctx *kotlin_parser.FunctionDeclarationContext) {

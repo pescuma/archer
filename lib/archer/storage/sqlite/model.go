@@ -21,16 +21,18 @@ type sqlProject struct {
 	Metrics *sqlMetrics         `gorm:"embedded"`
 	Data    map[string]string   `gorm:"serializer:json"`
 
-	Dependencies []sqlProjectDependency `gorm:"foreignKey:SourceID;foreignKey:TargetID"`
-	Dirs         []sqlProjectDirectory  `gorm:"foreignKey:ProjectID"`
-	Files        []sqlFile              `gorm:"foreignKey:ProjectID"`
-
 	CreatedAt time.Time
 	UpdatedAt time.Time
+
+	DependencySources []sqlProjectDependency `gorm:"foreignKey:SourceID"`
+	DependencyTargets []sqlProjectDependency `gorm:"foreignKey:TargetID"`
+	Dirs              []sqlProjectDirectory  `gorm:"foreignKey:ProjectID"`
+	Files             []sqlFile              `gorm:"foreignKey:ProjectID"`
 }
 
 type sqlProjectDependency struct {
 	ID       model.UUID
+	Name     string
 	SourceID model.UUID `gorm:"index"`
 	TargetID model.UUID `gorm:"index"`
 
@@ -41,10 +43,10 @@ type sqlProjectDependency struct {
 }
 
 type sqlProjectDirectory struct {
-	ID           model.UUID
-	ProjectID    model.UUID `gorm:"index"`
-	RelativePath string
-	Type         model.ProjectDirectoryType
+	ID        model.UUID
+	ProjectID model.UUID `gorm:"index"`
+	Name      string
+	Type      model.ProjectDirectoryType
 
 	Size    *sqlSize          `gorm:"embedded;embeddedPrefix:size_"`
 	Metrics *sqlMetrics       `gorm:"embedded"`
@@ -58,7 +60,7 @@ type sqlProjectDirectory struct {
 
 type sqlFile struct {
 	ID   model.UUID
-	Path string
+	Name string
 
 	ProjectID          *model.UUID `gorm:"index"`
 	ProjectDirectoryID *model.UUID `gorm:"index"`
@@ -71,6 +73,8 @@ type sqlFile struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
+
+	CommitFiles []sqlRepositoryCommitFile `gorm:"foreignKey:FileID"`
 }
 
 type sqlPerson struct {
@@ -83,10 +87,14 @@ type sqlPerson struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
+
+	CommitAuthored []sqlRepositoryCommit `gorm:"foreignKey:AuthorID"`
+	CommitCommited []sqlRepositoryCommit `gorm:"foreignKey:CommitterID"`
 }
 
 type sqlRepository struct {
 	ID      model.UUID
+	Name    string
 	RootDir string `gorm:"uniqueIndex"`
 	VCS     string
 
@@ -94,12 +102,15 @@ type sqlRepository struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
+
+	Commits     []sqlRepositoryCommit     `gorm:"foreignKey:RepositoryID"`
+	CommitFiles []sqlRepositoryCommitFile `gorm:"foreignKey:RepositoryID"`
 }
 
 type sqlRepositoryCommit struct {
 	ID           model.UUID
 	RepositoryID model.UUID `gorm:"index"`
-	Hash         string
+	Name         string
 	Message      string
 	Parents      []string   `gorm:"serializer:json"`
 	Date         time.Time  `gorm:"index"`
@@ -111,6 +122,8 @@ type sqlRepositoryCommit struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
+
+	CommitFiles []sqlRepositoryCommitFile `gorm:"foreignKey:CommitID"`
 }
 
 type sqlRepositoryCommitFile struct {

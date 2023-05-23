@@ -8,6 +8,7 @@ import (
 
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
 	"github.com/pkg/errors"
+	"github.com/schollz/progressbar/v3"
 
 	"github.com/Faire/archer/lib/archer/languages/kotlin_parser"
 	"github.com/Faire/archer/lib/archer/utils"
@@ -22,7 +23,8 @@ type work struct {
 
 func ProcessKotlinFiles(paths []string,
 	process func(file string, content kotlin_parser.IKotlinFileContext) error,
-	onError func(file string, err error) error,
+	onProcessed func(bar *progressbar.ProgressBar, index int, file string) error,
+	onError func(bar *progressbar.ProgressBar, index int, file string, err error) error,
 ) error {
 	group := utils.NewProcessGroup(func(w *work) (*work, error) {
 		contents := string(w.contents)
@@ -80,15 +82,22 @@ func ProcessKotlinFiles(paths []string,
 	}()
 
 	bar := utils.NewProgressBar(len(paths))
+	index := 0
 	for w := range group.Output {
-		if w.err != nil {
-			_ = bar.Clear()
-			err := onError(w.path, w.err)
+		if w.err == nil {
+			err := onProcessed(bar, index, w.path)
+			if err != nil {
+				group.Abort(err)
+			}
+
+		} else {
+			err := onError(bar, index, w.path, w.err)
 			if err != nil {
 				group.Abort(err)
 			}
 		}
 
+		index++
 		_ = bar.Add(1)
 	}
 

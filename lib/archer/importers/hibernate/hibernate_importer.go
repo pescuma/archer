@@ -7,7 +7,9 @@ import (
 	"strings"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
+	"github.com/schollz/progressbar/v3"
 
 	"github.com/Faire/archer/lib/archer"
 	"github.com/Faire/archer/lib/archer/common"
@@ -29,7 +31,7 @@ func NewImporter(rootDirs, globs []string, rootName string) archer.Importer {
 	}
 }
 
-func (i *hibernateImporter) Import(storage archer.Storage) error {
+func (h *hibernateImporter) Import(storage archer.Storage) error {
 	projectsDB, err := storage.LoadProjects()
 	if err != nil {
 		return err
@@ -40,7 +42,7 @@ func (i *hibernateImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
-	roots, err := i.rootsFinder.ComputeRootDirs(projectsDB, filesDB)
+	roots, err := h.rootsFinder.ComputeRootDirs(projectsDB, filesDB)
 	if err != nil {
 		return err
 	}
@@ -92,8 +94,12 @@ func (i *hibernateImporter) Import(storage archer.Storage) error {
 
 			return err
 		},
-		func(path string, err error) error {
-			if err != fs.ErrNotExist {
+		func(bar *progressbar.ProgressBar, index int, path string) error {
+			return nil
+		},
+		func(bar *progressbar.ProgressBar, index int, path string, err error) error {
+			if !errors.Is(err, fs.ErrNotExist) {
+				_ = bar.Clear()
 				fmt.Printf("Error procesing file %v: %v\n", path, err)
 			}
 
@@ -136,7 +142,7 @@ func (i *hibernateImporter) Import(storage archer.Storage) error {
 
 		root := c.Root[0]
 
-		proj := projectsDB.GetOrCreate(i.rootName, c.Tables[0])
+		proj := projectsDB.GetOrCreate(h.rootName, c.Tables[0])
 		dbProjs[proj] = true
 
 		proj.Type = model.DatabaseType
@@ -168,7 +174,7 @@ func (i *hibernateImporter) Import(storage archer.Storage) error {
 				continue
 			}
 
-			dp := projectsDB.GetOrCreate(i.rootName, dc.Tables[0])
+			dp := projectsDB.GetOrCreate(h.rootName, dc.Tables[0])
 			dbProjs[dp] = true
 
 			d := proj.GetDependency(dp)
@@ -181,6 +187,8 @@ func (i *hibernateImporter) Import(storage archer.Storage) error {
 	}
 
 	common.CreateTableNameParts(lo.Keys(dbProjs))
+
+	fmt.Printf("Writing results...\n")
 
 	return storage.WriteProjects(projectsDB, archer.ChangedBasicInfo|archer.ChangedDependencies)
 }

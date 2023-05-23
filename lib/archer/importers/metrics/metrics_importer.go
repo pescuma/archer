@@ -5,7 +5,9 @@ import (
 	"io/fs"
 	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
+	"github.com/schollz/progressbar/v3"
 
 	"github.com/Faire/archer/lib/archer"
 	"github.com/Faire/archer/lib/archer/importers"
@@ -22,6 +24,7 @@ type metricsImporter struct {
 type Limits struct {
 	Incremental      bool
 	MaxImportedFiles *int
+	SaveEvery        *int
 }
 
 func NewImporter(filters []string, limits Limits) archer.Importer {
@@ -82,6 +85,7 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Importing metrics from %v files...\n", len(files))
 
+	lastSave := 0
 	err = importers.ProcessKotlinFiles(lo.Keys(files),
 		func(path string, content kotlin_parser.IKotlinFileContext) error {
 			file := files[path]
@@ -90,13 +94,31 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 
 			return nil
 		},
-		func(path string, err error) error {
+		func(bar *progressbar.ProgressBar, index int, path string) error {
+			if m.limits.SaveEvery != nil && (index+1)-lastSave >= *m.limits.SaveEvery {
+				lastSave = index
+
+				_ = bar.Clear()
+				fmt.Print("Writing metrics for files...")
+
+				err = storage.WriteFiles(filesDB, archer.ChangedMetrics)
+				if err != nil {
+					return err
+				}
+
+				fmt.Print("\r")
+				_ = bar.RenderBlank()
+			}
+			return nil
+		},
+		func(bar *progressbar.ProgressBar, index int, path string, err error) error {
 			file := files[path]
 
-			if err == fs.ErrNotExist {
+			if errors.Is(err, fs.ErrNotExist) {
 				file.Exists = false
 
 			} else if err != nil {
+				_ = bar.Clear()
 				fmt.Printf("Error procesing file %v: %v\n", file.Path, err)
 			}
 
@@ -106,6 +128,24 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
+	updateParentMetrics(ps, filesDB)
+
+	fmt.Printf("Writing results...\n")
+
+	err = storage.WriteProjects(projectsDB, archer.ChangedMetrics)
+	if err != nil {
+		return err
+	}
+
+	err = storage.WriteFiles(filesDB, archer.ChangedMetrics)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func updateParentMetrics(ps []*model.Project, filesDB *model.Files) {
 	for _, proj := range ps {
 		proj.Metrics.Clear()
 
@@ -119,18 +159,6 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 			proj.Metrics.Add(dir.Metrics)
 		}
 	}
-
-	err = storage.WriteProjects(projectsDB, archer.ChangedMetrics)
-	if err != nil {
-		return err
-	}
-
-	err = storage.WriteFiles(filesDB, archer.ChangedMetrics)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (l *Limits) ShouldContinue(imported int) bool {

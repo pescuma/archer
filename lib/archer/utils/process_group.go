@@ -23,7 +23,7 @@ func NewProcessGroup[I, O any](proc func(I) (O, error)) ProcessGroup[I, O] {
 		abort: make(chan struct{}),
 
 		Input:  make(chan I, routines),
-		Output: make(chan O, routines),
+		Output: make(chan O, 10000*routines),
 		Err:    make(chan error),
 	}
 

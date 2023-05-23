@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"gorm.io/gorm/logger"
 	"gorm.io/gorm/schema"
 
 	"github.com/Faire/archer/lib/archer"
@@ -37,8 +39,19 @@ func NewSqliteStorage(file string) (archer.Storage, error) {
 		}
 	}
 
+	newLogger := logger.New(
+		log.New(os.Stdout, "\r\n", log.LstdFlags),
+		logger.Config{
+			SlowThreshold:             time.Second,
+			LogLevel:                  logger.Warn,
+			IgnoreRecordNotFoundError: false,
+			Colorful:                  true,
+		},
+	)
+
 	db, err := gorm.Open(sqlite.Open(file), &gorm.Config{
 		NamingStrategy: &NamingStrategy{},
+		Logger:         newLogger,
 	})
 	if err != nil {
 		return nil, err
@@ -107,7 +120,7 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 	for _, sd := range dirs {
 		p := result.GetByID(sd.ProjectID)
 
-		d := p.GetDirectory(sd.RelativePath)
+		d := p.GetDirectory(sd.Name)
 		d.ID = sd.ID
 		d.Type = sd.Type
 		d.Size = toModelSize(sd.Size)
@@ -177,21 +190,21 @@ func (s *sqliteStorage) writeProjects(projs []*model.Project, changes archer.Sto
 	})
 
 	if changedProjs {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlProjs).Error
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlProjs, 1000).Error
 		if err != nil {
 			return err
 		}
 	}
 
 	if changedDeps {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlDeps).Error
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlDeps, 1000).Error
 		if err != nil {
 			return err
 		}
 	}
 
 	if changedDirs {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlDirs).Error
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlDirs, 1000).Error
 		if err != nil {
 			return err
 		}
@@ -231,7 +244,7 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 	}
 
 	for _, sf := range files {
-		f := result.GetOrCreate(sf.Path)
+		f := result.GetOrCreate(sf.Name)
 		f.ID = sf.ID
 		f.ProjectID = sf.ProjectID
 		f.ProjectDirectoryID = sf.ProjectDirectoryID
@@ -264,7 +277,7 @@ func (s *sqliteStorage) WriteFiles(files *model.Files, changes archer.StorageCha
 		CreateBatchSize: 100,
 	})
 
-	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlFiles).Error
+	err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlFiles, 1000).Error
 	if err != nil {
 		return err
 	}
@@ -321,7 +334,7 @@ func (s *sqliteStorage) WritePeople(people *model.People, changes archer.Storage
 		CreateBatchSize: 100,
 	})
 
-	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlPeople).Error
+	err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlPeople, 1000).Error
 	if err != nil {
 		return err
 	}
@@ -364,9 +377,8 @@ func (s *sqliteStorage) LoadRepository(rootDir string) (*model.Repository, error
 	result.Data = sqlRepo.Data
 
 	for _, sc := range sqlCommits {
-		c := result.GetCommit(sc.Hash)
+		c := result.GetCommit(sc.Name)
 		c.ID = sc.ID
-		c.Hash = sc.Hash
 		c.Parents = sc.Parents
 		c.Date = sc.Date
 		c.CommitterID = sc.CommitterID
@@ -402,11 +414,11 @@ func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.S
 		}
 	}
 
-	var sqlFiles []*sqlRepositoryCommitFile
+	var sqlCommitFiles []*sqlRepositoryCommitFile
 	if changedFiles {
 		for _, c := range repo.ListCommits() {
 			for _, f := range c.Files {
-				sqlFiles = append(sqlFiles, toSqlRepositoryCommitFile(repo, c, f))
+				sqlCommitFiles = append(sqlCommitFiles, toSqlRepositoryCommitFile(repo, c, f))
 			}
 		}
 	}
@@ -425,14 +437,14 @@ func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.S
 	}
 
 	if changedCommits {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommits).Error
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlCommits, 1000).Error
 		if err != nil {
 			return err
 		}
 	}
 
 	if changedFiles {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlFiles).Error
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlCommitFiles, 1000).Error
 		if err != nil {
 			return err
 		}
@@ -523,6 +535,7 @@ func toSqlProject(p *model.Project) *sqlProject {
 func toSqlProjectDependency(d *model.ProjectDependency) *sqlProjectDependency {
 	return &sqlProjectDependency{
 		ID:       d.ID,
+		Name:     d.String(),
 		SourceID: d.Source.ID,
 		TargetID: d.Target.ID,
 		Data:     d.Data,
@@ -531,20 +544,20 @@ func toSqlProjectDependency(d *model.ProjectDependency) *sqlProjectDependency {
 
 func toSqlProjectDirectory(d *model.ProjectDirectory, p *model.Project) *sqlProjectDirectory {
 	return &sqlProjectDirectory{
-		ID:           d.ID,
-		ProjectID:    p.ID,
-		RelativePath: d.RelativePath,
-		Type:         d.Type,
-		Size:         toSqlSize(d.Size),
-		Metrics:      toSqlMetrics(d.Metrics),
-		Data:         d.Data,
+		ID:        d.ID,
+		ProjectID: p.ID,
+		Name:      d.RelativePath,
+		Type:      d.Type,
+		Size:      toSqlSize(d.Size),
+		Metrics:   toSqlMetrics(d.Metrics),
+		Data:      d.Data,
 	}
 }
 
 func toSqlFile(f *model.File) *sqlFile {
 	return &sqlFile{
 		ID:                 f.ID,
-		Path:               f.Path,
+		Name:               f.Path,
 		ProjectID:          f.ProjectID,
 		ProjectDirectoryID: f.ProjectDirectoryID,
 		RepositoryID:       f.RepositoryID,
@@ -568,6 +581,7 @@ func toSqlPerson(p *model.Person) *sqlPerson {
 func toSqlRepository(r *model.Repository) *sqlRepository {
 	return &sqlRepository{
 		ID:      r.ID,
+		Name:    fmt.Sprintf("%v:%v", r.VCS, r.RootDir),
 		RootDir: r.RootDir,
 		VCS:     r.VCS,
 		Data:    r.Data,
@@ -578,7 +592,7 @@ func toSqlRepositoryCommit(r *model.Repository, c *model.RepositoryCommit) *sqlR
 	return &sqlRepositoryCommit{
 		ID:           c.ID,
 		RepositoryID: r.ID,
-		Hash:         c.Hash,
+		Name:         c.Hash,
 		Parents:      c.Parents,
 		Date:         c.Date,
 		CommitterID:  c.CommitterID,

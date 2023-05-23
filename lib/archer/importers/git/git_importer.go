@@ -129,47 +129,46 @@ func (g gitImporter) Import(storage archer.Storage) error {
 		return nil
 	}
 
-	commitNumber = 0
-	imported = 0
-
 	commitsIter, err = gr.Log(&git.LogOptions{})
 	if err != nil {
 		return err
 	}
 
-	bar := utils.NewProgressBar(total)
-	err = commitsIter.ForEach(func(gc *object.Commit) error {
-		if !g.limits.ShouldContinue(commitNumber, imported, gc.Committer.When) {
+	bar := utils.NewProgressBar(imported)
+	commitNumber = 0
+	imported = 0
+	err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
+		if !g.limits.ShouldContinue(commitNumber, imported, gitCommit.Committer.When) {
 			return abort
 		}
 
 		commitNumber++
 
-		bar.Describe(gc.Committer.When.Format("2006-01-02 15:04"))
-		_ = bar.Add(1)
-
-		if g.limits.Incremental && repo.ContainsCommit(gc.Hash.String()) {
+		if g.limits.Incremental && repo.ContainsCommit(gitCommit.Hash.String()) {
 			return nil
 		}
 
 		imported++
 
-		author := people.GetOrCreate(grouper.getName(gc.Author.Email))
-		author.AddName(gc.Author.Name)
-		author.AddEmail(gc.Author.Email)
+		bar.Describe(gitCommit.Committer.When.Format("2006-01-02 15:04"))
+		_ = bar.Add(1)
 
-		committer := people.GetOrCreate(grouper.getName(gc.Committer.Email))
-		committer.AddName(gc.Committer.Name)
-		committer.AddEmail(gc.Committer.Email)
+		author := people.GetOrCreate(grouper.getName(gitCommit.Author.Email))
+		author.AddName(gitCommit.Author.Name)
+		author.AddEmail(gitCommit.Author.Email)
 
-		commit := repo.GetCommit(gc.Hash.String())
-		commit.Message = strings.TrimSpace(gc.Message)
-		commit.Date = gc.Committer.When
+		committer := people.GetOrCreate(grouper.getName(gitCommit.Committer.Email))
+		committer.AddName(gitCommit.Committer.Name)
+		committer.AddEmail(gitCommit.Committer.Email)
+
+		commit := repo.GetCommit(gitCommit.Hash.String())
+		commit.Message = strings.TrimSpace(gitCommit.Message)
+		commit.Date = gitCommit.Committer.When
 		commit.CommitterID = committer.ID
-		commit.DateAuthored = gc.Author.When
+		commit.DateAuthored = gitCommit.Author.When
 		commit.AuthorID = author.ID
 
-		err := gc.Parents().ForEach(func(p *object.Commit) error {
+		err := gitCommit.Parents().ForEach(func(p *object.Commit) error {
 			commit.Parents = append(commit.Parents, p.Hash.String())
 			return nil
 		})
@@ -177,23 +176,23 @@ func (g gitImporter) Import(storage archer.Storage) error {
 			return err
 		}
 
-		gs, err := gc.Stats()
+		gitStats, err := gitCommit.Stats()
 		if err != nil {
 			return err
 		}
 
-		for _, gf := range gs {
-			if gf.Name != "" {
-				path := filepath.Join(rootDir, gf.Name)
+		for _, gitFile := range gitStats {
+			if gitFile.Name != "" {
+				path := filepath.Join(rootDir, gitFile.Name)
 
 				file := files.GetOrCreate(path)
 				file.RepositoryID = &repo.ID
 
-				commit.AddFile(file.ID, gf.Addition, gf.Deletion)
+				commit.AddFile(file.ID, gitFile.Addition, gitFile.Deletion)
 			}
 
-			commit.AddedLines += gf.Addition
-			commit.DeletedLines += gf.Deletion
+			commit.AddedLines += gitFile.Addition
+			commit.DeletedLines += gitFile.Deletion
 		}
 
 		return nil

@@ -114,6 +114,8 @@ func (l *locImporter) Import(storage archer.Storage) error {
 		}
 	}
 
+	fmt.Printf("Writing results...\n")
+
 	err = storage.WriteProjects(projectsDB, archer.ChangedSize)
 	if err != nil {
 		return err

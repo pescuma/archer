@@ -55,8 +55,9 @@ func (c *ImportLOCCmd) Run(ctx *context) error {
 
 type ImportMetricsCmd struct {
 	Filters       []string `default:"" help:"Filters to be applied to the projects. Empty means all."`
-	Incremental   bool     `negatable:"" help:"Don't import metrics already imported'."`
-	LimitImported int      `help:"Limit the number of imported files. Can be used to incrementally import data. Counted randomly."`
+	Incremental   bool     `negatable:"" help:"Don't import metrics already imported."`
+	LimitImported int      `help:"Limit the number of imported files. Can be used to incrementally import data."`
+	SaveEvery     int      `help:"Save results after some number of files."`
 }
 
 func (c *ImportMetricsCmd) Run(ctx *context) error {
@@ -65,6 +66,9 @@ func (c *ImportMetricsCmd) Run(ctx *context) error {
 	}
 	if c.LimitImported != 0 {
 		limits.MaxImportedFiles = &c.LimitImported
+	}
+	if c.SaveEvery != 0 {
+		limits.SaveEvery = &c.SaveEvery
 	}
 
 	g := metrics.NewImporter(c.Filters, limits)

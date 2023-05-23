@@ -57,7 +57,7 @@ func parseProjects(content string) ([]string, error) {
 
 func parseDeps(projects *model.Projects, content string, rootProj string) error {
 	rootProjRE := regexp.MustCompile(`^(?:Root project|Project) '([^']+)'$`)
-	depRE := regexp.MustCompile(`^([-+\\| ]+)(?:project )?([a-zA-Z0-9:._-]+)`)
+	depRE := regexp.MustCompile(`^([-+\\| ]+)(?:project )?([a-zA-Z0-9:._-]+)(:\\d+\\(?:\\.\\d+){1,3}(?:\\.Final)?)?$`)
 
 	state := waitingRoot
 	var stack []pd
