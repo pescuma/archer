@@ -16,9 +16,10 @@ type sqlProject struct {
 	RootDir     string
 	ProjectFile string
 
-	Size  *sqlSize            `gorm:"embedded;embeddedPrefix:size_"`
-	Sizes map[string]*sqlSize `gorm:"serializer:json"`
-	Data  map[string]string   `gorm:"serializer:json"`
+	Size    *sqlSize            `gorm:"embedded;embeddedPrefix:size_"`
+	Sizes   map[string]*sqlSize `gorm:"serializer:json"`
+	Metrics *sqlMetrics         `gorm:"embedded"`
+	Data    map[string]string   `gorm:"serializer:json"`
 
 	Dependencies []sqlProjectDependency `gorm:"foreignKey:SourceID;foreignKey:TargetID"`
 	Dirs         []sqlProjectDirectory  `gorm:"foreignKey:ProjectID"`
@@ -45,20 +46,14 @@ type sqlProjectDirectory struct {
 	RelativePath string
 	Type         model.ProjectDirectoryType
 
-	Size *sqlSize          `gorm:"embedded;embeddedPrefix:size_"`
-	Data map[string]string `gorm:"serializer:json"`
+	Size    *sqlSize          `gorm:"embedded;embeddedPrefix:size_"`
+	Metrics *sqlMetrics       `gorm:"embedded"`
+	Data    map[string]string `gorm:"serializer:json"`
 
 	Files []sqlFile `gorm:"foreignKey:ProjectDirectoryID"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
-}
-
-type sqlSize struct {
-	Lines int
-	Files int
-	Bytes int
-	Other map[string]int `gorm:"serializer:json"`
 }
 
 type sqlFile struct {
@@ -69,9 +64,10 @@ type sqlFile struct {
 	ProjectDirectoryID *model.UUID `gorm:"index"`
 	RepositoryID       *model.UUID `gorm:"index"`
 
-	Exists bool
-	Size   *sqlSize          `gorm:"embedded;embeddedPrefix:size_"`
-	Data   map[string]string `gorm:"serializer:json"`
+	Exists  bool
+	Size    *sqlSize          `gorm:"embedded;embeddedPrefix:size_"`
+	Metrics *sqlMetrics       `gorm:"embedded"`
+	Data    map[string]string `gorm:"serializer:json"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -126,4 +122,15 @@ type sqlRepositoryCommitFile struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+type sqlSize struct {
+	Lines int
+	Files int
+	Bytes int
+	Other map[string]int `gorm:"serializer:json"`
+}
+
+type sqlMetrics struct {
+	DependenciesGuice *int
 }

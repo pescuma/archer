@@ -7,6 +7,7 @@ import (
 	"github.com/Faire/archer/lib/archer/importers/gradle"
 	"github.com/Faire/archer/lib/archer/importers/hibernate"
 	"github.com/Faire/archer/lib/archer/importers/loc"
+	"github.com/Faire/archer/lib/archer/importers/metrics"
 	"github.com/Faire/archer/lib/archer/importers/mysql"
 )
 
@@ -52,19 +53,38 @@ func (c *ImportLOCCmd) Run(ctx *context) error {
 	return ctx.ws.Import(g)
 }
 
+type ImportMetricsCmd struct {
+	Filters       []string `default:"" help:"Filters to be applied to the projects. Empty means all."`
+	Incremental   bool     `negatable:"" help:"Don't import metrics already imported'."`
+	LimitImported int      `help:"Limit the number of imported files. Can be used to incrementally import data. Counted randomly."`
+}
+
+func (c *ImportMetricsCmd) Run(ctx *context) error {
+	limits := metrics.Limits{
+		Incremental: c.Incremental,
+	}
+	if c.LimitImported != 0 {
+		limits.MaxImportedFiles = &c.LimitImported
+	}
+
+	g := metrics.NewImporter(c.Filters, limits)
+
+	return ctx.ws.Import(g)
+}
+
 type ImportGitCmd struct {
 	Path          string        `arg:"" help:"Path with root of git repository." type:"existingpath"`
+	Incremental   bool          `default:"true" negatable:"" help:"Don't import commits already imported'."`
 	LimitImported int           `help:"Limit the number of imported commits. Can be used to incrementally import data. Counted from the latest commit."`
 	LimitCommits  int           `help:"Limit the number of commits to be imported. Counted from the latest commit."`
 	LimitDuration time.Duration `help:"Import commits only in this duration. Counted from current time."`
 	After         time.Time     `help:"Import commits after this date (inclusive)."`
 	Before        time.Time     `help:"Import commits before this date (exclusive)."`
-	Force         bool          `help:"Force re-import of commits that were already imported."`
 }
 
 func (c *ImportGitCmd) Run(ctx *context) error {
 	limits := git.Limits{
-		ReImportCommits: c.Force,
+		Incremental: c.Incremental,
 	}
 
 	if c.LimitImported != 0 {

@@ -2,16 +2,16 @@ package hibernate
 
 import (
 	"fmt"
-	"os"
+	"io/fs"
 	"regexp"
 	"strings"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
-	"github.com/pkg/errors"
 	"github.com/samber/lo"
 
 	"github.com/Faire/archer/lib/archer"
 	"github.com/Faire/archer/lib/archer/common"
+	"github.com/Faire/archer/lib/archer/importers"
 	"github.com/Faire/archer/lib/archer/languages/kotlin_parser"
 	"github.com/Faire/archer/lib/archer/model"
 	"github.com/Faire/archer/lib/archer/utils"
@@ -50,55 +50,58 @@ func (i *hibernateImporter) Import(storage archer.Storage) error {
 	}
 
 	type work struct {
-		root         common.RootDir
-		fileName     string
-		fileContents string
-		classes      map[string]*classInfo
-		errors       []string
+		root     common.RootDir
+		fileName string
+		classes  map[string]*classInfo
+		errors   []string
 	}
 
-	group := utils.NewProcessGroup(func(w *work) (*work, error) {
-		var err error
-		w.classes, w.errors, err = i.processKotlin(w.fileContents, w.fileName, w.root)
-		return w, err
-	})
-
-	go func() {
-		for _, root := range roots {
-			err = root.WalkDir(func(proj *model.Project, path string) error {
-				if group.Aborted() {
-					return errors.New("aborted")
-				}
-
-				if !strings.HasSuffix(path, ".kt") {
-					return nil
-				}
-
-				contents, err := os.ReadFile(path)
-				if err != nil {
-					return err
-				}
-
-				group.Input <- &work{
-					root:         root,
-					fileName:     path,
-					fileContents: string(contents),
-				}
-
+	paths := map[string]*work{}
+	for _, root := range roots {
+		err = root.WalkDir(func(proj *model.Project, path string) error {
+			if !strings.HasSuffix(path, ".kt") {
 				return nil
-			})
-			if err != nil {
-				group.Abort(err)
-				return
 			}
-		}
+			paths[path] = &work{
+				root:     root,
+				fileName: path,
+			}
 
-		group.FinishedInput()
-	}()
+			return nil
+		})
+	}
+
+	fmt.Printf("Importing tables from hibernate from %v files...\n", len(paths))
+
+	_, err = importers.ProcessKotlinFiles(lo.Keys(paths),
+		func(path string, content kotlin_parser.IKotlinFileContext) (int, error) {
+			w := paths[path]
+
+			l := newTreeListener(w.fileName, w.root)
+			l.IncreasePrefix()
+
+			antlr.ParseTreeWalkerDefault.Walk(l, content)
+
+			l.DecreasePrefix()
+
+			w.classes, w.errors = l.Classes, l.Errors
+
+			return 0, err
+		},
+		func(path string, err error) error {
+			if err != fs.ErrNotExist {
+				fmt.Printf("Error procesing file %v: %v\n", path, err)
+			}
+
+			return nil
+		})
+	if err != nil {
+		return err
+	}
 
 	classes := map[string]*classInfo{}
 	var es []string
-	for w := range group.Output {
+	for _, w := range lo.Values(paths) {
 		for k, nv := range w.classes {
 			ov, ok := classes[k]
 			if !ok {
@@ -115,14 +118,6 @@ func (i *hibernateImporter) Import(storage archer.Storage) error {
 		es = append(es, w.errors...)
 	}
 
-	if err = <-group.Err; err != nil {
-		return err
-	}
-
-	for _, e := range es {
-		fmt.Printf("ERROR: %v\n", e)
-	}
-
 	dbProjs := map[*model.Project]bool{}
 
 	for _, c := range classes {
@@ -137,7 +132,7 @@ func (i *hibernateImporter) Import(storage archer.Storage) error {
 
 		root := c.Root[0]
 
-		proj := projects.Get(i.rootName, c.Tables[0])
+		proj := projects.GetOrCreate(i.rootName, c.Tables[0])
 		dbProjs[proj] = true
 
 		proj.Type = model.DatabaseType
@@ -169,7 +164,7 @@ func (i *hibernateImporter) Import(storage archer.Storage) error {
 				continue
 			}
 
-			dp := projects.Get(i.rootName, dc.Tables[0])
+			dp := projects.GetOrCreate(i.rootName, dc.Tables[0])
 			dbProjs[dp] = true
 
 			d := proj.GetDependency(dp)
@@ -184,29 +179,6 @@ func (i *hibernateImporter) Import(storage archer.Storage) error {
 	common.CreateTableNameParts(lo.Keys(dbProjs))
 
 	return storage.WriteProjects(projects, archer.ChangedBasicInfo|archer.ChangedDependencies)
-}
-
-func (i *hibernateImporter) processKotlin(fileContents string, fileName string, root common.RootDir) (map[string]*classInfo, []string, error) {
-	l := newTreeListener(fileName, root)
-
-	l.printfln("Parsing %v ...", fileName)
-	l.IncreasePrefix()
-	defer func() {
-		l.DecreasePrefix()
-		fmt.Print(l.sb.String())
-	}()
-
-	input := antlr.NewInputStream(fileContents)
-	lexer := kotlin_parser.NewKotlinLexer(input)
-	stream := antlr.NewCommonTokenStream(lexer, 0)
-
-	p := kotlin_parser.NewKotlinParser(stream)
-
-	file := p.KotlinFile()
-
-	antlr.ParseTreeWalkerDefault.Walk(l, file)
-
-	return l.Classes, l.Errors, nil
 }
 
 type treeListener struct {

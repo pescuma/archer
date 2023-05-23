@@ -6,16 +6,18 @@ import (
 )
 
 type Projects struct {
-	all map[string]*Project
+	byName map[string]*Project
+	byID   map[UUID]*Project
 }
 
 func NewProjects() *Projects {
 	return &Projects{
-		all: map[string]*Project{},
+		byName: map[string]*Project{},
+		byID:   map[UUID]*Project{},
 	}
 }
 
-func (ps *Projects) Get(root, name string) *Project {
+func (ps *Projects) GetOrCreate(root, name string) *Project {
 	if len(root) == 0 {
 		panic("empty root not supported")
 	}
@@ -24,14 +26,26 @@ func (ps *Projects) Get(root, name string) *Project {
 	}
 
 	key := root + "\n" + name
-	result, ok := ps.all[key]
+	result, ok := ps.byName[key]
 
 	if !ok {
 		result = NewProject(root, name)
-		ps.all[key] = result
+		ps.byName[key] = result
+		ps.byID[result.ID] = result
 	}
 
 	return result
+}
+
+func (ps *Projects) GetByID(id UUID) *Project {
+	return ps.byID[id]
+}
+
+func (ps *Projects) ChangeID(proj *Project, id UUID) {
+	delete(ps.byID, proj.ID)
+
+	proj.ID = id
+	ps.byID[proj.ID] = proj
 }
 
 func (ps *Projects) FilterProjects(filters []string, ft FilterType) ([]*Project, error) {
@@ -71,9 +85,9 @@ func (ps *Projects) FilterProjects(filters []string, ft FilterType) ([]*Project,
 }
 
 func (ps *Projects) ListProjects(ft FilterType) []*Project {
-	result := make([]*Project, 0, len(ps.all))
+	result := make([]*Project, 0, len(ps.byName))
 
-	for _, v := range ps.all {
+	for _, v := range ps.byName {
 		if ft == FilterExcludeExternal && v.IsExternalDependency() {
 			continue
 		}
@@ -87,9 +101,9 @@ func (ps *Projects) ListProjects(ft FilterType) []*Project {
 }
 
 func (ps *Projects) ListProjectsByRoot(root string, ft FilterType) []*Project {
-	result := make([]*Project, 0, len(ps.all))
+	result := make([]*Project, 0, len(ps.byName))
 
-	for _, v := range ps.all {
+	for _, v := range ps.byName {
 		if ft == FilterExcludeExternal && v.IsExternalDependency() {
 			continue
 		}

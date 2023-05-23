@@ -60,7 +60,7 @@ func (g *gradleImporter) Import(storage archer.Storage) error {
 
 	bar = utils.NewProgressBar(len(queue))
 	for _, p := range queue {
-		proj := projs.Get(rootProj, p)
+		proj := projs.GetOrCreate(rootProj, p)
 
 		err = g.importDirectories(files, proj)
 		if err != nil {
@@ -86,7 +86,7 @@ func (g *gradleImporter) Import(storage archer.Storage) error {
 	}
 
 	for _, p := range queue {
-		proj := projs.Get(rootProj, p)
+		proj := projs.GetOrCreate(rootProj, p)
 
 		for _, d := range proj.ListDependencies(model.FilterAll) {
 			if d.Source.IsCode() && strings.HasSuffix(d.Source.Name, "-api") {
@@ -135,7 +135,7 @@ func (g *gradleImporter) importBasicInfo(projs *model.Projects, projName string,
 		return err
 	}
 
-	proj := projs.Get(rootProj, projName)
+	proj := projs.GetOrCreate(rootProj, projName)
 	proj.NameParts = utils.IIf(projName == rootProj, []string{rootProj}, strings.Split(projName[1:], ":"))
 	proj.Root = rootProj
 	proj.Type = model.CodeType

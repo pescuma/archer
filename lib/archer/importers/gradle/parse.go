@@ -67,7 +67,7 @@ func parseDeps(projects *model.Projects, content string, rootProj string) error 
 		if state == waitingRoot {
 			rootMatches := rootProjRE.FindStringSubmatch(l)
 			if rootMatches != nil {
-				p := projects.Get(rootProj, rootMatches[1])
+				p := projects.GetOrCreate(rootProj, rootMatches[1])
 				stack = append(stack, pd{p, 0})
 				state = waitingDeps
 			}
@@ -91,7 +91,7 @@ func parseDeps(projects *model.Projects, content string, rootProj string) error 
 			}
 
 			depth := len(depMatches[1])
-			p := projects.Get(rootProj, depMatches[2])
+			p := projects.GetOrCreate(rootProj, depMatches[2])
 
 			lp := utils.Last(stack)
 			for depth <= lp.depth {

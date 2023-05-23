@@ -16,6 +16,7 @@ import (
 
 	"github.com/Faire/archer/lib/archer"
 	"github.com/Faire/archer/lib/archer/model"
+	"github.com/Faire/archer/lib/archer/utils"
 )
 
 type sqliteStorage struct {
@@ -79,11 +80,9 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 		return nil, err
 	}
 
-	projsByID := map[model.UUID]*model.Project{}
-
 	for _, sp := range projs {
-		p := result.Get(sp.Root, sp.Name)
-		p.ID = sp.ID
+		p := result.GetOrCreate(sp.Root, sp.Name)
+		result.ChangeID(p, sp.ID)
 		p.NameParts = sp.NameParts
 		p.Type = sp.Type
 
@@ -93,14 +92,13 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 		for k, v := range sp.Sizes {
 			p.Sizes[k] = toModelSize(v)
 		}
+		p.Metrics = toModelMetrics(sp.Metrics)
 		p.Data = sp.Data
-
-		projsByID[p.ID] = p
 	}
 
 	for _, sd := range deps {
-		source := projsByID[sd.SourceID]
-		target := projsByID[sd.TargetID]
+		source := result.GetByID(sd.SourceID)
+		target := result.GetByID(sd.TargetID)
 
 		d := source.GetDependency(target)
 		d.ID = sd.ID
@@ -108,12 +106,13 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 	}
 
 	for _, sd := range dirs {
-		p := projsByID[sd.ProjectID]
+		p := result.GetByID(sd.ProjectID)
 
 		d := p.GetDirectory(sd.RelativePath)
 		d.ID = sd.ID
 		d.Type = sd.Type
 		d.Size = toModelSize(sd.Size)
+		d.Metrics = toModelMetrics(sd.Metrics)
 		d.Data = sd.Data
 	}
 
@@ -143,9 +142,9 @@ func (s *sqliteStorage) WriteProject(proj *model.Project, changes archer.Storage
 }
 
 func (s *sqliteStorage) writeProjects(projs []*model.Project, changes archer.StorageChanges, scope func(string) func(*gorm.DB) *gorm.DB) error {
-	changedProjs := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedData != 0 || changes&archer.ChangedSize != 0
+	changedProjs := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedData != 0 || changes&archer.ChangedSize != 0 || changes&archer.ChangedMetrics != 0
 	changedDeps := changes&archer.ChangedDependencies != 0 || changes&archer.ChangedData != 0
-	changedDirs := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedSize != 0
+	changedDirs := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedSize != 0 || changes&archer.ChangedMetrics != 0
 
 	sqlProjs := make([]*sqlProject, 0, len(projs))
 	if changedProjs {
@@ -240,6 +239,7 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 		f.RepositoryID = sf.RepositoryID
 		f.Exists = sf.Exists
 		f.Size = toModelSize(sf.Size)
+		f.Metrics = toModelMetrics(sf.Metrics)
 		f.Data = sf.Data
 	}
 
@@ -247,7 +247,7 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 }
 
 func (s *sqliteStorage) WriteFiles(files *model.Files, changes archer.StorageChanges) error {
-	changed := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedData != 0 || changes&archer.ChangedSize != 0
+	changed := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedData != 0 || changes&archer.ChangedSize != 0 || changes&archer.ChangedMetrics != 0
 	if !changed {
 		return nil
 	}
@@ -474,6 +474,29 @@ func toModelSize(size *sqlSize) *model.Size {
 	}
 }
 
+func toSqlMetrics(metrics *model.Metrics) *sqlMetrics {
+	return &sqlMetrics{
+		DependenciesGuice: encodeMetric(metrics.GuiceDependencies),
+	}
+}
+
+func toModelMetrics(metrics *sqlMetrics) *model.Metrics {
+	return &model.Metrics{
+		GuiceDependencies: decodeMetric(metrics.DependenciesGuice),
+	}
+}
+
+func encodeMetric(v int) *int {
+	return utils.IIf(v == -1, nil, &v)
+}
+func decodeMetric(v *int) int {
+	if v == nil {
+		return -1
+	} else {
+		return *v
+	}
+}
+
 func toSqlProject(p *model.Project) *sqlProject {
 	size := p.GetSize()
 
@@ -487,6 +510,7 @@ func toSqlProject(p *model.Project) *sqlProject {
 		ProjectFile: p.ProjectFile,
 		Size:        toSqlSize(size),
 		Sizes:       map[string]*sqlSize{},
+		Metrics:     toSqlMetrics(p.Metrics),
 		Data:        p.Data,
 	}
 
@@ -513,6 +537,7 @@ func toSqlProjectDirectory(d *model.ProjectDirectory, p *model.Project) *sqlProj
 		RelativePath: d.RelativePath,
 		Type:         d.Type,
 		Size:         toSqlSize(d.Size),
+		Metrics:      toSqlMetrics(d.Metrics),
 		Data:         d.Data,
 	}
 }
@@ -526,6 +551,7 @@ func toSqlFile(f *model.File) *sqlFile {
 		RepositoryID:       f.RepositoryID,
 		Exists:             f.Exists,
 		Size:               toSqlSize(f.Size),
+		Metrics:            toSqlMetrics(f.Metrics),
 		Data:               f.Data,
 	}
 }

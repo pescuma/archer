@@ -12,6 +12,7 @@ const (
 	ChangedDependencies
 	ChangedSize
 	ChangedHistory
+	ChangedMetrics
 
 	ChangedAll = 0xffff
 )

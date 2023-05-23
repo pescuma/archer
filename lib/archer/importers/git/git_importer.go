@@ -21,11 +21,11 @@ type gitImporter struct {
 }
 
 type Limits struct {
+	Incremental        bool
 	MaxImportedCommits *int
 	MaxCommits         *int
 	After              *time.Time
 	Before             *time.Time
-	ReImportCommits    bool
 }
 
 func NewImporter(rootDir string, limits Limits) archer.Importer {
@@ -100,14 +100,13 @@ func (g gitImporter) Import(storage archer.Storage) error {
 
 	total := 0
 	err = commitsIter.ForEach(func(gc *object.Commit) error {
-		commitNumber++
-		if !g.limits.ShouldContinue(gc.Committer.When, commitNumber, imported) {
+		if !g.limits.ShouldContinue(total, imported, gc.Committer.When) {
 			return abort
 		}
 
 		total++
 
-		if !g.limits.ReImportCommits && repo.ContainsCommit(gc.Hash.String()) {
+		if g.limits.Incremental && repo.ContainsCommit(gc.Hash.String()) {
 			return nil
 		}
 
@@ -140,15 +139,16 @@ func (g gitImporter) Import(storage archer.Storage) error {
 
 	bar := utils.NewProgressBar(total)
 	err = commitsIter.ForEach(func(gc *object.Commit) error {
-		commitNumber++
-		if !g.limits.ShouldContinue(gc.Committer.When, commitNumber, imported) {
+		if !g.limits.ShouldContinue(commitNumber, imported, gc.Committer.When) {
 			return abort
 		}
+
+		commitNumber++
 
 		bar.Describe(gc.Committer.When.Format("2006-01-02 15:04"))
 		_ = bar.Add(1)
 
-		if !g.limits.ReImportCommits && repo.ContainsCommit(gc.Hash.String()) {
+		if g.limits.Incremental && repo.ContainsCommit(gc.Hash.String()) {
 			return nil
 		}
 
@@ -222,7 +222,7 @@ func (g gitImporter) Import(storage archer.Storage) error {
 	return nil
 }
 
-func (l *Limits) ShouldContinue(date time.Time, commit int, imported int) bool {
+func (l *Limits) ShouldContinue(commit int, imported int, date time.Time) bool {
 	if l.After != nil && date.Before(*l.After) {
 		return false
 	}

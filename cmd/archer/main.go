@@ -22,6 +22,7 @@ var cli struct {
 		Hibernate ImportHibernateCmd `cmd:"" help:"Import information from hibernate annotation in classes."`
 		Mysql     ImportMySqlCmd     `cmd:"" help:"Import information from MySQL schema."`
 		LOC       ImportLOCCmd       `cmd:"" help:"Import counts of lines of code to existing projects."`
+		Metrics   ImportMetricsCmd   `cmd:"" help:"Import code metrics to existing projects."`
 		Git       ImportGitCmd       `cmd:"" help:"Import information from git."`
 	} `cmd:""`
 }

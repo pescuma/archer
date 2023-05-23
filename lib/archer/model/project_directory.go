@@ -5,8 +5,9 @@ type ProjectDirectory struct {
 	Type         ProjectDirectoryType
 	ID           UUID
 
-	Size *Size
-	Data map[string]string
+	Size    *Size
+	Metrics *Metrics
+	Data    map[string]string
 }
 
 func NewProjectDirectory(relativePath string) *ProjectDirectory {
@@ -14,6 +15,7 @@ func NewProjectDirectory(relativePath string) *ProjectDirectory {
 		RelativePath: relativePath,
 		ID:           NewUUID("d"),
 		Size:         NewSize(),
+		Metrics:      NewMetrics(),
 		Data:         map[string]string{},
 	}
 }

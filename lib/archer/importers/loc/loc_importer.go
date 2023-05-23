@@ -24,17 +24,17 @@ func NewImporter(filters []string) archer.Importer {
 }
 
 func (l *locImporter) Import(storage archer.Storage) error {
-	projects, err := storage.LoadProjects()
+	projectsDB, err := storage.LoadProjects()
 	if err != nil {
 		return err
 	}
 
-	files, err := storage.LoadFiles()
+	filesDB, err := storage.LoadFiles()
 	if err != nil {
 		return err
 	}
 
-	ps, err := projects.FilterProjects(l.filters, model.FilterExcludeExternal)
+	ps, err := projectsDB.FilterProjects(l.filters, model.FilterExcludeExternal)
 	if err != nil {
 		return err
 	}
@@ -43,9 +43,9 @@ func (l *locImporter) Import(storage archer.Storage) error {
 
 	var candidates []*model.File
 	if len(l.filters) == 0 {
-		candidates = files.List()
+		candidates = filesDB.List()
 	} else {
-		candidates = files.ListByProjects(ps)
+		candidates = filesDB.ListByProjects(ps)
 	}
 
 	fmt.Printf("Going to import size from %v files...\n", len(candidates))
@@ -114,12 +114,12 @@ func (l *locImporter) Import(storage archer.Storage) error {
 		}
 	}
 
-	err = storage.WriteProjects(projects, archer.ChangedSize)
+	err = storage.WriteProjects(projectsDB, archer.ChangedSize)
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteFiles(files, archer.ChangedSize)
+	err = storage.WriteFiles(filesDB, archer.ChangedSize)
 	if err != nil {
 		return err
 	}

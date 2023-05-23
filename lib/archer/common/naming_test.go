@@ -20,7 +20,7 @@ func TestCreateTableNameParts(t *testing.T) {
 func createTableNameParts(name string) []string {
 	projs := model.NewProjects()
 
-	proj := projs.Get("r", name)
+	proj := projs.GetOrCreate("r", name)
 
 	common.CreateTableNameParts(projs.ListProjects(model.FilterAll))
 

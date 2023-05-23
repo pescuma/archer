@@ -59,7 +59,7 @@ func ProjBasicInfoFromJson(result *model.Projects, content string) error {
 		return err
 	}
 
-	proj := result.Get(jps.Root, jps.Name)
+	proj := result.GetOrCreate(jps.Root, jps.Name)
 	proj.ID = jps.ID
 	proj.NameParts = jps.NameParts
 	proj.Type = jps.Type
@@ -105,9 +105,9 @@ func ProjDepsFromJson(result *model.Projects, content string) error {
 		return err
 	}
 
-	proj := result.Get(jps.Root, jps.Name)
+	proj := result.GetOrCreate(jps.Root, jps.Name)
 	for _, jp := range jps.Deps {
-		target := result.Get(jp.TargetRoot, jp.TargetName)
+		target := result.GetOrCreate(jp.TargetRoot, jp.TargetName)
 
 		d := proj.GetDependency(target)
 		d.ID = jp.ID
@@ -151,7 +151,7 @@ func SizeFromJson(result *model.Projects, content string) error {
 		return err
 	}
 
-	proj := result.Get(jps.Root, jps.Name)
+	proj := result.GetOrCreate(jps.Root, jps.Name)
 
 	for dirPath, files := range jps.Sizes {
 		if dirPath == "" {
@@ -206,7 +206,7 @@ func FilesFromJson(result *model.Projects, content string) error {
 		return err
 	}
 
-	proj := result.Get(jps.Root, jps.Name)
+	proj := result.GetOrCreate(jps.Root, jps.Name)
 
 	for _, jd := range jps.Dirs {
 		dir := proj.GetDirectory(jd.Path)
@@ -239,7 +239,7 @@ func ConfigFromJson(result *model.Projects, content string) error {
 		return err
 	}
 
-	proj := result.Get(jps.Root, jps.Name)
+	proj := result.GetOrCreate(jps.Root, jps.Name)
 
 	for k, v := range jps.Config {
 		proj.SetData(k, v)
