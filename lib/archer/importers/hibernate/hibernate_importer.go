@@ -83,7 +83,7 @@ func (i *hibernateImporter) Import(storage archer.Storage) error {
 			l := newTreeListener(file.fileName, file.root)
 			l.IncreasePrefix()
 
-			antlr.ParseTreeWalkerDefault.Walk(l, content)
+			antlr.NewParseTreeWalker().Walk(l, content)
 
 			l.DecreasePrefix()
 

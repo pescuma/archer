@@ -1929,10 +1929,20 @@ func KotlinParserInit() {
 // NewKotlinParser produces a new parser instance for the optional input antlr.TokenStream.
 func NewKotlinParser(input antlr.TokenStream) *KotlinParser {
 	KotlinParserInit()
+
+	staticData := &kotlinparserParserStaticData
+
+	predictionContextCache := antlr.NewPredictionContextCache()
+	deserializer := antlr.NewATNDeserializer(nil)
+	atn := deserializer.Deserialize(staticData.serializedATN)
+	decisionToDFA := make([]*antlr.DFA, len(atn.DecisionToState))
+	for index, state := range atn.DecisionToState {
+		decisionToDFA[index] = antlr.NewDFA(state, index)
+	}
+
 	this := new(KotlinParser)
 	this.BaseParser = antlr.NewBaseParser(input)
-	staticData := &kotlinparserParserStaticData
-	this.Interpreter = antlr.NewParserATNSimulator(this, staticData.atn, staticData.decisionToDFA, staticData.predictionContextCache)
+	this.Interpreter = antlr.NewParserATNSimulator(this, atn, decisionToDFA, predictionContextCache)
 	this.RuleNames = staticData.ruleNames
 	this.LiteralNames = staticData.literalNames
 	this.SymbolicNames = staticData.symbolicNames

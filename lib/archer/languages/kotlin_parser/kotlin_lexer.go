@@ -1507,10 +1507,20 @@ func KotlinLexerInit() {
 // NewKotlinLexer produces a new lexer instance for the optional input antlr.CharStream.
 func NewKotlinLexer(input antlr.CharStream) *KotlinLexer {
 	KotlinLexerInit()
+
+	staticData := &kotlinlexerLexerStaticData
+
+	predictionContextCache := antlr.NewPredictionContextCache()
+	deserializer := antlr.NewATNDeserializer(nil)
+	atn := deserializer.Deserialize(staticData.serializedATN)
+	decisionToDFA := make([]*antlr.DFA, len(atn.DecisionToState))
+	for index, state := range atn.DecisionToState {
+		decisionToDFA[index] = antlr.NewDFA(state, index)
+	}
+
 	l := new(KotlinLexer)
 	l.BaseLexer = antlr.NewBaseLexer(input)
-	staticData := &kotlinlexerLexerStaticData
-	l.Interpreter = antlr.NewLexerATNSimulator(l, staticData.atn, staticData.decisionToDFA, staticData.predictionContextCache)
+	l.Interpreter = antlr.NewLexerATNSimulator(l, atn, decisionToDFA, predictionContextCache)
 	l.channelNames = staticData.channelNames
 	l.modeNames = staticData.modeNames
 	l.RuleNames = staticData.ruleNames

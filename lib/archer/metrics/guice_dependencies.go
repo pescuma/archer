@@ -15,7 +15,7 @@ func ComputeKotlinGuiceDependencies(path string, file kotlin_parser.IKotlinFileC
 		location: languages.NewLocationTracker(path),
 	}
 
-	antlr.ParseTreeWalkerDefault.Walk(l, file)
+	antlr.NewParseTreeWalker().Walk(l, file)
 
 	return l.constructorDependencies + l.fieldsDependencies
 }
