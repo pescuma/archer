@@ -16,7 +16,7 @@ func NewFiles() *Files {
 	}
 }
 
-func (fs *Files) Get(path string) *File {
+func (fs *Files) GetOrCreate(path string) *File {
 	if len(path) == 0 {
 		panic("empty path not supported")
 	}

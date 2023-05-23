@@ -25,11 +25,18 @@ type Project struct {
 	Data         map[string]string
 }
 
-func NewProject(root, name string) *Project {
+func NewProject(root, name string, id *UUID) *Project {
+	var uuid UUID
+	if id == nil {
+		uuid = NewUUID("p")
+	} else {
+		uuid = *id
+	}
+
 	return &Project{
 		Root:         root,
 		Name:         name,
-		ID:           NewUUID("p"),
+		ID:           uuid,
 		Dirs:         map[string]*ProjectDirectory{},
 		Dependencies: map[string]*ProjectDependency{},
 		Sizes:        map[string]*Size{},

@@ -207,7 +207,7 @@ func (g *gradleImporter) importDirectory(files *model.Files, proj *model.Project
 			dir.Type = dirType
 		}
 
-		file := files.Get(path)
+		file := files.GetOrCreate(path)
 		file.ProjectID = &proj.ID
 		file.ProjectDirectoryID = &dir.ID
 

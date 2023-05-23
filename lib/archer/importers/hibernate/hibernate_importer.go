@@ -30,17 +30,17 @@ func NewImporter(rootDirs, globs []string, rootName string) archer.Importer {
 }
 
 func (i *hibernateImporter) Import(storage archer.Storage) error {
-	projects, err := storage.LoadProjects()
+	projectsDB, err := storage.LoadProjects()
 	if err != nil {
 		return err
 	}
 
-	files, err := storage.LoadFiles()
+	filesDB, err := storage.LoadFiles()
 	if err != nil {
 		return err
 	}
 
-	roots, err := i.rootsFinder.ComputeRootDirs(projects, files)
+	roots, err := i.rootsFinder.ComputeRootDirs(projectsDB, filesDB)
 	if err != nil {
 		return err
 	}
@@ -49,44 +49,48 @@ func (i *hibernateImporter) Import(storage archer.Storage) error {
 		fmt.Printf("%v\n", r)
 	}
 
-	type work struct {
+	type fileInfo struct {
 		root     common.RootDir
 		fileName string
 		classes  map[string]*classInfo
 		errors   []string
 	}
 
-	paths := map[string]*work{}
+	files := map[string]*fileInfo{}
 	for _, root := range roots {
 		err = root.WalkDir(func(proj *model.Project, path string) error {
+			if strings.Contains(path, "/.idea/") {
+				return nil
+			}
 			if !strings.HasSuffix(path, ".kt") {
 				return nil
 			}
-			paths[path] = &work{
+
+			files[path] = &fileInfo{
 				root:     root,
 				fileName: path,
 			}
-
 			return nil
 		})
 	}
 
-	fmt.Printf("Importing tables from hibernate from %v files...\n", len(paths))
+	fmt.Printf("Importing tables from hibernate from %v files...\n", len(files))
 
-	_, err = importers.ProcessKotlinFiles(lo.Keys(paths),
-		func(path string, content kotlin_parser.IKotlinFileContext) (int, error) {
-			w := paths[path]
+	err = importers.ProcessKotlinFiles(lo.Keys(files),
+		func(path string, content kotlin_parser.IKotlinFileContext) error {
+			file := files[path]
 
-			l := newTreeListener(w.fileName, w.root)
+			l := newTreeListener(file.fileName, file.root)
 			l.IncreasePrefix()
 
 			antlr.ParseTreeWalkerDefault.Walk(l, content)
 
 			l.DecreasePrefix()
 
-			w.classes, w.errors = l.Classes, l.Errors
+			file.classes = l.Classes
+			file.errors = l.Errors
 
-			return 0, err
+			return err
 		},
 		func(path string, err error) error {
 			if err != fs.ErrNotExist {
@@ -101,7 +105,7 @@ func (i *hibernateImporter) Import(storage archer.Storage) error {
 
 	classes := map[string]*classInfo{}
 	var es []string
-	for _, w := range lo.Values(paths) {
+	for _, w := range lo.Values(files) {
 		for k, nv := range w.classes {
 			ov, ok := classes[k]
 			if !ok {
@@ -132,7 +136,7 @@ func (i *hibernateImporter) Import(storage archer.Storage) error {
 
 		root := c.Root[0]
 
-		proj := projects.GetOrCreate(i.rootName, c.Tables[0])
+		proj := projectsDB.GetOrCreate(i.rootName, c.Tables[0])
 		dbProjs[proj] = true
 
 		proj.Type = model.DatabaseType
@@ -164,7 +168,7 @@ func (i *hibernateImporter) Import(storage archer.Storage) error {
 				continue
 			}
 
-			dp := projects.GetOrCreate(i.rootName, dc.Tables[0])
+			dp := projectsDB.GetOrCreate(i.rootName, dc.Tables[0])
 			dbProjs[dp] = true
 
 			d := proj.GetDependency(dp)
@@ -178,7 +182,7 @@ func (i *hibernateImporter) Import(storage archer.Storage) error {
 
 	common.CreateTableNameParts(lo.Keys(dbProjs))
 
-	return storage.WriteProjects(projects, archer.ChangedBasicInfo|archer.ChangedDependencies)
+	return storage.WriteProjects(projectsDB, archer.ChangedBasicInfo|archer.ChangedDependencies)
 }
 
 type treeListener struct {

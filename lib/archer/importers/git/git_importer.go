@@ -154,11 +154,11 @@ func (g gitImporter) Import(storage archer.Storage) error {
 
 		imported++
 
-		author := people.Get(grouper.getName(gc.Author.Email))
+		author := people.GetOrCreate(grouper.getName(gc.Author.Email))
 		author.AddName(gc.Author.Name)
 		author.AddEmail(gc.Author.Email)
 
-		committer := people.Get(grouper.getName(gc.Committer.Email))
+		committer := people.GetOrCreate(grouper.getName(gc.Committer.Email))
 		committer.AddName(gc.Committer.Name)
 		committer.AddEmail(gc.Committer.Email)
 
@@ -186,7 +186,7 @@ func (g gitImporter) Import(storage archer.Storage) error {
 			if gf.Name != "" {
 				path := filepath.Join(rootDir, gf.Name)
 
-				file := files.Get(path)
+				file := files.GetOrCreate(path)
 				file.RepositoryID = &repo.ID
 
 				commit.AddFile(file.ID, gf.Addition, gf.Deletion)

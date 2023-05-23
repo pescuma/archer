@@ -18,6 +18,10 @@ func NewProjects() *Projects {
 }
 
 func (ps *Projects) GetOrCreate(root, name string) *Project {
+	return ps.GetOrCreateEx(root, name, nil)
+}
+
+func (ps *Projects) GetOrCreateEx(root, name string, id *UUID) *Project {
 	if len(root) == 0 {
 		panic("empty root not supported")
 	}
@@ -29,7 +33,7 @@ func (ps *Projects) GetOrCreate(root, name string) *Project {
 	result, ok := ps.byName[key]
 
 	if !ok {
-		result = NewProject(root, name)
+		result = NewProject(root, name, id)
 		ps.byName[key] = result
 		ps.byID[result.ID] = result
 	}
@@ -39,13 +43,6 @@ func (ps *Projects) GetOrCreate(root, name string) *Project {
 
 func (ps *Projects) GetByID(id UUID) *Project {
 	return ps.byID[id]
-}
-
-func (ps *Projects) ChangeID(proj *Project, id UUID) {
-	delete(ps.byID, proj.ID)
-
-	proj.ID = id
-	ps.byID[proj.ID] = proj
 }
 
 func (ps *Projects) FilterProjects(filters []string, ft FilterType) ([]*Project, error) {

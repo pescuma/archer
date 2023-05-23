@@ -16,19 +16,20 @@ import (
 type work struct {
 	index    int
 	path     string
-	contents string
-	result   interface{}
+	contents []byte
+	err      error
 }
 
-func ProcessKotlinFiles[T any](paths []string,
-	process func(file string, content kotlin_parser.IKotlinFileContext) (T, error),
+func ProcessKotlinFiles(paths []string,
+	process func(file string, content kotlin_parser.IKotlinFileContext) error,
 	onError func(file string, err error) error,
-) ([]T, error) {
-	bar := utils.NewProgressBar(len(paths))
-
+) error {
 	group := utils.NewProcessGroup(func(w *work) (*work, error) {
+		contents := string(w.contents)
+		w.contents = nil
+
 		el := antlrErrorListener{}
-		input := antlr.NewInputStream(w.contents)
+		input := antlr.NewInputStream(contents)
 
 		lexer := kotlin_parser.NewKotlinLexer(input)
 		lexer.RemoveErrorListeners()
@@ -43,73 +44,63 @@ func ProcessKotlinFiles[T any](paths []string,
 		content := parser.KotlinFile()
 
 		if el.errors != nil {
-			err := errors.New(strings.Join(el.errors, ", "))
-
-			_ = bar.Clear()
-			err = onError(w.path, err)
-
-			return w, err
+			w.err = errors.New(strings.Join(el.errors, ", "))
+			return w, nil
 		}
 
-		result, err := process(w.path, content)
+		err := process(w.path, content)
 		if err != nil {
-			_ = bar.Clear()
-			err = onError(w.path, err)
-
-			return w, err
+			w.err = err
+			return w, nil
 		}
 
-		w.result = result
-
-		return w, err
+		return w, nil
 	})
 
 	go func() {
 		for i, path := range paths {
 			contents, err := os.ReadFile(path)
 			if err != nil {
-				_ = bar.Clear()
-				err = onError(path, err)
-				if err != nil {
-					group.Abort(err)
-					return
-				}
-
 				group.Output <- &work{
 					index: i,
 					path:  path,
+					err:   err,
 				}
+				continue
+			}
 
-			} else {
-				group.Input <- &work{
-					index:    i,
-					path:     path,
-					contents: string(contents),
-				}
+			group.Input <- &work{
+				index:    i,
+				path:     path,
+				contents: contents,
 			}
 		}
 
 		group.FinishedInput()
 	}()
 
-	result := make([]T, len(paths))
+	bar := utils.NewProgressBar(len(paths))
 	for w := range group.Output {
-		_ = bar.Add(1)
-
-		if w.result != nil {
-			result[w.index] = w.result.(T)
+		if w.err != nil {
+			_ = bar.Clear()
+			err := onError(w.path, w.err)
+			if err != nil {
+				group.Abort(err)
+			}
 		}
+
+		_ = bar.Add(1)
 	}
 
 	if err := <-group.Err; err != nil {
-		return nil, err
+		return err
 	}
 
-	return result, nil
+	return nil
 }
 
 type antlrErrorListener struct {
-	antlr.DefaultErrorListener
+	*antlr.DefaultErrorListener
 	errors []string
 }
 

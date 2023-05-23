@@ -69,7 +69,6 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 		if strings.Contains(file.Path, "/.idea/") {
 			continue
 		}
-
 		if !strings.HasSuffix(file.Path, ".kt") {
 			continue
 		}
@@ -83,13 +82,13 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Importing metrics from %v files...\n", len(files))
 
-	_, err = importers.ProcessKotlinFiles(lo.Keys(files),
-		func(path string, content kotlin_parser.IKotlinFileContext) (int, error) {
+	err = importers.ProcessKotlinFiles(lo.Keys(files),
+		func(path string, content kotlin_parser.IKotlinFileContext) error {
 			file := files[path]
 
 			file.Metrics.GuiceDependencies = metrics.ComputeKotlinGuiceDependencies(file.Path, content)
 
-			return 0, nil
+			return nil
 		},
 		func(path string, err error) error {
 			file := files[path]

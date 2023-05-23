@@ -14,7 +14,7 @@ func NewPeople() *People {
 	}
 }
 
-func (ps *People) Get(name string) *Person {
+func (ps *People) GetOrCreate(name string) *Person {
 	if len(name) == 0 {
 		panic("empty name not supported")
 	}

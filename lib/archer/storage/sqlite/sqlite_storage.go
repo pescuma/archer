@@ -81,8 +81,7 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 	}
 
 	for _, sp := range projs {
-		p := result.GetOrCreate(sp.Root, sp.Name)
-		result.ChangeID(p, sp.ID)
+		p := result.GetOrCreateEx(sp.Root, sp.Name, &sp.ID)
 		p.NameParts = sp.NameParts
 		p.Type = sp.Type
 
@@ -232,7 +231,7 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 	}
 
 	for _, sf := range files {
-		f := result.Get(sf.Path)
+		f := result.GetOrCreate(sf.Path)
 		f.ID = sf.ID
 		f.ProjectID = sf.ProjectID
 		f.ProjectDirectoryID = sf.ProjectDirectoryID
@@ -288,7 +287,7 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 	}
 
 	for _, sp := range people {
-		p := result.Get(sp.Name)
+		p := result.GetOrCreate(sp.Name)
 		p.ID = sp.ID
 
 		for _, name := range sp.Names {
