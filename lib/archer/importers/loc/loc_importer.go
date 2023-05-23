@@ -48,7 +48,7 @@ func (l *locImporter) Import(storage archer.Storage) error {
 		candidates = filesDB.ListByProjects(ps)
 	}
 
-	fmt.Printf("Going to import size from %v files...\n", len(candidates))
+	fmt.Printf("Importing size from %v files...\n", len(candidates))
 
 	bar := utils.NewProgressBar(len(candidates))
 	var fs = make([]*model.File, 0, len(candidates))
@@ -71,7 +71,7 @@ func (l *locImporter) Import(storage archer.Storage) error {
 		_ = bar.Add(1)
 	}
 
-	fmt.Printf("Going to import lines of code from %v files...\n", len(fs))
+	fmt.Printf("Importing lines of code from %v files...\n", len(fs))
 
 	loc, err := l.computeLOC(fs)
 	if err != nil {

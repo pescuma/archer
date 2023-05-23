@@ -42,7 +42,7 @@ func (g *gradleImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
-	fmt.Printf("Going to import basic info from %v projects...\n", len(queue))
+	fmt.Printf("Importing basic info from %v projects...\n", len(queue))
 
 	rootProj := queue[0]
 
@@ -56,7 +56,7 @@ func (g *gradleImporter) Import(storage archer.Storage) error {
 		_ = bar.Add(1)
 	}
 
-	fmt.Printf("Going to import files from %v projects...\n", len(queue))
+	fmt.Printf("Importing files from %v projects...\n", len(queue))
 
 	bar = utils.NewProgressBar(len(queue))
 	for _, p := range queue {
@@ -70,7 +70,7 @@ func (g *gradleImporter) Import(storage archer.Storage) error {
 		_ = bar.Add(1)
 	}
 
-	fmt.Printf("Going to import dependencies from %v projects...\n", len(queue))
+	fmt.Printf("Importing dependencies from %v projects...\n", len(queue))
 
 	bar = utils.NewProgressBar(len(queue))
 	block := 100

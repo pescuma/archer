@@ -57,7 +57,8 @@ func parseProjects(content string) ([]string, error) {
 
 func parseDeps(projects *model.Projects, content string, rootProj string) error {
 	rootProjRE := regexp.MustCompile(`^(?:Root project|Project) '([^']+)'$`)
-	depRE := regexp.MustCompile(`^([-+\\| ]+)(?:project )?([a-zA-Z0-9:._-]+)(:\\d+\\(?:\\.\\d+){1,3}(?:\\.Final)?)?$`)
+	depRE := regexp.MustCompile(`^([-+\\| ]+)(?:project )?([a-zA-Z0-9:._-]+)`)
+	versionRE := regexp.MustCompile(`^([a-zA-Z0-9:._-]+):\d+(?:\.\d+){1,3}(?:\.Final)?$`)
 
 	state := waitingRoot
 	var stack []pd
@@ -91,7 +92,14 @@ func parseDeps(projects *model.Projects, content string, rootProj string) error 
 			}
 
 			depth := len(depMatches[1])
-			p := projects.GetOrCreate(rootProj, depMatches[2])
+
+			depName := depMatches[2]
+			versionMatches := versionRE.FindStringSubmatch(depName)
+			if versionMatches != nil {
+				depName = versionMatches[1]
+			}
+
+			p := projects.GetOrCreate(rootProj, depName)
 
 			lp := utils.Last(stack)
 			for depth <= lp.depth {
