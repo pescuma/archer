@@ -22,13 +22,16 @@ func (c *ImportGradleCmd) Run(ctx *context) error {
 }
 
 type ImportHibernateCmd struct {
-	Path []string `arg:"" help:"Path with root of projects to search." type:"existingpath"`
-	Glob []string `help:"Glob limiting files to be processed."`
-	Root string   `default:"db" help:"Root name for the projects."`
+	Path        []string `arg:"" help:"Path with root of projects to search." type:"existingpath"`
+	Glob        []string `help:"Glob limiting files to be processed."`
+	Root        string   `default:"db" help:"Root name for the projects."`
+	Incremental bool     `default:"true" negatable:"" help:"Don't import files already imported."`
 }
 
 func (c *ImportHibernateCmd) Run(ctx *context) error {
-	g := hibernate.NewImporter(c.Path, c.Glob, c.Root)
+	g := hibernate.NewImporter(c.Path, c.Glob, c.Root, hibernate.Options{
+		Incremental: c.Incremental,
+	})
 
 	return ctx.ws.Import(g)
 }
@@ -44,41 +47,44 @@ func (c *ImportMySqlCmd) Run(ctx *context) error {
 }
 
 type ImportLOCCmd struct {
-	Filters []string `default:"" help:"Filters to be applied to the projects. Empty means all."`
+	Filters     []string `default:"" help:"Filters to be applied to the projects. Empty means all."`
+	Incremental bool     `default:"true" negatable:"" help:"Don't import files already imported."`
 }
 
 func (c *ImportLOCCmd) Run(ctx *context) error {
-	g := loc.NewImporter(c.Filters)
+	g := loc.NewImporter(c.Filters, loc.Options{
+		Incremental: c.Incremental,
+	})
 
 	return ctx.ws.Import(g)
 }
 
 type ImportMetricsCmd struct {
 	Filters       []string `default:"" help:"Filters to be applied to the projects. Empty means all."`
-	Incremental   bool     `negatable:"" help:"Don't import metrics already imported."`
+	Incremental   bool     `default:"true" negatable:"" help:"Don't import files already imported."`
 	LimitImported int      `help:"Limit the number of imported files. Can be used to incrementally import data."`
 	SaveEvery     int      `help:"Save results after some number of files."`
 }
 
 func (c *ImportMetricsCmd) Run(ctx *context) error {
-	limits := metrics.Limits{
+	options := metrics.Options{
 		Incremental: c.Incremental,
 	}
 	if c.LimitImported != 0 {
-		limits.MaxImportedFiles = &c.LimitImported
+		options.MaxImportedFiles = &c.LimitImported
 	}
 	if c.SaveEvery != 0 {
-		limits.SaveEvery = &c.SaveEvery
+		options.SaveEvery = &c.SaveEvery
 	}
 
-	g := metrics.NewImporter(c.Filters, limits)
+	g := metrics.NewImporter(c.Filters, options)
 
 	return ctx.ws.Import(g)
 }
 
 type ImportGitCmd struct {
 	Path          string        `arg:"" help:"Path with root of git repository." type:"existingpath"`
-	Incremental   bool          `default:"true" negatable:"" help:"Don't import commits already imported'."`
+	Incremental   bool          `default:"true" negatable:"" help:"Don't import commits already imported."`
 	LimitImported int           `help:"Limit the number of imported commits. Can be used to incrementally import data. Counted from the latest commit."`
 	LimitCommits  int           `help:"Limit the number of commits to be imported. Counted from the latest commit."`
 	LimitDuration time.Duration `help:"Import commits only in this duration. Counted from current time."`
@@ -87,38 +93,38 @@ type ImportGitCmd struct {
 }
 
 func (c *ImportGitCmd) Run(ctx *context) error {
-	limits := git.Limits{
+	Options := git.Options{
 		Incremental: c.Incremental,
 	}
 
 	if c.LimitImported != 0 {
-		limits.MaxImportedCommits = &c.LimitImported
+		Options.MaxImportedCommits = &c.LimitImported
 	}
 	if c.LimitCommits != 0 {
-		limits.MaxCommits = &c.LimitCommits
+		Options.MaxCommits = &c.LimitCommits
 	}
 
 	emptyTime := time.Time{}
 	if c.After != emptyTime {
-		limits.After = &c.After
+		Options.After = &c.After
 	}
 	if c.Before != emptyTime {
-		limits.Before = &c.Before
+		Options.Before = &c.Before
 	}
 
 	if c.LimitDuration != 0 {
 		before := time.Now()
 		after := before.Add(-c.LimitDuration)
 
-		if limits.After == nil || limits.After.Before(after) {
-			limits.After = &after
+		if Options.After == nil || Options.After.Before(after) {
+			Options.After = &after
 		}
-		if limits.Before == nil || limits.Before.After(before) {
-			limits.Before = &before
+		if Options.Before == nil || Options.Before.After(before) {
+			Options.Before = &before
 		}
 	}
 
-	g := git.NewImporter(c.Path, limits)
+	g := git.NewImporter(c.Path, Options)
 
 	return ctx.ws.Import(g)
 }

@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,8 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/hexops/gotextdiff"
+	"github.com/hexops/gotextdiff/myers"
 	"github.com/pkg/errors"
 
 	"github.com/Faire/archer/lib/archer"
@@ -17,10 +20,10 @@ import (
 
 type gitImporter struct {
 	rootDir string
-	limits  Limits
+	options Options
 }
 
-type Limits struct {
+type Options struct {
 	Incremental        bool
 	MaxImportedCommits *int
 	MaxCommits         *int
@@ -28,10 +31,10 @@ type Limits struct {
 	Before             *time.Time
 }
 
-func NewImporter(rootDir string, limits Limits) archer.Importer {
+func NewImporter(rootDir string, options Options) archer.Importer {
 	return &gitImporter{
 		rootDir: rootDir,
-		limits:  limits,
+		options: options,
 	}
 }
 
@@ -100,13 +103,13 @@ func (g gitImporter) Import(storage archer.Storage) error {
 
 	total := 0
 	err = commitsIter.ForEach(func(gc *object.Commit) error {
-		if !g.limits.ShouldContinue(total, imported, gc.Committer.When) {
+		if !g.options.ShouldContinue(total, imported, gc.Committer.When) {
 			return abort
 		}
 
 		total++
 
-		if g.limits.Incremental && repo.ContainsCommit(gc.Hash.String()) {
+		if g.options.Incremental && repo.ContainsCommit(gc.Hash.String()) {
 			return nil
 		}
 
@@ -138,13 +141,13 @@ func (g gitImporter) Import(storage archer.Storage) error {
 	commitNumber = 0
 	imported = 0
 	err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
-		if !g.limits.ShouldContinue(commitNumber, imported, gitCommit.Committer.When) {
+		if !g.options.ShouldContinue(commitNumber, imported, gitCommit.Committer.When) {
 			return abort
 		}
 
 		commitNumber++
 
-		if g.limits.Incremental && repo.ContainsCommit(gitCommit.Hash.String()) {
+		if g.options.Incremental && repo.ContainsCommit(gitCommit.Hash.String()) {
 			return nil
 		}
 
@@ -168,7 +171,11 @@ func (g gitImporter) Import(storage archer.Storage) error {
 		commit.DateAuthored = gitCommit.Author.When
 		commit.AuthorID = author.ID
 
+		var firstParent *object.Commit
 		err := gitCommit.Parents().ForEach(func(p *object.Commit) error {
+			if firstParent == nil {
+				firstParent = p
+			}
 			commit.Parents = append(commit.Parents, p.Hash.String())
 			return nil
 		})
@@ -176,23 +183,27 @@ func (g gitImporter) Import(storage archer.Storage) error {
 			return err
 		}
 
-		gitStats, err := gitCommit.Stats()
+		gitChanges, err := computeChanges(gitCommit, firstParent)
 		if err != nil {
 			return err
 		}
 
-		for _, gitFile := range gitStats {
-			if gitFile.Name != "" {
-				path := filepath.Join(rootDir, gitFile.Name)
+		commit.ModifiedLines = 0
+		commit.AddedLines = 0
+		commit.DeletedLines = 0
+		commit.Files = nil
 
-				file := files.GetOrCreate(path)
-				file.RepositoryID = &repo.ID
+		for _, gitFile := range gitChanges {
+			path := filepath.Join(rootDir, gitFile.Name)
 
-				commit.AddFile(file.ID, gitFile.Addition, gitFile.Deletion)
-			}
+			file := files.GetOrCreate(path)
+			file.RepositoryID = &repo.ID
 
-			commit.AddedLines += gitFile.Addition
-			commit.DeletedLines += gitFile.Deletion
+			commit.AddFile(file.ID, gitFile.Modified, gitFile.Added, gitFile.Deleted)
+
+			commit.ModifiedLines += gitFile.Modified
+			commit.AddedLines += gitFile.Added
+			commit.DeletedLines += gitFile.Deleted
 		}
 
 		return nil
@@ -221,7 +232,118 @@ func (g gitImporter) Import(storage archer.Storage) error {
 	return nil
 }
 
-func (l *Limits) ShouldContinue(commit int, imported int, date time.Time) bool {
+func computeChanges(commit *object.Commit, parent *object.Commit) ([]*gitFileChange, error) {
+	commitTree, err := commit.Tree()
+	if err != nil {
+		return nil, err
+	}
+
+	var parentTree *object.Tree
+	if parent != nil {
+		parentTree, err = parent.Tree()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	changes, err := commitTree.DiffContext(context.Background(), parentTree)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []*gitFileChange
+	for _, change := range changes {
+		commitFile, parentFile, err := change.Files()
+		if err != nil {
+			return nil, err
+		}
+
+		commitContent, commitIsBinary, err := fileContent(commitFile)
+		if err != nil {
+			return nil, err
+		}
+
+		parentContent, parentIsBinary, err := fileContent(parentFile)
+		if err != nil {
+			return nil, err
+		}
+
+		gitChange := gitFileChange{}
+
+		if commitFile != nil {
+			gitChange.Name = change.From.Name
+		} else {
+			gitChange.Name = change.To.Name
+		}
+
+		if !commitIsBinary && !parentIsBinary {
+			edits := myers.ComputeEdits("parent", parentContent, commitContent)
+			unified := gotextdiff.ToUnified("parent", "commit", parentContent, edits)
+
+			// Modified is defined as changes that happened without a line without change in the middle
+			for _, hunk := range unified.Hunks {
+				add := 0
+				del := 0
+				for _, line := range hunk.Lines {
+					switch line.Kind {
+					case gotextdiff.Insert:
+						add++
+					case gotextdiff.Delete:
+						del++
+					default:
+						min := utils.Min(add, del)
+						gitChange.Modified += min
+						gitChange.Added += add - min
+						gitChange.Deleted += del - min
+
+						add = 0
+						del = 0
+					}
+				}
+
+				min := utils.Min(add, del)
+				gitChange.Modified += min
+				gitChange.Added += add - min
+				gitChange.Deleted += del - min
+			}
+		}
+
+		result = append(result, &gitChange)
+	}
+
+	return result, nil
+}
+
+func fileContent(f *object.File) (string, bool, error) {
+	if f == nil {
+		return "", false, nil
+	}
+
+	isBinary, err := f.IsBinary()
+	if err != nil {
+		return "", false, err
+	}
+
+	if isBinary {
+		return "", true, nil
+	}
+
+	content, err := f.Contents()
+	if err != nil {
+		return "", false, err
+	}
+
+	return content, isBinary, err
+}
+
+type gitFileChange struct {
+	Name     string
+	Modified int
+	Added    int
+	Deleted  int
+}
+
+func (l *Options) ShouldContinue(commit int, imported int, date time.Time) bool {
 	if l.After != nil && date.Before(*l.After) {
 		return false
 	}

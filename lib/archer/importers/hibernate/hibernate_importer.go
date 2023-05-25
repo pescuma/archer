@@ -3,6 +3,7 @@ package hibernate
 import (
 	"fmt"
 	"io/fs"
+	"os"
 	"regexp"
 	"strings"
 
@@ -13,7 +14,7 @@ import (
 
 	"github.com/Faire/archer/lib/archer"
 	"github.com/Faire/archer/lib/archer/common"
-	"github.com/Faire/archer/lib/archer/importers"
+	"github.com/Faire/archer/lib/archer/languages"
 	"github.com/Faire/archer/lib/archer/languages/kotlin_parser"
 	"github.com/Faire/archer/lib/archer/model"
 	"github.com/Faire/archer/lib/archer/utils"
@@ -22,12 +23,18 @@ import (
 type hibernateImporter struct {
 	rootsFinder common.RootsFinder
 	rootName    string
+	options     Options
 }
 
-func NewImporter(rootDirs, globs []string, rootName string) archer.Importer {
+type Options struct {
+	Incremental bool
+}
+
+func NewImporter(rootDirs, globs []string, rootName string, options Options) archer.Importer {
 	return &hibernateImporter{
 		rootsFinder: common.NewRootsFinder(rootDirs, globs),
 		rootName:    rootName,
+		options:     options,
 	}
 }
 
@@ -51,16 +58,20 @@ func (h *hibernateImporter) Import(storage archer.Storage) error {
 		fmt.Printf("%v\n", r)
 	}
 
+	lastModifiedKey := fmt.Sprintf("hibernate:%v:last_modified", h.rootName)
+
 	type fileInfo struct {
 		root     common.RootDir
+		file     *model.File
 		fileName string
+		modTime  string
 		classes  map[string]*classInfo
 		errors   []string
 	}
 
 	files := map[string]*fileInfo{}
 	for _, root := range roots {
-		err = root.WalkDir(func(proj *model.Project, path string) error {
+		err = root.WalkDir(func(proj *model.Project, file *model.File, path string) error {
 			if strings.Contains(path, "/.idea/") {
 				return nil
 			}
@@ -68,9 +79,23 @@ func (h *hibernateImporter) Import(storage archer.Storage) error {
 				return nil
 			}
 
+			stat, err := os.Stat(path)
+			if err != nil {
+				file.Exists = false
+				return nil
+			}
+
+			modTime := stat.ModTime().String()
+
+			if h.options.Incremental && modTime == file.Data[lastModifiedKey] {
+				return nil
+			}
+
 			files[path] = &fileInfo{
 				root:     root,
+				file:     file,
 				fileName: path,
+				modTime:  modTime,
 			}
 			return nil
 		})
@@ -78,7 +103,7 @@ func (h *hibernateImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Importing tables from hibernate from %v files...\n", len(files))
 
-	err = importers.ProcessKotlinFiles(lo.Keys(files),
+	err = languages.ProcessKotlinFiles(lo.Keys(files),
 		func(path string, content kotlin_parser.IKotlinFileContext) error {
 			file := files[path]
 
@@ -91,6 +116,7 @@ func (h *hibernateImporter) Import(storage archer.Storage) error {
 
 			file.classes = l.Classes
 			file.errors = l.Errors
+			file.file.Data[lastModifiedKey] = file.modTime
 
 			return err
 		},
@@ -98,7 +124,12 @@ func (h *hibernateImporter) Import(storage archer.Storage) error {
 			return nil
 		},
 		func(bar *progressbar.ProgressBar, index int, path string, err error) error {
-			if !errors.Is(err, fs.ErrNotExist) {
+			file := files[path]
+
+			if file.file != nil && errors.Is(err, fs.ErrNotExist) {
+				file.file.Exists = false
+
+			} else {
 				_ = bar.Clear()
 				fmt.Printf("Error procesing file %v: %v\n", path, err)
 			}
@@ -190,7 +221,17 @@ func (h *hibernateImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Writing results...\n")
 
-	return storage.WriteProjects(projectsDB, archer.ChangedBasicInfo|archer.ChangedDependencies)
+	err = storage.WriteProjects(projectsDB, archer.ChangedBasicInfo|archer.ChangedDependencies)
+	if err != nil {
+		return err
+	}
+
+	err = storage.WriteFiles(filesDB, archer.ChangedBasicInfo|archer.ChangedData)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type treeListener struct {

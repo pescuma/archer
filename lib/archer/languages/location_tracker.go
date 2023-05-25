@@ -5,17 +5,22 @@ import (
 )
 
 type LocationTracker struct {
-	path         string
-	className    []string
-	functionName []string
-	fieldName    string
+	path      string
+	className []string
+	function  []functionInfo
+	fieldName string
+}
+
+type functionInfo struct {
+	name  string
+	arity int
 }
 
 func NewLocationTracker(path string) *LocationTracker {
 	return &LocationTracker{
-		path:         path,
-		className:    []string{""},
-		functionName: []string{""},
+		path:      path,
+		className: []string{""},
+		function:  []functionInfo{{}},
 	}
 }
 
@@ -36,7 +41,11 @@ func (l *LocationTracker) IsInsideFunction() bool {
 }
 
 func (l *LocationTracker) CurrentFunctionName() string {
-	return utils.Last(l.functionName)
+	return utils.Last(l.function).name
+}
+
+func (l *LocationTracker) CurrentFunctionArity() int {
+	return utils.Last(l.function).arity
 }
 
 func (l *LocationTracker) IsInsideField() bool {
@@ -53,20 +62,20 @@ func (l *LocationTracker) EnterClass(name string) {
 	}
 
 	l.className = append(l.className, name)
-	l.functionName = append(l.functionName, "")
+	l.function = append(l.function, functionInfo{})
 }
 
 func (l *LocationTracker) ExitClass() {
-	l.functionName = utils.RemoveLast(l.functionName)
+	l.function = utils.RemoveLast(l.function)
 	l.className = utils.RemoveLast(l.className)
 }
 
-func (l *LocationTracker) EnterFunction(name string) {
-	l.functionName = append(l.functionName, name)
+func (l *LocationTracker) EnterFunction(name string, arity int) {
+	l.function = append(l.function, functionInfo{name, arity})
 }
 
 func (l *LocationTracker) ExitFunction() {
-	l.functionName = utils.RemoveLast(l.functionName)
+	l.function = utils.RemoveLast(l.function)
 }
 
 func (l *LocationTracker) EnterField(name string) {

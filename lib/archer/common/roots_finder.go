@@ -24,19 +24,23 @@ func NewRootsFinder(rootDirs, globs []string) RootsFinder {
 	}
 }
 
-func (r *RootsFinder) ComputeRootDirs(projs *model.Projects, files *model.Files) ([]RootDir, error) {
+func (r *RootsFinder) ComputeRootDirs(projectsDB *model.Projects, filesDB *model.Files) ([]RootDir, error) {
 	paths := map[string]RootDir{}
 
 	for _, rootDir := range r.rootDirs {
 		switch {
 		case strings.HasPrefix(rootDir, "archer:"):
-			ps, err := projs.FilterProjects([]string{strings.TrimPrefix(rootDir, "archer:")}, model.FilterExcludeExternal)
+			ps, err := projectsDB.FilterProjects([]string{strings.TrimPrefix(rootDir, "archer:")}, model.FilterExcludeExternal)
 			if err != nil {
 				return nil, err
 			}
 
 			for _, p := range ps {
-				paths[p.FullName()] = RootDir{Project: p, files: files, globs: r.globs}
+				paths[p.FullName()] = RootDir{
+					filesDB: filesDB,
+					Project: p,
+					globs:   r.globs,
+				}
 			}
 
 		default:
@@ -45,7 +49,11 @@ func (r *RootsFinder) ComputeRootDirs(projs *model.Projects, files *model.Files)
 				return nil, err
 			}
 
-			paths[dir] = RootDir{Dir: &dir, globs: r.globs}
+			paths[dir] = RootDir{
+				filesDB: filesDB,
+				Dir:     &dir,
+				globs:   r.globs,
+			}
 		}
 	}
 
@@ -62,8 +70,8 @@ func (r *RootsFinder) ComputeRootDirs(projs *model.Projects, files *model.Files)
 }
 
 type RootDir struct {
+	filesDB *model.Files
 	Project *model.Project
-	files   *model.Files
 	Dir     *string
 	globs   []string
 }
@@ -105,7 +113,7 @@ func (r *RootDir) createGlobsMatcher(path string) func(string) (bool, error) {
 	}
 }
 
-func (r *RootDir) WalkDir(cb func(proj *model.Project, path string) error) error {
+func (r *RootDir) WalkDir(cb func(proj *model.Project, file *model.File, path string) error) error {
 	if r.Dir != nil {
 		globsMatch := r.createGlobsMatcher(*r.Dir)
 
@@ -127,20 +135,22 @@ func (r *RootDir) WalkDir(cb func(proj *model.Project, path string) error) error
 				return nil
 			}
 
-			return cb(r.Project, path)
+			file := r.filesDB.GetOrCreate(path)
+
+			return cb(r.Project, file, path)
 		})
 
 	} else {
 		globsMatch := r.createGlobsMatcher(r.Project.RootDir)
 
-		for _, file := range r.files.ListByProject(r.Project) {
+		for _, file := range r.filesDB.ListByProject(r.Project) {
 			match, err := globsMatch(file.Path)
 			if err != nil {
 				return err
 			}
 
 			if match {
-				err = cb(r.Project, file.Path)
+				err = cb(r.Project, file, file.Path)
 				if err != nil {
 					return err
 				}

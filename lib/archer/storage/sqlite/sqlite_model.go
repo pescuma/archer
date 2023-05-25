@@ -7,11 +7,12 @@ import (
 )
 
 type sqlProject struct {
-	ID        model.UUID
-	Root      string   `gorm:"index:idx_projects_name"`
-	Name      string   `gorm:"index:idx_projects_name"`
-	NameParts []string `gorm:"serializer:json"`
-	Type      model.ProjectType
+	ID          model.UUID
+	Name        string
+	Root        string   `gorm:"index:idx_projects_name"`
+	ProjectName string   `gorm:"index:idx_projects_name"`
+	NameParts   []string `gorm:"serializer:json"`
+	Type        model.ProjectType
 
 	RootDir     string
 	ProjectFile string
@@ -108,17 +109,18 @@ type sqlRepository struct {
 }
 
 type sqlRepositoryCommit struct {
-	ID           model.UUID
-	RepositoryID model.UUID `gorm:"index"`
-	Name         string
-	Message      string
-	Parents      []string   `gorm:"serializer:json"`
-	Date         time.Time  `gorm:"index"`
-	CommitterID  model.UUID `gorm:"index"`
-	DateAuthored time.Time
-	AuthorID     model.UUID
-	AddedLines   int
-	DeletedLines int
+	ID            model.UUID
+	RepositoryID  model.UUID `gorm:"index"`
+	Name          string
+	Message       string
+	Parents       []string   `gorm:"serializer:json"`
+	Date          time.Time  `gorm:"index"`
+	CommitterID   model.UUID `gorm:"index"`
+	DateAuthored  time.Time
+	AuthorID      model.UUID
+	ModifiedLines int
+	AddedLines    int
+	DeletedLines  int
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -127,11 +129,12 @@ type sqlRepositoryCommit struct {
 }
 
 type sqlRepositoryCommitFile struct {
-	CommitID     model.UUID `gorm:"primaryKey"`
-	FileID       model.UUID `gorm:"primaryKey"`
-	RepositoryID model.UUID `gorm:"index"`
-	AddedLines   int
-	DeletedLines int
+	CommitID      model.UUID `gorm:"primaryKey"`
+	FileID        model.UUID `gorm:"primaryKey"`
+	RepositoryID  model.UUID `gorm:"index"`
+	ModifiedLines int
+	AddedLines    int
+	DeletedLines  int
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -145,5 +148,7 @@ type sqlSize struct {
 }
 
 type sqlMetrics struct {
-	DependenciesGuice *int
+	DependenciesGuice    *int
+	ComplexityCyclomatic *int
+	ComplexityCognitive  *int
 }

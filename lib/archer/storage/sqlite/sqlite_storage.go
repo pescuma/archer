@@ -94,7 +94,7 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 	}
 
 	for _, sp := range projs {
-		p := result.GetOrCreateEx(sp.Root, sp.Name, &sp.ID)
+		p := result.GetOrCreateEx(sp.Root, sp.ProjectName, &sp.ID)
 		p.NameParts = sp.NameParts
 		p.Type = sp.Type
 
@@ -384,12 +384,13 @@ func (s *sqliteStorage) LoadRepository(rootDir string) (*model.Repository, error
 		c.CommitterID = sc.CommitterID
 		c.DateAuthored = sc.DateAuthored
 		c.AuthorID = sc.AuthorID
+		c.ModifiedLines = sc.ModifiedLines
 		c.AddedLines = sc.AddedLines
 		c.DeletedLines = sc.DeletedLines
 
 		if sfs, ok := filesByCommit[sc.ID]; ok {
 			for _, sf := range sfs {
-				c.AddFile(sf.FileID, sf.AddedLines, sf.DeletedLines)
+				c.AddFile(sf.FileID, sf.ModifiedLines, sf.AddedLines, sf.DeletedLines)
 			}
 		}
 	}
@@ -487,13 +488,17 @@ func toModelSize(size *sqlSize) *model.Size {
 
 func toSqlMetrics(metrics *model.Metrics) *sqlMetrics {
 	return &sqlMetrics{
-		DependenciesGuice: encodeMetric(metrics.GuiceDependencies),
+		DependenciesGuice:    encodeMetric(metrics.GuiceDependencies),
+		ComplexityCyclomatic: encodeMetric(metrics.CyclomaticComplexity),
+		ComplexityCognitive:  encodeMetric(metrics.CognitiveComplexity),
 	}
 }
 
 func toModelMetrics(metrics *sqlMetrics) *model.Metrics {
 	return &model.Metrics{
-		GuiceDependencies: decodeMetric(metrics.DependenciesGuice),
+		GuiceDependencies:    decodeMetric(metrics.DependenciesGuice),
+		CyclomaticComplexity: decodeMetric(metrics.ComplexityCyclomatic),
+		CognitiveComplexity:  decodeMetric(metrics.ComplexityCognitive),
 	}
 }
 
@@ -513,8 +518,9 @@ func toSqlProject(p *model.Project) *sqlProject {
 
 	sp := &sqlProject{
 		ID:          p.ID,
+		Name:        p.String(),
 		Root:        p.Root,
-		Name:        p.Name,
+		ProjectName: p.Name,
 		NameParts:   p.NameParts,
 		Type:        p.Type,
 		RootDir:     p.RootDir,
@@ -590,26 +596,28 @@ func toSqlRepository(r *model.Repository) *sqlRepository {
 
 func toSqlRepositoryCommit(r *model.Repository, c *model.RepositoryCommit) *sqlRepositoryCommit {
 	return &sqlRepositoryCommit{
-		ID:           c.ID,
-		RepositoryID: r.ID,
-		Name:         c.Hash,
-		Parents:      c.Parents,
-		Date:         c.Date,
-		CommitterID:  c.CommitterID,
-		DateAuthored: c.DateAuthored,
-		AuthorID:     c.AuthorID,
-		AddedLines:   c.AddedLines,
-		DeletedLines: c.DeletedLines,
+		ID:            c.ID,
+		RepositoryID:  r.ID,
+		Name:          c.Hash,
+		Parents:       c.Parents,
+		Date:          c.Date,
+		CommitterID:   c.CommitterID,
+		DateAuthored:  c.DateAuthored,
+		AuthorID:      c.AuthorID,
+		ModifiedLines: c.ModifiedLines,
+		AddedLines:    c.AddedLines,
+		DeletedLines:  c.DeletedLines,
 	}
 }
 
 func toSqlRepositoryCommitFile(r *model.Repository, c *model.RepositoryCommit, f *model.RepositoryCommitFile) *sqlRepositoryCommitFile {
 	return &sqlRepositoryCommitFile{
-		CommitID:     c.ID,
-		FileID:       f.FileID,
-		RepositoryID: r.ID,
-		AddedLines:   f.AddedLines,
-		DeletedLines: f.DeletedLines,
+		CommitID:      c.ID,
+		FileID:        f.FileID,
+		RepositoryID:  r.ID,
+		ModifiedLines: f.ModifiedLines,
+		AddedLines:    f.AddedLines,
+		DeletedLines:  f.DeletedLines,
 	}
 }
 

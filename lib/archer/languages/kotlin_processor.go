@@ -1,4 +1,4 @@
-package importers
+package languages
 
 import (
 	"fmt"
@@ -26,38 +26,39 @@ func ProcessKotlinFiles(paths []string,
 	onProcessed func(bar *progressbar.ProgressBar, index int, file string) error,
 	onError func(bar *progressbar.ProgressBar, index int, file string, err error) error,
 ) error {
-	group := utils.NewProcessGroup(func(w *work) (*work, error) {
-		contents := string(w.contents)
-		w.contents = nil
+	group := utils.NewProcessGroup(1, 1000,
+		func(w *work) (*work, error) {
+			contents := string(w.contents)
+			w.contents = nil
 
-		el := antlrErrorListener{}
-		input := antlr.NewInputStream(contents)
+			el := antlrErrorListener{}
+			input := antlr.NewInputStream(contents)
 
-		lexer := kotlin_parser.NewKotlinLexer(input)
-		lexer.RemoveErrorListeners()
-		lexer.AddErrorListener(&el)
+			lexer := kotlin_parser.NewKotlinLexer(input)
+			lexer.RemoveErrorListeners()
+			lexer.AddErrorListener(&el)
 
-		stream := antlr.NewCommonTokenStream(lexer, 0)
+			stream := antlr.NewCommonTokenStream(lexer, 0)
 
-		parser := kotlin_parser.NewKotlinParser(stream)
-		parser.RemoveErrorListeners()
-		parser.AddErrorListener(&el)
+			parser := kotlin_parser.NewKotlinParser(stream)
+			parser.RemoveErrorListeners()
+			parser.AddErrorListener(&el)
 
-		content := parser.KotlinFile()
+			content := parser.KotlinFile()
 
-		if el.errors != nil {
-			w.err = errors.New(strings.Join(el.errors, ", "))
+			if el.errors != nil {
+				w.err = errors.New(strings.Join(el.errors, ", "))
+				return w, nil
+			}
+
+			err := process(w.path, content)
+			if err != nil {
+				w.err = err
+				return w, nil
+			}
+
 			return w, nil
-		}
-
-		err := process(w.path, content)
-		if err != nil {
-			w.err = err
-			return w, nil
-		}
-
-		return w, nil
-	})
+		})
 
 	go func() {
 		for i, path := range paths {

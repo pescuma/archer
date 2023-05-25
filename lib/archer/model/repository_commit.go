@@ -15,8 +15,9 @@ type RepositoryCommit struct {
 	DateAuthored time.Time
 	AuthorID     UUID
 
-	AddedLines   int
-	DeletedLines int
+	ModifiedLines int
+	AddedLines    int
+	DeletedLines  int
 
 	Files []*RepositoryCommitFile
 }
@@ -28,10 +29,11 @@ func NewRepositoryCommit(hash string) *RepositoryCommit {
 	}
 }
 
-func (c *RepositoryCommit) AddFile(fileID UUID, addedLines int, deletedLines int) {
+func (c *RepositoryCommit) AddFile(fileID UUID, modifiedLines, addedLines, deletedLines int) {
 	c.Files = append(c.Files, &RepositoryCommitFile{
-		FileID:       fileID,
-		AddedLines:   addedLines,
-		DeletedLines: deletedLines,
+		FileID:        fileID,
+		ModifiedLines: modifiedLines,
+		AddedLines:    addedLines,
+		DeletedLines:  deletedLines,
 	})
 }

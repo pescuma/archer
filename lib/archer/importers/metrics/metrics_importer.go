@@ -3,6 +3,7 @@ package metrics
 import (
 	"fmt"
 	"io/fs"
+	"os"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -10,27 +11,28 @@ import (
 	"github.com/schollz/progressbar/v3"
 
 	"github.com/Faire/archer/lib/archer"
-	"github.com/Faire/archer/lib/archer/importers"
+	"github.com/Faire/archer/lib/archer/languages"
 	"github.com/Faire/archer/lib/archer/languages/kotlin_parser"
-	"github.com/Faire/archer/lib/archer/metrics"
+	"github.com/Faire/archer/lib/archer/metrics/complexity"
+	"github.com/Faire/archer/lib/archer/metrics/dependencies"
 	"github.com/Faire/archer/lib/archer/model"
 )
 
 type metricsImporter struct {
 	filters []string
-	limits  Limits
+	options Options
 }
 
-type Limits struct {
+type Options struct {
 	Incremental      bool
 	MaxImportedFiles *int
 	SaveEvery        *int
 }
 
-func NewImporter(filters []string, limits Limits) archer.Importer {
+func NewImporter(filters []string, options Options) archer.Importer {
 	return &metricsImporter{
 		filters: filters,
-		limits:  limits,
+		options: options,
 	}
 }
 
@@ -60,8 +62,9 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 	}
 
 	files := map[string]*model.File{}
+	modTimes := map[string]string{}
 	for _, file := range candidates {
-		if !m.limits.ShouldContinue(len(files)) {
+		if !m.options.ShouldContinue(len(files)) {
 			break
 		}
 
@@ -76,26 +79,43 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 			continue
 		}
 
-		if m.limits.Incremental && file.Metrics.GuiceDependencies >= 0 {
+		stat, err := os.Stat(file.Path)
+		if err != nil {
+			file.Exists = false
 			continue
 		}
 
+		modTime := stat.ModTime().String()
+
+		if m.options.Incremental && file.Metrics.GuiceDependencies >= 0 {
+			if modTime == file.Data["metrics:last_modified"] {
+				continue
+			}
+		}
+
 		files[file.Path] = file
+		modTimes[file.Path] = modTime
 	}
 
 	fmt.Printf("Importing metrics from %v files...\n", len(files))
 
 	lastSave := 0
-	err = importers.ProcessKotlinFiles(lo.Keys(files),
+	err = languages.ProcessKotlinFiles(lo.Keys(files),
 		func(path string, content kotlin_parser.IKotlinFileContext) error {
 			file := files[path]
 
-			file.Metrics.GuiceDependencies = metrics.ComputeKotlinGuiceDependencies(file.Path, content)
+			file.Metrics.GuiceDependencies = dependencies.ComputeKotlinGuiceDependencies(file.Path, content)
+
+			c := complexity.ComputeKotlinComplexity(file.Path, content)
+			file.Metrics.CyclomaticComplexity = c.CyclomaticComplexity
+			file.Metrics.CognitiveComplexity = c.CognitiveComplexity
+
+			file.Data["metrics:last_modified"] = modTimes[path]
 
 			return nil
 		},
 		func(bar *progressbar.ProgressBar, index int, path string) error {
-			if m.limits.SaveEvery != nil && (index+1)-lastSave >= *m.limits.SaveEvery {
+			if m.options.SaveEvery != nil && (index+1)-lastSave >= *m.options.SaveEvery {
 				lastSave = index
 
 				_ = bar.Clear()
@@ -117,7 +137,7 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 			if errors.Is(err, fs.ErrNotExist) {
 				file.Exists = false
 
-			} else if err != nil {
+			} else {
 				_ = bar.Clear()
 				fmt.Printf("Error procesing file %v: %v\n", file.Path, err)
 			}
@@ -161,7 +181,7 @@ func updateParentMetrics(ps []*model.Project, filesDB *model.Files) {
 	}
 }
 
-func (l *Limits) ShouldContinue(imported int) bool {
+func (l *Options) ShouldContinue(imported int) bool {
 	if l.MaxImportedFiles != nil && imported >= *l.MaxImportedFiles {
 		return false
 	}

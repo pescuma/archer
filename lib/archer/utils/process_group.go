@@ -15,15 +15,15 @@ type ProcessGroup[I, O any] struct {
 	Err    chan error
 }
 
-func NewProcessGroup[I, O any](proc func(I) (O, error)) ProcessGroup[I, O] {
+func NewProcessGroup[I, O any](inputFactor, outputFactor int, proc func(I) (O, error)) ProcessGroup[I, O] {
 	routines := Max(Min(runtime.GOMAXPROCS(-1), runtime.NumCPU())-2, 1)
 
 	group := ProcessGroup[I, O]{
 		proc:  proc,
 		abort: make(chan struct{}),
 
-		Input:  make(chan I, routines),
-		Output: make(chan O, 10000*routines),
+		Input:  make(chan I, inputFactor*routines),
+		Output: make(chan O, outputFactor*routines),
 		Err:    make(chan error),
 	}
 

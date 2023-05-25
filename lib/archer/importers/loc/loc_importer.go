@@ -15,11 +15,17 @@ import (
 
 type locImporter struct {
 	filters []string
+	options Options
 }
 
-func NewImporter(filters []string) archer.Importer {
+type Options struct {
+	Incremental bool
+}
+
+func NewImporter(filters []string, options Options) archer.Importer {
 	return &locImporter{
 		filters: filters,
+		options: options,
 	}
 }
 
@@ -50,30 +56,37 @@ func (l *locImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Importing size from %v files...\n", len(candidates))
 
+	files := make([]*model.File, 0, len(candidates))
+
 	bar := utils.NewProgressBar(len(candidates))
-	var fs = make([]*model.File, 0, len(candidates))
-	for _, c := range candidates {
-		info, err := os.Stat(c.Path)
+	for _, file := range candidates {
+		stat, err := os.Stat(file.Path)
 		if err == nil {
-			c.Exists = true
+			file.Exists = true
 
-			c.Size.Clear()
-			c.Size.Files = 1
-			c.Size.Bytes = int(info.Size())
+			file.Size.Clear()
+			file.Size.Files = 1
+			file.Size.Bytes = int(stat.Size())
 
-			fs = append(fs, c)
+			modTime := stat.ModTime().String()
+
+			if !l.options.Incremental || modTime != file.Data["loc:last_modified"] {
+				files = append(files, file)
+				file.Data["loc:last_modified"] = modTime
+			}
+
 		} else {
-			c.Exists = false
+			file.Exists = false
 
-			c.Size.Clear()
+			file.Size.Clear()
 		}
 
 		_ = bar.Add(1)
 	}
 
-	fmt.Printf("Importing lines of code from %v files...\n", len(fs))
+	fmt.Printf("Importing lines of code from %v files...\n", len(files))
 
-	loc, err := l.computeLOC(fs)
+	loc, err := l.computeLOC(files)
 	if err != nil {
 		return err
 	}
@@ -87,7 +100,7 @@ func (l *locImporter) Import(storage archer.Storage) error {
 		}
 	}
 
-	for _, file := range fs {
+	for _, file := range files {
 		if floc, ok := loc.Files[file.Path]; ok {
 			file.Size.Lines = int(floc.Code + floc.Comments + floc.Blanks)
 			file.Size.Other["Code"] = int(floc.Code)
@@ -121,7 +134,7 @@ func (l *locImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
-	err = storage.WriteFiles(filesDB, archer.ChangedSize)
+	err = storage.WriteFiles(filesDB, archer.ChangedData|archer.ChangedSize)
 	if err != nil {
 		return err
 	}
