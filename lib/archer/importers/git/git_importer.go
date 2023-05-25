@@ -69,7 +69,7 @@ func (g gitImporter) Import(storage archer.Storage) error {
 	}
 
 	if repo == nil {
-		repo = model.NewRepository(rootDir)
+		repo = model.NewRepository(rootDir, nil)
 	}
 
 	repo.VCS = "git"
@@ -127,11 +127,6 @@ func (g gitImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Loading history...\n")
 
-	if imported == 0 {
-		fmt.Printf("No new commits to import.\n")
-		return nil
-	}
-
 	commitsIter, err = gr.Log(&git.LogOptions{})
 	if err != nil {
 		return err
@@ -140,6 +135,7 @@ func (g gitImporter) Import(storage archer.Storage) error {
 	bar := utils.NewProgressBar(imported)
 	commitNumber = 0
 	imported = 0
+	touchedFiles := map[model.UUID]*model.File{}
 	err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
 		if !g.options.ShouldContinue(commitNumber, imported, gitCommit.Committer.When) {
 			return abort
@@ -204,12 +200,18 @@ func (g gitImporter) Import(storage archer.Storage) error {
 			commit.ModifiedLines += gitFile.Modified
 			commit.AddedLines += gitFile.Added
 			commit.DeletedLines += gitFile.Deleted
+
+			touchedFiles[file.ID] = file
 		}
 
 		return nil
 	})
 	if err != nil && err != abort {
 		return err
+	}
+
+	if imported == 0 {
+		fmt.Printf("No new commits to import.\n")
 	}
 
 	fmt.Printf("Writing results...\n")

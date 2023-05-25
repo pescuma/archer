@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
@@ -16,6 +17,7 @@ import (
 	"github.com/Faire/archer/lib/archer/metrics/complexity"
 	"github.com/Faire/archer/lib/archer/metrics/dependencies"
 	"github.com/Faire/archer/lib/archer/model"
+	"github.com/Faire/archer/lib/archer/utils"
 )
 
 type metricsImporter struct {
@@ -43,6 +45,11 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 	}
 
 	filesDB, err := storage.LoadFiles()
+	if err != nil {
+		return err
+	}
+
+	reposDB, err := storage.LoadRepositories()
 	if err != nil {
 		return err
 	}
@@ -146,6 +153,28 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 		})
 	if err != nil {
 		return err
+	}
+
+	fmt.Printf("Importing changes from %v files...\n", len(candidates))
+
+	candidatesByID := map[model.UUID]*model.File{}
+	for _, f := range candidates {
+		f.Metrics.ChangesTotal = 0
+		f.Metrics.ChangesIn6Months = 0
+
+		candidatesByID[f.ID] = f
+	}
+
+	now := time.Now()
+	for _, repo := range reposDB.List() {
+		for _, c := range repo.ListCommits() {
+			inLast6Months := now.Sub(c.Date) < 6*30*24*time.Hour
+			for _, cf := range c.Files {
+				f := candidatesByID[cf.FileID]
+				f.Metrics.ChangesIn6Months += utils.IIf(inLast6Months, 1, 0)
+				f.Metrics.ChangesTotal++
+			}
+		}
 	}
 
 	updateParentMetrics(ps, filesDB)

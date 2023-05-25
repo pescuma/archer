@@ -151,4 +151,6 @@ type sqlMetrics struct {
 	DependenciesGuice    *int
 	ComplexityCyclomatic *int
 	ComplexityCognitive  *int
+	Changes6Months       *int
+	ChangesTotal         *int
 }

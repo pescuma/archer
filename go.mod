@@ -9,8 +9,9 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/gertd/go-pluralize v0.2.1
 	github.com/glebarez/sqlite v1.8.0
-	github.com/go-git/go-git/v5 v5.6.1
+	github.com/go-git/go-git/v5 v5.7.0
 	github.com/go-sql-driver/mysql v1.7.1
+	github.com/hexops/gotextdiff v1.0.3
 	github.com/hhatto/gocloc v0.5.0
 	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/pkg/errors v0.9.1
@@ -31,10 +32,10 @@ require (
 	github.com/glebarez/go-sqlite v1.21.1 // indirect
 	github.com/go-enry/go-enry/v2 v2.8.4 // indirect
 	github.com/go-enry/go-oniguruma v1.2.1 // indirect
-	github.com/go-git/gcfg v1.5.0 // indirect
+	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.4.1 // indirect
+	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/hexops/gotextdiff v1.0.3 // indirect
 	github.com/imdario/mergo v0.3.15 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect

@@ -347,6 +347,60 @@ func (s *sqliteStorage) WritePeople(people *model.People, changes archer.Storage
 	return nil
 }
 
+func (s *sqliteStorage) LoadRepositories() (*model.Repositories, error) {
+	var sqlRepos []*sqlRepository
+	err := s.db.Find(&sqlRepos).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var sqlCommits []*sqlRepositoryCommit
+	err = s.db.Find(&sqlCommits).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var sqlFiles []*sqlRepositoryCommitFile
+	err = s.db.Find(&sqlFiles).Error
+	if err != nil {
+		return nil, err
+	}
+
+	result := model.NewRepositories()
+
+	for _, sr := range sqlRepos {
+		r := result.GetOrCreateEx(sr.RootDir, &sr.ID)
+		r.VCS = sr.VCS
+		r.Data = sr.Data
+	}
+
+	commitsById := map[model.UUID]*model.RepositoryCommit{}
+	for _, sc := range sqlCommits {
+		repo := result.GetByID(sc.RepositoryID)
+
+		c := repo.GetCommit(sc.Name)
+		c.ID = sc.ID
+		c.Parents = sc.Parents
+		c.Date = sc.Date
+		c.CommitterID = sc.CommitterID
+		c.DateAuthored = sc.DateAuthored
+		c.AuthorID = sc.AuthorID
+		c.ModifiedLines = sc.ModifiedLines
+		c.AddedLines = sc.AddedLines
+		c.DeletedLines = sc.DeletedLines
+
+		commitsById[c.ID] = c
+	}
+
+	for _, sf := range sqlFiles {
+		commit := commitsById[sf.CommitID]
+
+		commit.AddFile(sf.FileID, sf.ModifiedLines, sf.AddedLines, sf.DeletedLines)
+	}
+
+	return result, nil
+}
+
 func (s *sqliteStorage) LoadRepository(rootDir string) (*model.Repository, error) {
 	var sqlRepo *sqlRepository
 	err := s.db.Where("root_dir = ?", rootDir).Limit(1).Find(&sqlRepo).Error
@@ -371,9 +425,8 @@ func (s *sqliteStorage) LoadRepository(rootDir string) (*model.Repository, error
 
 	filesByCommit := lo.GroupBy(sqlFiles, func(f *sqlRepositoryCommitFile) model.UUID { return f.CommitID })
 
-	result := model.NewRepository(rootDir)
+	result := model.NewRepository(rootDir, &sqlRepo.ID)
 	result.VCS = sqlRepo.VCS
-	result.ID = sqlRepo.ID
 	result.Data = sqlRepo.Data
 
 	for _, sc := range sqlCommits {
@@ -491,6 +544,8 @@ func toSqlMetrics(metrics *model.Metrics) *sqlMetrics {
 		DependenciesGuice:    encodeMetric(metrics.GuiceDependencies),
 		ComplexityCyclomatic: encodeMetric(metrics.CyclomaticComplexity),
 		ComplexityCognitive:  encodeMetric(metrics.CognitiveComplexity),
+		Changes6Months:       encodeMetric(metrics.ChangesIn6Months),
+		ChangesTotal:         encodeMetric(metrics.ChangesTotal),
 	}
 }
 
@@ -499,6 +554,8 @@ func toModelMetrics(metrics *sqlMetrics) *model.Metrics {
 		GuiceDependencies:    decodeMetric(metrics.DependenciesGuice),
 		CyclomaticComplexity: decodeMetric(metrics.ComplexityCyclomatic),
 		CognitiveComplexity:  decodeMetric(metrics.ComplexityCognitive),
+		ChangesIn6Months:     decodeMetric(metrics.Changes6Months),
+		ChangesTotal:         decodeMetric(metrics.ChangesTotal),
 	}
 }
 

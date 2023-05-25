@@ -14,10 +14,17 @@ type Repository struct {
 	Commits map[string]*RepositoryCommit
 }
 
-func NewRepository(rootDir string) *Repository {
+func NewRepository(rootDir string, id *UUID) *Repository {
+	var uuid UUID
+	if id == nil {
+		uuid = NewUUID("r")
+	} else {
+		uuid = *id
+	}
+
 	return &Repository{
 		RootDir: rootDir,
-		ID:      NewUUID("r"),
+		ID:      uuid,
 		Data:    map[string]string{},
 		Commits: map[string]*RepositoryCommit{},
 	}

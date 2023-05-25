@@ -28,6 +28,7 @@ type Storage interface {
 	LoadPeople() (*model.People, error)
 	WritePeople(people *model.People, changes StorageChanges) error
 
+	LoadRepositories() (repos *model.Repositories, err error)
 	LoadRepository(rootDir string) (*model.Repository, error)
 	WriteRepository(repo *model.Repository, changes StorageChanges) error
 }
