@@ -55,10 +55,10 @@ func parseProjects(content string) ([]string, error) {
 	return result, nil
 }
 
-func parseDeps(projects *model.Projects, content string, rootProj string) error {
+func parseDeps(projects *model.Projects, content string, rootProj string, projsInsideRoot map[string]bool) error {
 	rootProjRE := regexp.MustCompile(`^(?:Root project|Project) '([^']+)'$`)
 	depRE := regexp.MustCompile(`^([-+\\| ]+)(?:project )?([a-zA-Z0-9:._-]+)`)
-	versionRE := regexp.MustCompile(`^([a-zA-Z0-9:._-]+):\d+(?:\.\d+){1,3}(?:\.Final)?$`)
+	versionRE := regexp.MustCompile(`^([a-zA-Z0-9:._-]+):\d+[^:]+$`)
 
 	state := waitingRoot
 	var stack []pd
@@ -92,14 +92,18 @@ func parseDeps(projects *model.Projects, content string, rootProj string) error 
 			}
 
 			depth := len(depMatches[1])
-
 			depName := depMatches[2]
-			versionMatches := versionRE.FindStringSubmatch(depName)
-			if versionMatches != nil {
-				depName = versionMatches[1]
+
+			root := rootProj
+			if !projsInsideRoot[depName] {
+				root = "external"
+				m := versionRE.FindStringSubmatch(depName)
+				if m != nil {
+					depName = m[1]
+				}
 			}
 
-			p := projects.GetOrCreate(rootProj, depName)
+			p := projects.GetOrCreate(root, depName)
 
 			lp := utils.Last(stack)
 			for depth <= lp.depth {

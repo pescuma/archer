@@ -157,7 +157,7 @@ func (p *Project) IsCode() bool {
 }
 
 func (p *Project) IsExternalDependency() bool {
-	return p.Type == ExternalDependencyType
+	return p.Type == Library
 }
 
 func (p *Project) ListDependencies(filter FilterType) []*ProjectDependency {

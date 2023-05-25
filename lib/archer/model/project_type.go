@@ -3,15 +3,15 @@ package model
 type ProjectType int
 
 const (
-	ExternalDependencyType ProjectType = iota
+	Library ProjectType = iota
 	CodeType
 	DatabaseType
 )
 
 func (t ProjectType) String() string {
 	switch t {
-	case ExternalDependencyType:
-		return "external dependency"
+	case Library:
+		return "lib"
 	case CodeType:
 		return "code"
 	case DatabaseType:

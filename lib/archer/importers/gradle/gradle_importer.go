@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/samber/lo"
+
 	"github.com/Faire/archer/lib/archer"
 	"github.com/Faire/archer/lib/archer/model"
 	"github.com/Faire/archer/lib/archer/utils"
@@ -74,10 +76,11 @@ func (g *gradleImporter) Import(storage archer.Storage) error {
 
 	bar = utils.NewProgressBar(len(queue))
 	block := 100
+	projsInsideRoot := lo.Associate(queue, func(s string) (string, bool) { return s, true })
 	for i := 0; i < len(queue); i += block {
 		piece := utils.Take(queue[i:], block)
 
-		err = g.loadDependencies(projs, piece, rootProj)
+		err = g.loadDependencies(projs, piece, rootProj, projsInsideRoot)
 		if err != nil {
 			return err
 		}
@@ -247,7 +250,7 @@ func (g *gradleImporter) getProjectFile(projName string) (string, error) {
 	return "", nil
 }
 
-func (g *gradleImporter) loadDependencies(projs *model.Projects, projNamesToImport []string, rootProj string) error {
+func (g *gradleImporter) loadDependencies(projs *model.Projects, projNamesToImport []string, rootProj string, projsInsideRoot map[string]bool) error {
 	args := make([]string, 0, 3*len(projNamesToImport))
 	for _, projName := range projNamesToImport {
 		var target string
@@ -271,7 +274,7 @@ func (g *gradleImporter) loadDependencies(projs *model.Projects, projNamesToImpo
 	opt := splitOutputPerTarget(string(output))
 
 	for _, o := range opt {
-		err = parseDeps(projs, o, rootProj)
+		err = parseDeps(projs, o, rootProj, projsInsideRoot)
 		if err != nil {
 			return err
 		}
