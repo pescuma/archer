@@ -9,9 +9,11 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/utils/diff"
 	"github.com/hexops/gotextdiff"
 	"github.com/hexops/gotextdiff/myers"
 	"github.com/pkg/errors"
+	"github.com/sergi/go-diff/diffmatchpatch"
 
 	"github.com/Faire/archer/lib/archer"
 	"github.com/Faire/archer/lib/archer/model"
@@ -29,6 +31,7 @@ type Options struct {
 	MaxCommits         *int
 	After              *time.Time
 	Before             *time.Time
+	SaveEvery          *int
 }
 
 func NewImporter(rootDir string, options Options) archer.Importer {
@@ -53,12 +56,12 @@ func (g gitImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Loading existing data...\n")
 
-	files, err := storage.LoadFiles()
+	filesDB, err := storage.LoadFiles()
 	if err != nil {
 		return err
 	}
 
-	people, err := storage.LoadPeople()
+	peopleDB, err := storage.LoadPeople()
 	if err != nil {
 		return err
 	}
@@ -87,7 +90,7 @@ func (g gitImporter) Import(storage archer.Storage) error {
 
 	grouper := newNameEmailGrouper()
 
-	for _, p := range people.List() {
+	for _, p := range peopleDB.List() {
 		emails := p.ListEmails()
 		if len(emails) == 0 {
 			continue
@@ -125,6 +128,17 @@ func (g gitImporter) Import(storage archer.Storage) error {
 
 	grouper.prepare()
 
+	for _, ne := range grouper.list() {
+		person := peopleDB.GetOrCreate(ne.Name)
+
+		for n := range ne.Names {
+			person.AddName(n)
+		}
+		for e := range ne.Emails {
+			person.AddEmail(e)
+		}
+	}
+
 	fmt.Printf("Loading history...\n")
 
 	commitsIter, err = gr.Log(&git.LogOptions{})
@@ -152,11 +166,11 @@ func (g gitImporter) Import(storage archer.Storage) error {
 		bar.Describe(gitCommit.Committer.When.Format("2006-01-02 15:04"))
 		_ = bar.Add(1)
 
-		author := people.GetOrCreate(grouper.getName(gitCommit.Author.Email))
+		author := peopleDB.GetOrCreate(grouper.getName(gitCommit.Author.Email))
 		author.AddName(gitCommit.Author.Name)
 		author.AddEmail(gitCommit.Author.Email)
 
-		committer := people.GetOrCreate(grouper.getName(gitCommit.Committer.Email))
+		committer := peopleDB.GetOrCreate(grouper.getName(gitCommit.Committer.Email))
 		committer.AddName(gitCommit.Committer.Name)
 		committer.AddEmail(gitCommit.Committer.Email)
 
@@ -190,18 +204,45 @@ func (g gitImporter) Import(storage archer.Storage) error {
 		commit.Files = nil
 
 		for _, gitFile := range gitChanges {
-			path := filepath.Join(rootDir, gitFile.Name)
+			filePath := filepath.Join(rootDir, gitFile.Name)
+			oldFilePath := filepath.Join(rootDir, gitFile.OldName)
 
-			file := files.GetOrCreate(path)
+			file := filesDB.GetOrCreate(filePath)
 			file.RepositoryID = &repo.ID
 
-			commit.AddFile(file.ID, gitFile.Modified, gitFile.Added, gitFile.Deleted)
+			oldFile := filesDB.GetOrCreate(oldFilePath)
+			oldFile.RepositoryID = &repo.ID
+
+			commit.AddFile(file.ID, utils.IIf(file != oldFile, &oldFile.ID, nil), gitFile.Modified, gitFile.Added, gitFile.Deleted)
 
 			commit.ModifiedLines += gitFile.Modified
 			commit.AddedLines += gitFile.Added
 			commit.DeletedLines += gitFile.Deleted
 
 			touchedFiles[file.ID] = file
+		}
+
+		if g.options.SaveEvery != nil && imported%*g.options.SaveEvery == 0 {
+			_ = bar.Clear()
+			fmt.Print("Writing results...")
+
+			err := storage.WritePeople(peopleDB, archer.ChangedBasicInfo)
+			if err != nil {
+				return err
+			}
+
+			err = storage.WriteFiles(filesDB, archer.ChangedBasicInfo)
+			if err != nil {
+				return err
+			}
+
+			err = storage.WriteRepository(repo, archer.ChangedBasicInfo|archer.ChangedHistory)
+			if err != nil {
+				return err
+			}
+
+			fmt.Print("\r")
+			_ = bar.RenderBlank()
 		}
 
 		return nil
@@ -216,12 +257,12 @@ func (g gitImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Writing results...\n")
 
-	err = storage.WritePeople(people, archer.ChangedBasicInfo)
+	err = storage.WritePeople(peopleDB, archer.ChangedBasicInfo)
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteFiles(files, archer.ChangedBasicInfo)
+	err = storage.WriteFiles(filesDB, archer.ChangedBasicInfo)
 	if err != nil {
 		return err
 	}
@@ -277,36 +318,64 @@ func computeChanges(commit *object.Commit, parent *object.Commit) ([]*gitFileCha
 		} else {
 			gitChange.Name = change.To.Name
 		}
+		if parentFile != nil {
+			gitChange.OldName = change.To.Name
+		} else {
+			gitChange.OldName = change.From.Name
+		}
 
 		if !commitIsBinary && !parentIsBinary {
-			edits := myers.ComputeEdits("parent", parentContent, commitContent)
-			unified := gotextdiff.ToUnified("parent", "commit", parentContent, edits)
+			commitLines := countLines(commitContent)
+			parentLines := countLines(parentContent)
 
-			// Modified is defined as changes that happened without a line without change in the middle
-			for _, hunk := range unified.Hunks {
-				add := 0
-				del := 0
-				for _, line := range hunk.Lines {
-					switch line.Kind {
-					case gotextdiff.Insert:
-						add++
-					case gotextdiff.Delete:
-						del++
-					default:
-						min := utils.Min(add, del)
-						gitChange.Modified += min
-						gitChange.Added += add - min
-						gitChange.Deleted += del - min
+			if parentLines == 0 {
+				gitChange.Added += commitLines
 
-						add = 0
-						del = 0
+			} else if commitLines == 0 {
+				gitChange.Deleted += parentLines
+
+			} else if parentLines > 10_000 || commitLines > 10_000 {
+				// gotextdiff goes out of memory
+				diffs := diff.Do(parentContent, commitContent)
+				for _, d := range diffs {
+					switch d.Type {
+					case diffmatchpatch.DiffDelete:
+						gitChange.Deleted += countLines(d.Text)
+					case diffmatchpatch.DiffInsert:
+						gitChange.Added += countLines(d.Text)
 					}
 				}
 
-				min := utils.Min(add, del)
-				gitChange.Modified += min
-				gitChange.Added += add - min
-				gitChange.Deleted += del - min
+			} else {
+				edits := myers.ComputeEdits("parent", parentContent, commitContent)
+				unified := gotextdiff.ToUnified("parent", "commit", parentContent, edits)
+
+				// Modified is defined as changes that happened without a line without change in the middle
+				for _, hunk := range unified.Hunks {
+					add := 0
+					del := 0
+					for _, line := range hunk.Lines {
+						switch line.Kind {
+						case gotextdiff.Insert:
+							add++
+						case gotextdiff.Delete:
+							del++
+						default:
+							min := utils.Min(add, del)
+							gitChange.Modified += min
+							gitChange.Added += add - min
+							gitChange.Deleted += del - min
+
+							add = 0
+							del = 0
+						}
+					}
+
+					min := utils.Min(add, del)
+					gitChange.Modified += min
+					gitChange.Added += add - min
+					gitChange.Deleted += del - min
+				}
 			}
 		}
 
@@ -338,8 +407,21 @@ func fileContent(f *object.File) (string, bool, error) {
 	return content, isBinary, err
 }
 
+func countLines(text string) int {
+	if text == "" {
+		return 0
+	}
+
+	result := strings.Count(text, "\n")
+	if text[len(text)-1] != '\n' {
+		result++
+	}
+	return result
+}
+
 type gitFileChange struct {
 	Name     string
+	OldName  string
 	Modified int
 	Added    int
 	Deleted  int

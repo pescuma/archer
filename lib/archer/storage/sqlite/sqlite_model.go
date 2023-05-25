@@ -75,7 +75,8 @@ type sqlFile struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	CommitFiles []sqlRepositoryCommitFile `gorm:"foreignKey:FileID"`
+	CommitFiles    []sqlRepositoryCommitFile `gorm:"foreignKey:FileID"`
+	CommitOldFiles []sqlRepositoryCommitFile `gorm:"foreignKey:OldFileID"`
 }
 
 type sqlPerson struct {
@@ -106,6 +107,7 @@ type sqlRepository struct {
 
 	Commits     []sqlRepositoryCommit     `gorm:"foreignKey:RepositoryID"`
 	CommitFiles []sqlRepositoryCommitFile `gorm:"foreignKey:RepositoryID"`
+	Files       []sqlFile                 `gorm:"foreignKey:RepositoryID"`
 }
 
 type sqlRepositoryCommit struct {
@@ -131,6 +133,7 @@ type sqlRepositoryCommit struct {
 type sqlRepositoryCommitFile struct {
 	CommitID      model.UUID `gorm:"primaryKey"`
 	FileID        model.UUID `gorm:"primaryKey"`
+	OldFileID     *model.UUID
 	RepositoryID  model.UUID `gorm:"index"`
 	ModifiedLines int
 	AddedLines    int
@@ -151,6 +154,6 @@ type sqlMetrics struct {
 	DependenciesGuice    *int
 	ComplexityCyclomatic *int
 	ComplexityCognitive  *int
-	Changes6Months       *int
+	ChangesSemester      *int
 	ChangesTotal         *int
 }

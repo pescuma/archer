@@ -1,7 +1,8 @@
 package model
 
 type RepositoryCommitFile struct {
-	FileID UUID
+	FileID    UUID
+	OldFileID *UUID
 
 	ModifiedLines int
 	AddedLines    int

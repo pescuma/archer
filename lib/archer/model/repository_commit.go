@@ -29,9 +29,10 @@ func NewRepositoryCommit(hash string) *RepositoryCommit {
 	}
 }
 
-func (c *RepositoryCommit) AddFile(fileID UUID, modifiedLines, addedLines, deletedLines int) {
+func (c *RepositoryCommit) AddFile(fileID UUID, oldFileID *UUID, modifiedLines, addedLines, deletedLines int) {
 	c.Files = append(c.Files, &RepositoryCommitFile{
 		FileID:        fileID,
+		OldFileID:     oldFileID,
 		ModifiedLines: modifiedLines,
 		AddedLines:    addedLines,
 		DeletedLines:  deletedLines,

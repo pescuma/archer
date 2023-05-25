@@ -1,6 +1,8 @@
 package model
 
 import (
+	"sort"
+
 	"github.com/samber/lo"
 )
 
@@ -28,7 +30,11 @@ func (p *Person) AddName(name string) {
 }
 
 func (p *Person) ListNames() []string {
-	return lo.Keys(p.names)
+	result := lo.Keys(p.names)
+	sort.Slice(result, func(i, j int) bool {
+		return result[i] < result[j]
+	})
+	return result
 }
 
 func (p *Person) AddEmail(email string) {
@@ -36,5 +42,9 @@ func (p *Person) AddEmail(email string) {
 }
 
 func (p *Person) ListEmails() []string {
-	return lo.Keys(p.emails)
+	result := lo.Keys(p.emails)
+	sort.Slice(result, func(i, j int) bool {
+		return result[i] < result[j]
+	})
+	return result
 }

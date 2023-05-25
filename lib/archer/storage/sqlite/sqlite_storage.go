@@ -395,7 +395,7 @@ func (s *sqliteStorage) LoadRepositories() (*model.Repositories, error) {
 	for _, sf := range sqlFiles {
 		commit := commitsById[sf.CommitID]
 
-		commit.AddFile(sf.FileID, sf.ModifiedLines, sf.AddedLines, sf.DeletedLines)
+		commit.AddFile(sf.FileID, sf.OldFileID, sf.ModifiedLines, sf.AddedLines, sf.DeletedLines)
 	}
 
 	return result, nil
@@ -443,7 +443,7 @@ func (s *sqliteStorage) LoadRepository(rootDir string) (*model.Repository, error
 
 		if sfs, ok := filesByCommit[sc.ID]; ok {
 			for _, sf := range sfs {
-				c.AddFile(sf.FileID, sf.ModifiedLines, sf.AddedLines, sf.DeletedLines)
+				c.AddFile(sf.FileID, sf.OldFileID, sf.ModifiedLines, sf.AddedLines, sf.DeletedLines)
 			}
 		}
 	}
@@ -544,7 +544,7 @@ func toSqlMetrics(metrics *model.Metrics) *sqlMetrics {
 		DependenciesGuice:    encodeMetric(metrics.GuiceDependencies),
 		ComplexityCyclomatic: encodeMetric(metrics.CyclomaticComplexity),
 		ComplexityCognitive:  encodeMetric(metrics.CognitiveComplexity),
-		Changes6Months:       encodeMetric(metrics.ChangesIn6Months),
+		ChangesSemester:      encodeMetric(metrics.ChangesIn6Months),
 		ChangesTotal:         encodeMetric(metrics.ChangesTotal),
 	}
 }
@@ -554,7 +554,7 @@ func toModelMetrics(metrics *sqlMetrics) *model.Metrics {
 		GuiceDependencies:    decodeMetric(metrics.DependenciesGuice),
 		CyclomaticComplexity: decodeMetric(metrics.ComplexityCyclomatic),
 		CognitiveComplexity:  decodeMetric(metrics.ComplexityCognitive),
-		ChangesIn6Months:     decodeMetric(metrics.Changes6Months),
+		ChangesIn6Months:     decodeMetric(metrics.ChangesSemester),
 		ChangesTotal:         decodeMetric(metrics.ChangesTotal),
 	}
 }
@@ -671,6 +671,7 @@ func toSqlRepositoryCommitFile(r *model.Repository, c *model.RepositoryCommit, f
 	return &sqlRepositoryCommitFile{
 		CommitID:      c.ID,
 		FileID:        f.FileID,
+		OldFileID:     f.OldFileID,
 		RepositoryID:  r.ID,
 		ModifiedLines: f.ModifiedLines,
 		AddedLines:    f.AddedLines,

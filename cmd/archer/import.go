@@ -90,41 +90,46 @@ type ImportGitCmd struct {
 	LimitDuration time.Duration `help:"Import commits only in this duration. Counted from current time."`
 	After         time.Time     `help:"Import commits after this date (inclusive)."`
 	Before        time.Time     `help:"Import commits before this date (exclusive)."`
+	SaveEvery     int           `help:"Save results after some number of commits."`
 }
 
 func (c *ImportGitCmd) Run(ctx *context) error {
-	Options := git.Options{
+	options := git.Options{
 		Incremental: c.Incremental,
 	}
 
 	if c.LimitImported != 0 {
-		Options.MaxImportedCommits = &c.LimitImported
+		options.MaxImportedCommits = &c.LimitImported
 	}
 	if c.LimitCommits != 0 {
-		Options.MaxCommits = &c.LimitCommits
-	}
-
-	emptyTime := time.Time{}
-	if c.After != emptyTime {
-		Options.After = &c.After
-	}
-	if c.Before != emptyTime {
-		Options.Before = &c.Before
+		options.MaxCommits = &c.LimitCommits
 	}
 
 	if c.LimitDuration != 0 {
 		before := time.Now()
 		after := before.Add(-c.LimitDuration)
 
-		if Options.After == nil || Options.After.Before(after) {
-			Options.After = &after
+		if options.After == nil || options.After.Before(after) {
+			options.After = &after
 		}
-		if Options.Before == nil || Options.Before.After(before) {
-			Options.Before = &before
+		if options.Before == nil || options.Before.After(before) {
+			options.Before = &before
 		}
 	}
 
-	g := git.NewImporter(c.Path, Options)
+	emptyTime := time.Time{}
+	if c.After != emptyTime {
+		options.After = &c.After
+	}
+	if c.Before != emptyTime {
+		options.Before = &c.Before
+	}
+
+	if c.SaveEvery != 0 {
+		options.SaveEvery = &c.SaveEvery
+	}
+
+	g := git.NewImporter(c.Path, options)
 
 	return ctx.ws.Import(g)
 }
