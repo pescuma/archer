@@ -108,7 +108,7 @@ func (g gitImporter) Import(storage archer.Storage) error {
 
 	commitNumber := 0
 	imported := 0
-	for _, w := range ws {
+	for i, w := range ws {
 		gr, err := git.PlainOpen(w.rootDir)
 		if err != nil {
 			return err
@@ -118,6 +118,8 @@ func (g gitImporter) Import(storage archer.Storage) error {
 		if err != nil {
 			return err
 		}
+
+		importedFromRepo := 0
 
 		err = commitsIter.ForEach(func(gc *object.Commit) error {
 			if !g.options.ShouldContinue(commitNumber, imported, gc.Committer.When) {
@@ -131,6 +133,7 @@ func (g gitImporter) Import(storage archer.Storage) error {
 			}
 
 			imported++
+			importedFromRepo++
 
 			grouper.add(gc.Author.Name, gc.Author.Email, nil)
 			grouper.add(gc.Committer.Name, gc.Committer.Email, nil)
@@ -138,6 +141,10 @@ func (g gitImporter) Import(storage archer.Storage) error {
 		})
 		if err != nil && err != abort {
 			return err
+		}
+
+		if importedFromRepo == 0 {
+			ws[i] = nil
 		}
 	}
 
@@ -173,9 +180,35 @@ func (g gitImporter) Import(storage archer.Storage) error {
 	fmt.Printf("Loading history...\n")
 
 	bar := utils.NewProgressBar(imported)
+
+	write := func(repo *model.Repository) error {
+		_ = bar.Clear()
+		fmt.Printf("Writing results...")
+
+		err = storage.WriteFiles(filesDB, archer.ChangedBasicInfo)
+		if err != nil {
+			return err
+		}
+
+		err = storage.WriteRepository(repo, archer.ChangedBasicInfo|archer.ChangedHistory)
+		if err != nil {
+			return err
+		}
+
+		fmt.Print("\r")
+		_ = bar.RenderBlank()
+
+		// Free memory
+		return nil
+	}
+
 	commitNumber = 0
 	imported = 0
-	for _, w := range ws {
+	for i, w := range ws {
+		if w == nil {
+			continue
+		}
+
 		gr, err := git.PlainOpen(w.rootDir)
 		if err != nil {
 			return err
@@ -187,6 +220,7 @@ func (g gitImporter) Import(storage archer.Storage) error {
 		}
 
 		touchedFiles := map[model.UUID]*model.File{}
+		importedFromRepo := 0
 		err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
 			if !g.options.ShouldContinue(commitNumber, imported, gitCommit.Committer.When) {
 				return abort
@@ -199,6 +233,7 @@ func (g gitImporter) Import(storage archer.Storage) error {
 			}
 
 			imported++
+			importedFromRepo++
 
 			bar.Describe(w.repo.Name + " " + gitCommit.Committer.When.Format("2006-01-02 15"))
 			_ = bar.Add(1)
@@ -259,22 +294,11 @@ func (g gitImporter) Import(storage archer.Storage) error {
 				touchedFiles[file.ID] = file
 			}
 
-			if g.options.SaveEvery != nil && imported%*g.options.SaveEvery == 0 {
-				_ = bar.Clear()
-				fmt.Printf("Writing results...")
-
-				err = storage.WriteFiles(filesDB, archer.ChangedBasicInfo)
+			if g.options.SaveEvery != nil && importedFromRepo%*g.options.SaveEvery == 0 {
+				err = write(w.repo)
 				if err != nil {
 					return err
 				}
-
-				err = storage.WriteRepository(w.repo, archer.ChangedBasicInfo|archer.ChangedHistory)
-				if err != nil {
-					return err
-				}
-
-				fmt.Print("\r")
-				_ = bar.RenderBlank()
 			}
 
 			return nil
@@ -283,23 +307,13 @@ func (g gitImporter) Import(storage archer.Storage) error {
 			return err
 		}
 
-		_ = bar.Clear()
-		fmt.Printf("Writing results...")
-
-		err = storage.WriteFiles(filesDB, archer.ChangedBasicInfo)
+		err = write(w.repo)
 		if err != nil {
 			return err
 		}
 
-		err = storage.WriteRepository(w.repo, archer.ChangedBasicInfo|archer.ChangedHistory)
-		if err != nil {
-			return err
-		}
-
-		fmt.Print("\r")
-		_ = bar.RenderBlank()
-
-		w.repo = nil
+		// Free memory
+		ws[i] = nil
 	}
 	_ = bar.Clear()
 
@@ -367,7 +381,7 @@ func computeChanges(commit *object.Commit, parent *object.Commit) ([]*gitFileCha
 
 			} else if parentLines > 10_000 || commitLines > 10_000 {
 				// gotextdiff goes out of memory
-				diffs := diff.Do(parentContent, commitContent)
+				diffs := diff.DoWithTimeout(parentContent, commitContent, 30*time.Second)
 				for _, d := range diffs {
 					switch d.Type {
 					case diffmatchpatch.DiffDelete:
