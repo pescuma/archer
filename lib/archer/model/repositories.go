@@ -18,6 +18,10 @@ func NewRepositories() *Repositories {
 	}
 }
 
+func (s *Repositories) Get(rootDir string) *Repository {
+	return s.byRootDir[rootDir]
+}
+
 func (s *Repositories) GetOrCreate(rootDir string) *Repository {
 	return s.GetOrCreateEx(rootDir, nil)
 }

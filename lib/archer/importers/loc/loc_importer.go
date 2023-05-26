@@ -64,15 +64,15 @@ func (l *locImporter) Import(storage archer.Storage) error {
 		if err == nil {
 			file.Exists = true
 
-			file.Size.Clear()
-			file.Size.Files = 1
-			file.Size.Bytes = int(stat.Size())
-
 			modTime := stat.ModTime().String()
 
 			if !l.options.Incremental || modTime != file.Data["loc:last_modified"] {
 				files = append(files, file)
 				file.Data["loc:last_modified"] = modTime
+
+				file.Size.Clear()
+				file.Size.Files = 1
+				file.Size.Bytes = int(stat.Size())
 			}
 
 		} else {
@@ -91,15 +91,6 @@ func (l *locImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
-	dirsByID := map[model.UUID]*model.ProjectDirectory{}
-
-	for _, proj := range ps {
-		for _, dir := range proj.Dirs {
-			dir.Size.Clear()
-			dirsByID[dir.ID] = dir
-		}
-	}
-
 	for _, file := range files {
 		if floc, ok := loc.Files[file.Path]; ok {
 			file.Size.Lines = int(floc.Code + floc.Comments + floc.Blanks)
@@ -107,25 +98,9 @@ func (l *locImporter) Import(storage archer.Storage) error {
 			file.Size.Other["Comments"] = int(floc.Comments)
 			file.Size.Other["Blanks"] = int(floc.Blanks)
 		}
-
-		if file.ProjectDirectoryID != nil {
-			if dir, ok := dirsByID[*file.ProjectDirectoryID]; ok {
-				dir.Size.Files += 1
-				dir.Size.Lines += file.Size.Lines
-				dir.Size.Other["Code"] += file.Size.Other["Code"]
-				dir.Size.Other["Comments"] += file.Size.Other["Comments"]
-				dir.Size.Other["Blanks"] += file.Size.Other["Blanks"]
-			}
-		}
 	}
 
-	for _, proj := range ps {
-		proj.Sizes = map[string]*model.Size{}
-
-		for _, dir := range proj.Dirs {
-			proj.AddSize(dir.Type.String(), dir.Size)
-		}
-	}
+	l.updateParents(ps, candidates)
 
 	fmt.Printf("Writing results...\n")
 
@@ -140,6 +115,27 @@ func (l *locImporter) Import(storage archer.Storage) error {
 	}
 
 	return nil
+}
+
+func (l *locImporter) updateParents(ps []*model.Project, files []*model.File) {
+	filesByDir := lo.GroupBy(
+		lo.Filter(files, func(f *model.File, _ int) bool { return f.ProjectDirectoryID != nil }),
+		func(f *model.File) model.UUID { return *f.ProjectDirectoryID },
+	)
+
+	for _, proj := range ps {
+		proj.Sizes = map[string]*model.Size{}
+
+		for _, dir := range proj.Dirs {
+			dir.Size.Clear()
+
+			for _, file := range filesByDir[dir.ID] {
+				dir.Size.Add(file.Size)
+			}
+
+			proj.AddSize(dir.Type.String(), dir.Size)
+		}
+	}
 }
 
 func (l *locImporter) computeLOC(files []*model.File) (*gocloc.Result, error) {

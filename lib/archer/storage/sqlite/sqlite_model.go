@@ -135,7 +135,7 @@ type sqlRepositoryCommitFile struct {
 	FileID        model.UUID `gorm:"primaryKey"`
 	OldFileID     *model.UUID
 	RepositoryID  model.UUID `gorm:"index"`
-	AddedLines    int
+	AddedLines    int        // TODO *
 	ModifiedLines int
 	DeletedLines  int
 
