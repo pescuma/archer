@@ -32,3 +32,11 @@ func (ps *People) GetOrCreate(name string) *Person {
 func (ps *People) List() []*Person {
 	return lo.Values(ps.all)
 }
+
+func (ps *People) ChangeName(person *Person, name string) {
+	delete(ps.all, person.Name)
+
+	person.Name = name
+
+	ps.all[name] = person
+}

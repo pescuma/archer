@@ -370,6 +370,7 @@ func (s *sqliteStorage) LoadRepositories() (*model.Repositories, error) {
 
 	for _, sr := range sqlRepos {
 		r := result.GetOrCreateEx(sr.RootDir, &sr.ID)
+		r.Name = sr.Name
 		r.VCS = sr.VCS
 		r.Data = sr.Data
 	}
@@ -380,6 +381,7 @@ func (s *sqliteStorage) LoadRepositories() (*model.Repositories, error) {
 
 		c := repo.GetCommit(sc.Name)
 		c.ID = sc.ID
+		c.Message = sc.Message
 		c.Parents = sc.Parents
 		c.Date = sc.Date
 		c.CommitterID = sc.CommitterID
@@ -432,6 +434,7 @@ func (s *sqliteStorage) LoadRepository(rootDir string) (*model.Repository, error
 	for _, sc := range sqlCommits {
 		c := result.GetCommit(sc.Name)
 		c.ID = sc.ID
+		c.Message = sc.Message
 		c.Parents = sc.Parents
 		c.Date = sc.Date
 		c.CommitterID = sc.CommitterID
@@ -644,7 +647,7 @@ func toSqlPerson(p *model.Person) *sqlPerson {
 func toSqlRepository(r *model.Repository) *sqlRepository {
 	return &sqlRepository{
 		ID:      r.ID,
-		Name:    fmt.Sprintf("%v:%v", r.VCS, r.RootDir),
+		Name:    r.Name,
 		RootDir: r.RootDir,
 		VCS:     r.VCS,
 		Data:    r.Data,
@@ -656,6 +659,7 @@ func toSqlRepositoryCommit(r *model.Repository, c *model.RepositoryCommit) *sqlR
 		ID:            c.ID,
 		RepositoryID:  r.ID,
 		Name:          c.Hash,
+		Message:       c.Message,
 		Parents:       c.Parents,
 		Date:          c.Date,
 		CommitterID:   c.CommitterID,

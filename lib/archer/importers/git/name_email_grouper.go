@@ -4,6 +4,9 @@ import (
 	"strings"
 
 	"github.com/samber/lo"
+
+	"github.com/Faire/archer/lib/archer/model"
+	"github.com/Faire/archer/lib/archer/utils"
 )
 
 type nameEmailGrouper struct {
@@ -18,7 +21,7 @@ func newNameEmailGrouper() *nameEmailGrouper {
 	}
 }
 
-func (g *nameEmailGrouper) add(name string, email string) {
+func (g *nameEmailGrouper) add(name string, email string, person *model.Person) {
 	if name == "" {
 		name = email
 	}
@@ -31,6 +34,8 @@ func (g *nameEmailGrouper) add(name string, email string) {
 			Names:  map[string]bool{},
 			Emails: map[string]bool{},
 		}
+
+		n.person = utils.Coalesce(n.person, person)
 
 		n.Names[name] = true
 		g.byName[name] = n
@@ -91,6 +96,7 @@ func (g *nameEmailGrouper) list() []*namesEmails {
 }
 
 type namesEmails struct {
+	person *model.Person
 	Name   string
 	Names  map[string]bool
 	Emails map[string]bool

@@ -57,6 +57,18 @@ func IIf[T any](test bool, ifTrue, ifFalse T) T {
 	}
 }
 
+func Coalesce[T comparable](vs ...T) T {
+	var def T
+
+	for _, v := range vs {
+		if v != def {
+			return v
+		}
+	}
+
+	return def
+}
+
 func MapContains[K comparable, V any](m map[K]V, k K) bool {
 	_, ok := m[k]
 	return ok

@@ -5,6 +5,7 @@ import (
 )
 
 type Repository struct {
+	Name    string
 	RootDir string
 	VCS     string
 	ID      UUID

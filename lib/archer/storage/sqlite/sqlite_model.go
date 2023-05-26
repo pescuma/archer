@@ -120,8 +120,8 @@ type sqlRepositoryCommit struct {
 	CommitterID   model.UUID `gorm:"index"`
 	DateAuthored  time.Time
 	AuthorID      model.UUID
-	ModifiedLines int
 	AddedLines    int
+	ModifiedLines int
 	DeletedLines  int
 
 	CreatedAt time.Time
@@ -135,8 +135,8 @@ type sqlRepositoryCommitFile struct {
 	FileID        model.UUID `gorm:"primaryKey"`
 	OldFileID     *model.UUID
 	RepositoryID  model.UUID `gorm:"index"`
-	ModifiedLines int
 	AddedLines    int
+	ModifiedLines int
 	DeletedLines  int
 
 	CreatedAt time.Time

@@ -21,8 +21,8 @@ import (
 )
 
 type gitImporter struct {
-	rootDir string
-	options Options
+	rootDirs []string
+	options  Options
 }
 
 type Options struct {
@@ -34,24 +34,30 @@ type Options struct {
 	SaveEvery          *int
 }
 
-func NewImporter(rootDir string, options Options) archer.Importer {
+func NewImporter(rootDirs []string, options Options) archer.Importer {
 	return &gitImporter{
-		rootDir: rootDir,
-		options: options,
+		rootDirs: rootDirs,
+		options:  options,
 	}
 }
 
+type work struct {
+	rootDir string
+	repo    *model.Repository
+}
+
 func (g gitImporter) Import(storage archer.Storage) error {
-	rootDir, err := filepath.Abs(g.rootDir)
-	if err != nil {
-		return err
-	}
+	ws := make([]*work, 0, len(g.rootDirs))
+	for _, rootDir := range g.rootDirs {
+		var err error
+		rootDir, err = filepath.Abs(rootDir)
+		if err != nil {
+			return err
+		}
 
-	fmt.Printf("Opening git repo...\n")
-
-	gr, err := git.PlainOpen(rootDir)
-	if err != nil {
-		return err
+		ws = append(ws, &work{
+			rootDir: rootDir,
+		})
 	}
 
 	fmt.Printf("Loading existing data...\n")
@@ -66,27 +72,23 @@ func (g gitImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
-	repo, err := storage.LoadRepository(rootDir)
-	if err != nil {
-		return err
+	for _, w := range ws {
+		w.repo, err = storage.LoadRepository(w.rootDir)
+		if err != nil {
+			return err
+		}
+
+		if w.repo == nil {
+			w.repo = model.NewRepository(w.rootDir, nil)
+		}
+
+		w.repo.Name = filepath.Base(w.rootDir)
+		w.repo.VCS = "git"
 	}
 
-	if repo == nil {
-		repo = model.NewRepository(rootDir, nil)
-	}
-
-	repo.VCS = "git"
+	abort := errors.New("ABORT")
 
 	fmt.Printf("Grouping authors...\n")
-
-	commitsIter, err := gr.Log(&git.LogOptions{})
-	if err != nil {
-		return err
-	}
-
-	commitNumber := 0
-	imported := 0
-	abort := errors.New("ABORT")
 
 	grouper := newNameEmailGrouper()
 
@@ -97,39 +99,61 @@ func (g gitImporter) Import(storage archer.Storage) error {
 		}
 
 		for _, email := range emails {
-			grouper.add(p.Name, email)
+			grouper.add(p.Name, email, p)
 		}
 		for _, name := range p.ListNames() {
-			grouper.add(name, emails[0])
+			grouper.add(name, emails[0], p)
 		}
 	}
 
-	total := 0
-	err = commitsIter.ForEach(func(gc *object.Commit) error {
-		if !g.options.ShouldContinue(total, imported, gc.Committer.When) {
-			return abort
+	commitNumber := 0
+	imported := 0
+	for _, w := range ws {
+		gr, err := git.PlainOpen(w.rootDir)
+		if err != nil {
+			return err
 		}
 
-		total++
+		commitsIter, err := gr.Log(&git.LogOptions{})
+		if err != nil {
+			return err
+		}
 
-		if g.options.Incremental && repo.ContainsCommit(gc.Hash.String()) {
+		err = commitsIter.ForEach(func(gc *object.Commit) error {
+			if !g.options.ShouldContinue(commitNumber, imported, gc.Committer.When) {
+				return abort
+			}
+
+			commitNumber++
+
+			if g.options.Incremental && w.repo.ContainsCommit(gc.Hash.String()) {
+				return nil
+			}
+
+			imported++
+
+			grouper.add(gc.Author.Name, gc.Author.Email, nil)
+			grouper.add(gc.Committer.Name, gc.Committer.Email, nil)
 			return nil
+		})
+		if err != nil && err != abort {
+			return err
 		}
-
-		imported++
-
-		grouper.add(gc.Author.Name, gc.Author.Email)
-		grouper.add(gc.Committer.Name, gc.Committer.Email)
-		return nil
-	})
-	if err != nil && err != abort {
-		return err
 	}
 
 	grouper.prepare()
 
 	for _, ne := range grouper.list() {
-		person := peopleDB.GetOrCreate(ne.Name)
+		var person *model.Person
+		if ne.person == nil {
+			person = peopleDB.GetOrCreate(ne.Name)
+
+		} else {
+			person = ne.person
+			if person.Name != ne.Name {
+				peopleDB.ChangeName(person, ne.Name)
+			}
+		}
 
 		for n := range ne.Names {
 			person.AddName(n)
@@ -139,138 +163,145 @@ func (g gitImporter) Import(storage archer.Storage) error {
 		}
 	}
 
-	fmt.Printf("Loading history...\n")
-
-	commitsIter, err = gr.Log(&git.LogOptions{})
-	if err != nil {
-		return err
-	}
-
-	bar := utils.NewProgressBar(imported)
-	commitNumber = 0
-	imported = 0
-	touchedFiles := map[model.UUID]*model.File{}
-	err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
-		if !g.options.ShouldContinue(commitNumber, imported, gitCommit.Committer.When) {
-			return abort
-		}
-
-		commitNumber++
-
-		if g.options.Incremental && repo.ContainsCommit(gitCommit.Hash.String()) {
-			return nil
-		}
-
-		imported++
-
-		bar.Describe(gitCommit.Committer.When.Format("2006-01-02 15:04"))
-		_ = bar.Add(1)
-
-		author := peopleDB.GetOrCreate(grouper.getName(gitCommit.Author.Email))
-		author.AddName(gitCommit.Author.Name)
-		author.AddEmail(gitCommit.Author.Email)
-
-		committer := peopleDB.GetOrCreate(grouper.getName(gitCommit.Committer.Email))
-		committer.AddName(gitCommit.Committer.Name)
-		committer.AddEmail(gitCommit.Committer.Email)
-
-		commit := repo.GetCommit(gitCommit.Hash.String())
-		commit.Message = strings.TrimSpace(gitCommit.Message)
-		commit.Date = gitCommit.Committer.When
-		commit.CommitterID = committer.ID
-		commit.DateAuthored = gitCommit.Author.When
-		commit.AuthorID = author.ID
-
-		var firstParent *object.Commit
-		err := gitCommit.Parents().ForEach(func(p *object.Commit) error {
-			if firstParent == nil {
-				firstParent = p
-			}
-			commit.Parents = append(commit.Parents, p.Hash.String())
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-
-		gitChanges, err := computeChanges(gitCommit, firstParent)
-		if err != nil {
-			return err
-		}
-
-		commit.ModifiedLines = 0
-		commit.AddedLines = 0
-		commit.DeletedLines = 0
-		commit.Files = nil
-
-		for _, gitFile := range gitChanges {
-			filePath := filepath.Join(rootDir, gitFile.Name)
-			oldFilePath := filepath.Join(rootDir, gitFile.OldName)
-
-			file := filesDB.GetOrCreate(filePath)
-			file.RepositoryID = &repo.ID
-
-			oldFile := filesDB.GetOrCreate(oldFilePath)
-			oldFile.RepositoryID = &repo.ID
-
-			commit.AddFile(file.ID, utils.IIf(file != oldFile, &oldFile.ID, nil), gitFile.Modified, gitFile.Added, gitFile.Deleted)
-
-			commit.ModifiedLines += gitFile.Modified
-			commit.AddedLines += gitFile.Added
-			commit.DeletedLines += gitFile.Deleted
-
-			touchedFiles[file.ID] = file
-		}
-
-		if g.options.SaveEvery != nil && imported%*g.options.SaveEvery == 0 {
-			_ = bar.Clear()
-			fmt.Print("Writing results...")
-
-			err := storage.WritePeople(peopleDB, archer.ChangedBasicInfo)
-			if err != nil {
-				return err
-			}
-
-			err = storage.WriteFiles(filesDB, archer.ChangedBasicInfo)
-			if err != nil {
-				return err
-			}
-
-			err = storage.WriteRepository(repo, archer.ChangedBasicInfo|archer.ChangedHistory)
-			if err != nil {
-				return err
-			}
-
-			fmt.Print("\r")
-			_ = bar.RenderBlank()
-		}
-
-		return nil
-	})
-	if err != nil && err != abort {
-		return err
-	}
-
-	if imported == 0 {
-		fmt.Printf("No new commits to import.\n")
-	}
-
-	fmt.Printf("Writing results...\n")
+	fmt.Printf("Writing people...\n")
 
 	err = storage.WritePeople(peopleDB, archer.ChangedBasicInfo)
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteFiles(filesDB, archer.ChangedBasicInfo)
-	if err != nil {
-		return err
-	}
+	fmt.Printf("Loading history...\n")
 
-	err = storage.WriteRepository(repo, archer.ChangedBasicInfo|archer.ChangedHistory)
-	if err != nil {
-		return err
+	bar := utils.NewProgressBar(imported)
+	commitNumber = 0
+	imported = 0
+	for _, w := range ws {
+		gr, err := git.PlainOpen(w.rootDir)
+		if err != nil {
+			return err
+		}
+
+		commitsIter, err := gr.Log(&git.LogOptions{})
+		if err != nil {
+			return err
+		}
+
+		touchedFiles := map[model.UUID]*model.File{}
+		err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
+			if !g.options.ShouldContinue(commitNumber, imported, gitCommit.Committer.When) {
+				return abort
+			}
+
+			commitNumber++
+
+			if g.options.Incremental && w.repo.ContainsCommit(gitCommit.Hash.String()) {
+				return nil
+			}
+
+			imported++
+
+			bar.Describe(w.repo.Name + " " + gitCommit.Committer.When.Format("2006-01-02 15"))
+			_ = bar.Add(1)
+
+			author := peopleDB.GetOrCreate(grouper.getName(gitCommit.Author.Email))
+			author.AddName(gitCommit.Author.Name)
+			author.AddEmail(gitCommit.Author.Email)
+
+			committer := peopleDB.GetOrCreate(grouper.getName(gitCommit.Committer.Email))
+			committer.AddName(gitCommit.Committer.Name)
+			committer.AddEmail(gitCommit.Committer.Email)
+
+			commit := w.repo.GetCommit(gitCommit.Hash.String())
+			commit.Message = strings.TrimSpace(gitCommit.Message)
+			commit.Date = gitCommit.Committer.When
+			commit.CommitterID = committer.ID
+			commit.DateAuthored = gitCommit.Author.When
+			commit.AuthorID = author.ID
+
+			var firstParent *object.Commit
+			err := gitCommit.Parents().ForEach(func(p *object.Commit) error {
+				if firstParent == nil {
+					firstParent = p
+				}
+				commit.Parents = append(commit.Parents, p.Hash.String())
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+
+			gitChanges, err := computeChanges(gitCommit, firstParent)
+			if err != nil {
+				return err
+			}
+
+			commit.ModifiedLines = 0
+			commit.AddedLines = 0
+			commit.DeletedLines = 0
+			commit.Files = nil
+
+			for _, gitFile := range gitChanges {
+				filePath := filepath.Join(w.rootDir, gitFile.Name)
+				oldFilePath := filepath.Join(w.rootDir, gitFile.OldName)
+
+				file := filesDB.GetOrCreate(filePath)
+				file.RepositoryID = &w.repo.ID
+
+				oldFile := filesDB.GetOrCreate(oldFilePath)
+				oldFile.RepositoryID = &w.repo.ID
+
+				commit.AddFile(file.ID, utils.IIf(file != oldFile, &oldFile.ID, nil), gitFile.Modified, gitFile.Added, gitFile.Deleted)
+
+				commit.ModifiedLines += gitFile.Modified
+				commit.AddedLines += gitFile.Added
+				commit.DeletedLines += gitFile.Deleted
+
+				touchedFiles[file.ID] = file
+			}
+
+			if g.options.SaveEvery != nil && imported%*g.options.SaveEvery == 0 {
+				_ = bar.Clear()
+				fmt.Printf("Writing results...")
+
+				err = storage.WriteFiles(filesDB, archer.ChangedBasicInfo)
+				if err != nil {
+					return err
+				}
+
+				err = storage.WriteRepository(w.repo, archer.ChangedBasicInfo|archer.ChangedHistory)
+				if err != nil {
+					return err
+				}
+
+				fmt.Print("\r")
+				_ = bar.RenderBlank()
+			}
+
+			return nil
+		})
+		if err != nil && err != abort {
+			return err
+		}
+
+		_ = bar.Clear()
+		fmt.Printf("Writing results...")
+
+		err = storage.WriteFiles(filesDB, archer.ChangedBasicInfo)
+		if err != nil {
+			return err
+		}
+
+		err = storage.WriteRepository(w.repo, archer.ChangedBasicInfo|archer.ChangedHistory)
+		if err != nil {
+			return err
+		}
+
+		fmt.Print("\r")
+		_ = bar.RenderBlank()
+
+		w.repo = nil
 	}
+	_ = bar.Clear()
 
 	return nil
 }
