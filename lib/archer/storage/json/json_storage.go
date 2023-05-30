@@ -456,12 +456,27 @@ func (s *jsonStorage) WritePeople(people *model.People, changes archer.StorageCh
 	panic("implement me")
 }
 
+func (s *jsonStorage) LoadRepositories() (repos *model.Repositories, err error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (s *jsonStorage) LoadRepository(rootDir string) (*model.Repository, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
 func (s *jsonStorage) WriteRepository(repo *model.Repository, changes archer.StorageChanges) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *jsonStorage) LoadConfig() (*map[string]string, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *jsonStorage) WriteConfig(m *map[string]string) error {
 	// TODO implement me
 	panic("implement me")
 }

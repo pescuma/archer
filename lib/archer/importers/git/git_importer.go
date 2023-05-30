@@ -92,7 +92,7 @@ func (g gitImporter) Import(storage archer.Storage) error {
 
 	grouper := newNameEmailGrouper()
 
-	for _, p := range peopleDB.List() {
+	for _, p := range peopleDB.ListPeople() {
 		emails := p.ListEmails()
 		if len(emails) == 0 {
 			continue
@@ -111,7 +111,9 @@ func (g gitImporter) Import(storage archer.Storage) error {
 	for i, w := range ws {
 		gr, err := git.PlainOpen(w.rootDir)
 		if err != nil {
-			return err
+			fmt.Printf("Skipping '%s': %s\n", w.rootDir, err)
+			ws[i] = nil
+			continue
 		}
 
 		commitsIter, err := gr.Log(&git.LogOptions{})
@@ -153,12 +155,12 @@ func (g gitImporter) Import(storage archer.Storage) error {
 	for _, ne := range grouper.list() {
 		var person *model.Person
 		if ne.person == nil {
-			person = peopleDB.GetOrCreate(ne.Name)
+			person = peopleDB.GetOrCreatePerson(ne.Name)
 
 		} else {
 			person = ne.person
 			if person.Name != ne.Name {
-				peopleDB.ChangeName(person, ne.Name)
+				peopleDB.ChangePersonName(person, ne.Name)
 			}
 		}
 
@@ -195,8 +197,8 @@ func (g gitImporter) Import(storage archer.Storage) error {
 			return err
 		}
 
-		fmt.Print("\r")
-		_ = bar.RenderBlank()
+		// fmt.Print("\r")
+		// _ = bar.RenderBlank()
 
 		// Free memory
 		return nil
@@ -238,11 +240,11 @@ func (g gitImporter) Import(storage archer.Storage) error {
 			bar.Describe(w.repo.Name + " " + gitCommit.Committer.When.Format("2006-01-02 15"))
 			_ = bar.Add(1)
 
-			author := peopleDB.GetOrCreate(grouper.getName(gitCommit.Author.Email))
+			author := peopleDB.GetOrCreatePerson(grouper.getName(gitCommit.Author.Email))
 			author.AddName(gitCommit.Author.Name)
 			author.AddEmail(gitCommit.Author.Email)
 
-			committer := peopleDB.GetOrCreate(grouper.getName(gitCommit.Committer.Email))
+			committer := peopleDB.GetOrCreatePerson(grouper.getName(gitCommit.Committer.Email))
 			committer.AddName(gitCommit.Committer.Name)
 			committer.AddEmail(gitCommit.Committer.Email)
 

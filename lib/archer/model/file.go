@@ -9,6 +9,8 @@ type File struct {
 
 	RepositoryID *UUID
 
+	TeamID *UUID
+
 	Exists  bool
 	Size    *Size
 	Metrics *Metrics

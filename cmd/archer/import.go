@@ -9,6 +9,7 @@ import (
 	"github.com/Faire/archer/lib/archer/importers/loc"
 	"github.com/Faire/archer/lib/archer/importers/metrics"
 	"github.com/Faire/archer/lib/archer/importers/mysql"
+	"github.com/Faire/archer/lib/archer/importers/owners"
 )
 
 type ImportGradleCmd struct {
@@ -130,6 +131,29 @@ func (c *ImportGitCmd) Run(ctx *context) error {
 	}
 
 	g := git.NewImporter(c.Paths, options)
+
+	return ctx.ws.Import(g)
+}
+
+type ImportOwnersCmd struct {
+	Filters       []string `default:"" help:"Filters to be applied to the projects. Empty means all."`
+	Incremental   bool     `default:"true" negatable:"" help:"Don't import files already imported."`
+	LimitImported int      `help:"Limit the number of imported files. Can be used to incrementally import data."`
+	SaveEvery     int      `help:"Save results after some number of files."`
+}
+
+func (c *ImportOwnersCmd) Run(ctx *context) error {
+	options := owners.Options{
+		Incremental: c.Incremental,
+	}
+	if c.LimitImported != 0 {
+		options.MaxImportedFiles = &c.LimitImported
+	}
+	if c.SaveEvery != 0 {
+		options.SaveEvery = &c.SaveEvery
+	}
+
+	g := owners.NewImporter(c.Filters, options)
 
 	return ctx.ws.Import(g)
 }

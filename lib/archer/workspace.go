@@ -51,7 +51,29 @@ func (w *Workspace) Import(importer Importer) error {
 	return importer.Import(w.storage)
 }
 
-func (w *Workspace) SetConfigParameter(proj *model.Project, config string, value string) (bool, error) {
+func (w *Workspace) SetGlobalConfig(config string, value string) (bool, error) {
+	cfg, err := w.storage.LoadConfig()
+	if err != nil {
+		return false, err
+	}
+
+	v, ok := (*cfg)[config]
+	if ok && v != value {
+		return false, nil
+	}
+
+	(*cfg)[config] = value
+
+	err = w.storage.WriteConfig(cfg)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+
+}
+
+func (w *Workspace) SetProjectConfig(proj *model.Project, config string, value string) (bool, error) {
 	changed := proj.SetData(config, value)
 
 	if changed {

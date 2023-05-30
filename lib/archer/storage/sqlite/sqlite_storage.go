@@ -25,11 +25,13 @@ import (
 type sqliteStorage struct {
 	db *gorm.DB
 
+	configs         map[string]*sqlConfig
 	projs           map[model.UUID]*sqlProject
 	projDeps        map[model.UUID]*sqlProjectDependency
 	projDirs        map[model.UUID]*sqlProjectDirectory
 	files           map[model.UUID]*sqlFile
 	people          map[model.UUID]*sqlPerson
+	teams           map[model.UUID]*sqlTeam
 	repos           map[model.UUID]*sqlRepository
 	repoCommits     map[model.UUID]*sqlRepositoryCommit
 	repoCommitFiles map[model.UUID]*sqlRepositoryCommitFile
@@ -68,9 +70,10 @@ func NewSqliteStorage(file string) (archer.Storage, error) {
 	}
 
 	err = db.AutoMigrate(
+		&sqlConfig{},
 		&sqlProject{}, &sqlProjectDependency{}, &sqlProjectDirectory{},
 		&sqlFile{},
-		&sqlPerson{},
+		&sqlPerson{}, &sqlTeam{},
 		&sqlRepository{}, &sqlRepositoryCommit{}, &sqlRepositoryCommitFile{},
 	)
 	if err != nil {
@@ -78,7 +81,16 @@ func NewSqliteStorage(file string) (archer.Storage, error) {
 	}
 
 	return &sqliteStorage{
-		db: db,
+		db:              db,
+		configs:         map[string]*sqlConfig{},
+		projs:           map[model.UUID]*sqlProject{},
+		projDeps:        map[model.UUID]*sqlProjectDependency{},
+		projDirs:        map[model.UUID]*sqlProjectDirectory{},
+		files:           map[model.UUID]*sqlFile{},
+		people:          map[model.UUID]*sqlPerson{},
+		repos:           map[model.UUID]*sqlRepository{},
+		repoCommits:     map[model.UUID]*sqlRepositoryCommit{},
+		repoCommitFiles: map[model.UUID]*sqlRepositoryCommitFile{},
 	}, nil
 }
 
@@ -215,6 +227,8 @@ func (s *sqliteStorage) writeProjects(projs []*model.Project, changes archer.Sto
 		if err != nil {
 			return err
 		}
+
+		addList(&s.projs, sqlProjs, func(s *sqlProject) model.UUID { return s.ID })
 	}
 
 	if changedDeps {
@@ -222,6 +236,8 @@ func (s *sqliteStorage) writeProjects(projs []*model.Project, changes archer.Sto
 		if err != nil {
 			return err
 		}
+
+		addList(&s.projDeps, sqlDeps, func(s *sqlProjectDependency) model.UUID { return s.ID })
 	}
 
 	if changedDirs {
@@ -229,6 +245,8 @@ func (s *sqliteStorage) writeProjects(projs []*model.Project, changes archer.Sto
 		if err != nil {
 			return err
 		}
+
+		addList(&s.projDirs, sqlDirs, func(s *sqlProjectDirectory) model.UUID { return s.ID })
 	}
 
 	// TODO delete
@@ -255,6 +273,7 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 		f.ProjectID = sf.ProjectID
 		f.ProjectDirectoryID = sf.ProjectDirectoryID
 		f.RepositoryID = sf.RepositoryID
+		f.TeamID = sf.TeamID
 		f.Exists = sf.Exists
 		f.Size = toModelSize(sf.Size)
 		f.Metrics = toModelMetrics(sf.Metrics)
@@ -265,7 +284,9 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 }
 
 func (s *sqliteStorage) WriteFiles(files *model.Files, changes archer.StorageChanges) error {
-	changedFiles := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedData != 0 || changes&archer.ChangedSize != 0 || changes&archer.ChangedMetrics != 0
+	changedFiles := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedData != 0 ||
+		changes&archer.ChangedSize != 0 || changes&archer.ChangedMetrics != 0 ||
+		changes&archer.ChangedTeams != 0
 	if !changedFiles {
 		return nil
 	}
@@ -291,6 +312,8 @@ func (s *sqliteStorage) WriteFiles(files *model.Files, changes archer.StorageCha
 		return err
 	}
 
+	addList(&s.files, sqlFiles, func(s *sqlFile) model.UUID { return s.ID })
+
 	// TODO delete
 
 	return nil
@@ -309,8 +332,23 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 		return i.ID, i
 	})
 
+	var teams []*sqlTeam
+	err = s.db.Find(&teams).Error
+	if err != nil {
+		return nil, err
+	}
+
+	s.teams = lo.Associate(teams, func(i *sqlTeam) (model.UUID, *sqlTeam) {
+		return i.ID, i
+	})
+
+	for _, st := range teams {
+		t := result.GetOrCreateTeamEx(st.Name, &st.ID)
+		t.Data = st.Data
+	}
+
 	for _, sp := range people {
-		p := result.GetOrCreate(sp.Name)
+		p := result.GetOrCreatePerson(sp.Name)
 		p.ID = sp.ID
 
 		for _, name := range sp.Names {
@@ -320,24 +358,38 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 			p.AddEmail(email)
 		}
 		p.Data = sp.Data
+
+		if sp.TeamID != nil {
+			p.Team = result.GeTeamByID(*sp.TeamID)
+		}
 	}
 
 	return result, nil
 }
 
-func (s *sqliteStorage) WritePeople(people *model.People, changes archer.StorageChanges) error {
-	changedPeople := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedData != 0
-	if !changedPeople {
+func (s *sqliteStorage) WritePeople(peopleDB *model.People, changes archer.StorageChanges) error {
+	changed := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedData != 0
+	if !changed {
 		return nil
 	}
 
-	all := people.List()
+	people := peopleDB.ListPeople()
 
-	sqlPeople := make([]*sqlPerson, 0, len(all))
-	for _, p := range all {
+	var sqlPeople []*sqlPerson
+	for _, p := range people {
 		sp := toSqlPerson(p)
 		if prepareChange(&s.people, sp.ID, sp) {
 			sqlPeople = append(sqlPeople, sp)
+		}
+	}
+
+	teams := peopleDB.ListTeams()
+
+	var sqlTeams []*sqlTeam
+	for _, t := range teams {
+		st := toSqlTeam(t)
+		if prepareChange(&s.teams, st.ID, st) {
+			sqlTeams = append(sqlTeams, st)
 		}
 	}
 
@@ -351,6 +403,15 @@ func (s *sqliteStorage) WritePeople(people *model.People, changes archer.Storage
 	if err != nil {
 		return err
 	}
+
+	addList(&s.people, sqlPeople, func(s *sqlPerson) model.UUID { return s.ID })
+
+	err = db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlTeams, 1000).Error
+	if err != nil {
+		return err
+	}
+
+	addList(&s.teams, sqlTeams, func(s *sqlTeam) model.UUID { return s.ID })
 
 	// TODO delete
 
@@ -387,15 +448,21 @@ func (s *sqliteStorage) LoadRepository(rootDir string) (*model.Repository, error
 }
 
 func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm.DB) *gorm.DB) (*model.Repositories, error) {
+	result := model.NewRepositories()
+
 	var repos []*sqlRepository
 	err := s.db.Scopes(scope(repos)).Find(&repos).Error
 	if err != nil {
 		return nil, err
 	}
 
-	s.repos = lo.Associate(repos, func(i *sqlRepository) (model.UUID, *sqlRepository) {
+	addMap(&s.repos, lo.Associate(repos, func(i *sqlRepository) (model.UUID, *sqlRepository) {
 		return i.ID, i
-	})
+	}))
+
+	if len(repos) == 0 {
+		return result, nil
+	}
 
 	var commits []*sqlRepositoryCommit
 	err = s.db.Scopes(scope(repos)).Find(&commits).Error
@@ -403,9 +470,9 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 		return nil, err
 	}
 
-	s.repoCommits = lo.Associate(commits, func(i *sqlRepositoryCommit) (model.UUID, *sqlRepositoryCommit) {
+	addMap(&s.repoCommits, lo.Associate(commits, func(i *sqlRepositoryCommit) (model.UUID, *sqlRepositoryCommit) {
 		return i.ID, i
-	})
+	}))
 
 	var commitFiles []*sqlRepositoryCommitFile
 	err = s.db.Scopes(scope(repos)).Find(&commitFiles).Error
@@ -413,11 +480,9 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 		return nil, err
 	}
 
-	s.repoCommitFiles = lo.Associate(commitFiles, func(i *sqlRepositoryCommitFile) (model.UUID, *sqlRepositoryCommitFile) {
+	addMap(&s.repoCommitFiles, lo.Associate(commitFiles, func(i *sqlRepositoryCommitFile) (model.UUID, *sqlRepositoryCommitFile) {
 		return i.CommitID + "\n" + i.FileID, i
-	})
-
-	result := model.NewRepositories()
+	}))
 
 	for _, sr := range repos {
 		r := result.GetOrCreateEx(sr.RootDir, &sr.ID)
@@ -500,6 +565,8 @@ func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.S
 		if err != nil {
 			return err
 		}
+
+		addList(&s.repos, sqlRepos, func(s *sqlRepository) model.UUID { return s.ID })
 	}
 
 	if changedCommits {
@@ -507,6 +574,8 @@ func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.S
 		if err != nil {
 			return err
 		}
+
+		addList(&s.repoCommits, sqlCommits, func(s *sqlRepositoryCommit) model.UUID { return s.ID })
 	}
 
 	if changedFiles {
@@ -514,11 +583,67 @@ func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.S
 		if err != nil {
 			return err
 		}
+
+		addList(&s.repoCommitFiles, sqlCommitFiles, func(s *sqlRepositoryCommitFile) model.UUID { return s.CommitID + "\n" + s.FileID })
 	}
 
 	// TODO delete
 
 	return nil
+}
+
+func (s *sqliteStorage) LoadConfig() (*map[string]string, error) {
+	result := map[string]string{}
+
+	var sqlConfigs []*sqlConfig
+	err := s.db.Find(&sqlConfigs).Error
+	if err != nil {
+		return nil, err
+	}
+
+	s.configs = lo.Associate(sqlConfigs, func(i *sqlConfig) (string, *sqlConfig) {
+		return i.Key, i
+	})
+
+	for _, sc := range sqlConfigs {
+		result[sc.Key] = sc.Value
+	}
+
+	return &result, nil
+}
+
+func (s *sqliteStorage) WriteConfig(configs *map[string]string) error {
+	var sqlConfigs []*sqlConfig
+	for k, v := range *configs {
+		sc := toSqlConfig(k, v)
+		if prepareChange(&s.configs, sc.Key, sc) {
+			sqlConfigs = append(sqlConfigs, sc)
+		}
+	}
+
+	now := time.Now().Local()
+	db := s.db.Session(&gorm.Session{
+		NowFunc:         func() time.Time { return now },
+		CreateBatchSize: 100,
+	})
+
+	err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlConfigs, 1000).Error
+	if err != nil {
+		return err
+	}
+
+	addList(&s.configs, sqlConfigs, func(s *sqlConfig) string { return s.Key })
+
+	// TODO delete
+
+	return nil
+}
+
+func toSqlConfig(k string, v string) *sqlConfig {
+	return &sqlConfig{
+		Key:   k,
+		Value: v,
+	}
 }
 
 func toSqlSize(size *model.Size) *sqlSize {
@@ -624,6 +749,7 @@ func toSqlFile(f *model.File) *sqlFile {
 		ProjectID:          f.ProjectID,
 		ProjectDirectoryID: f.ProjectDirectoryID,
 		RepositoryID:       f.RepositoryID,
+		TeamID:             f.TeamID,
 		Exists:             f.Exists,
 		Size:               toSqlSize(f.Size),
 		Metrics:            toSqlMetrics(f.Metrics),
@@ -632,12 +758,26 @@ func toSqlFile(f *model.File) *sqlFile {
 }
 
 func toSqlPerson(p *model.Person) *sqlPerson {
-	return &sqlPerson{
+	result := &sqlPerson{
 		ID:     p.ID,
 		Name:   p.Name,
 		Names:  p.ListNames(),
 		Emails: p.ListEmails(),
 		Data:   p.Data,
+	}
+
+	if p.Team != nil {
+		result.TeamID = &p.Team.ID
+	}
+
+	return result
+}
+
+func toSqlTeam(t *model.Team) *sqlTeam {
+	return &sqlTeam{
+		ID:   t.ID,
+		Name: t.Name,
+		Data: t.Data,
 	}
 }
 
@@ -680,7 +820,18 @@ func toSqlRepositoryCommitFile(r *model.Repository, c *model.RepositoryCommit, f
 	}
 }
 
-func prepareChange[T any](byID *map[model.UUID]T, id model.UUID, n T) bool {
+func addMap[K comparable, V any](target *map[K]V, toAdd map[K]V) {
+	for k, v := range toAdd {
+		(*target)[k] = v
+	}
+}
+func addList[K comparable, V any](target *map[K]V, toAdd []V, key func(V) K) {
+	for _, v := range toAdd {
+		(*target)[key(v)] = v
+	}
+}
+
+func prepareChange[K comparable, V any](byID *map[K]V, id K, n V) bool {
 	o, ok := (*byID)[id]
 	if ok {
 		ro := reflect.Indirect(reflect.ValueOf(o))

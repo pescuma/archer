@@ -9,19 +9,22 @@ import (
 type Person struct {
 	Name string
 	ID   UUID
+	Team *Team
 
-	names  map[string]bool
-	emails map[string]bool
-	Data   map[string]string
+	names   map[string]bool
+	emails  map[string]bool
+	Metrics *Metrics
+	Data    map[string]string
 }
 
 func NewPerson(name string) *Person {
 	return &Person{
-		Name:   name,
-		ID:     NewUUID("a"),
-		names:  map[string]bool{},
-		emails: map[string]bool{},
-		Data:   map[string]string{},
+		Name:    name,
+		ID:      NewUUID("a"),
+		names:   map[string]bool{},
+		emails:  map[string]bool{},
+		Metrics: NewMetrics(),
+		Data:    map[string]string{},
 	}
 }
 

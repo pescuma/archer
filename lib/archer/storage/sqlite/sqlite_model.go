@@ -6,6 +6,14 @@ import (
 	"github.com/Faire/archer/lib/archer/model"
 )
 
+type sqlConfig struct {
+	Key   string `gorm:"primaryKey"`
+	Value string
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type sqlProject struct {
 	ID          model.UUID
 	Name        string
@@ -66,6 +74,7 @@ type sqlFile struct {
 	ProjectID          *model.UUID `gorm:"index"`
 	ProjectDirectoryID *model.UUID `gorm:"index"`
 	RepositoryID       *model.UUID `gorm:"index"`
+	TeamID             *model.UUID `gorm:"index"`
 
 	Exists  bool
 	Size    *sqlSize          `gorm:"embedded;embeddedPrefix:size_"`
@@ -80,8 +89,9 @@ type sqlFile struct {
 }
 
 type sqlPerson struct {
-	ID   model.UUID
-	Name string
+	ID     model.UUID
+	Name   string
+	TeamID *model.UUID
 
 	Names  []string          `gorm:"serializer:json"`
 	Emails []string          `gorm:"serializer:json"`
@@ -92,6 +102,18 @@ type sqlPerson struct {
 
 	CommitAuthored []sqlRepositoryCommit `gorm:"foreignKey:AuthorID"`
 	CommitCommited []sqlRepositoryCommit `gorm:"foreignKey:CommitterID"`
+}
+
+type sqlTeam struct {
+	ID   model.UUID
+	Name string
+
+	Data map[string]string `gorm:"serializer:json"`
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	People []sqlPerson `gorm:"foreignKey:TeamID"`
 }
 
 type sqlRepository struct {

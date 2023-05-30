@@ -13,6 +13,7 @@ const (
 	ChangedSize
 	ChangedHistory
 	ChangedMetrics
+	ChangedTeams
 
 	ChangedAll = 0xffff
 )
@@ -31,6 +32,9 @@ type Storage interface {
 	LoadRepositories() (repos *model.Repositories, err error)
 	LoadRepository(rootDir string) (*model.Repository, error)
 	WriteRepository(repo *model.Repository, changes StorageChanges) error
+
+	LoadConfig() (*map[string]string, error)
+	WriteConfig(*map[string]string) error
 }
 
 type StorageFactory = func(path string) (Storage, error)
