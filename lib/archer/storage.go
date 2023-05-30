@@ -10,10 +10,11 @@ const (
 	ChangedBasicInfo StorageChanges = 1 << iota
 	ChangedData
 	ChangedDependencies
-	ChangedSize
 	ChangedHistory
-	ChangedMetrics
 	ChangedTeams
+	ChangedSize
+	ChangedMetrics
+	ChangedChanges
 
 	ChangedAll = 0xffff
 )

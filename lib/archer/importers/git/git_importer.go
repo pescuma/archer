@@ -13,6 +13,7 @@ import (
 	"github.com/hexops/gotextdiff"
 	"github.com/hexops/gotextdiff/myers"
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 	"github.com/sergi/go-diff/diffmatchpatch"
 
 	"github.com/Faire/archer/lib/archer"
@@ -47,20 +48,12 @@ type work struct {
 }
 
 func (g gitImporter) Import(storage archer.Storage) error {
-	ws := make([]*work, 0, len(g.rootDirs))
-	for _, rootDir := range g.rootDirs {
-		var err error
-		rootDir, err = filepath.Abs(rootDir)
-		if err != nil {
-			return err
-		}
-
-		ws = append(ws, &work{
-			rootDir: rootDir,
-		})
-	}
-
 	fmt.Printf("Loading existing data...\n")
+
+	projectsDB, err := storage.LoadProjects()
+	if err != nil {
+		return err
+	}
 
 	filesDB, err := storage.LoadFiles()
 	if err != nil {
@@ -72,23 +65,14 @@ func (g gitImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
-	for _, w := range ws {
-		w.repo, err = storage.LoadRepository(w.rootDir)
-		if err != nil {
-			return err
-		}
-
-		if w.repo == nil {
-			w.repo = model.NewRepository(w.rootDir, nil)
-		}
-
-		w.repo.Name = filepath.Base(w.rootDir)
-		w.repo.VCS = "git"
+	reposDB, err := storage.LoadRepositories()
+	if err != nil {
+		return err
 	}
 
 	abort := errors.New("ABORT")
 
-	fmt.Printf("Grouping authors...\n")
+	fmt.Printf("Preparing and grouping authors...\n")
 
 	grouper := newNameEmailGrouper()
 
@@ -108,11 +92,17 @@ func (g gitImporter) Import(storage archer.Storage) error {
 
 	commitNumber := 0
 	imported := 0
-	for i, w := range ws {
-		gr, err := git.PlainOpen(w.rootDir)
+	ws := make([]*work, 0, len(g.rootDirs))
+	for _, rootDir := range g.rootDirs {
+		var err error
+		rootDir, err = filepath.Abs(rootDir)
 		if err != nil {
-			fmt.Printf("Skipping '%s': %s\n", w.rootDir, err)
-			ws[i] = nil
+			return err
+		}
+
+		gr, err := git.PlainOpen(rootDir)
+		if err != nil {
+			fmt.Printf("Skipping '%s': %s\n", rootDir, err)
 			continue
 		}
 
@@ -120,6 +110,10 @@ func (g gitImporter) Import(storage archer.Storage) error {
 		if err != nil {
 			return err
 		}
+
+		repo := reposDB.GetOrCreate(rootDir)
+		repo.Name = filepath.Base(rootDir)
+		repo.VCS = "git"
 
 		importedFromRepo := 0
 
@@ -130,7 +124,7 @@ func (g gitImporter) Import(storage archer.Storage) error {
 
 			commitNumber++
 
-			if g.options.Incremental && w.repo.ContainsCommit(gc.Hash.String()) {
+			if g.options.Incremental && repo.ContainsCommit(gc.Hash.String()) {
 				return nil
 			}
 
@@ -145,8 +139,11 @@ func (g gitImporter) Import(storage archer.Storage) error {
 			return err
 		}
 
-		if importedFromRepo == 0 {
-			ws[i] = nil
+		if importedFromRepo > 0 {
+			ws = append(ws, &work{
+				rootDir: rootDir,
+				repo:    repo,
+			})
 		}
 	}
 
@@ -197,10 +194,6 @@ func (g gitImporter) Import(storage archer.Storage) error {
 			return err
 		}
 
-		// fmt.Print("\r")
-		// _ = bar.RenderBlank()
-
-		// Free memory
 		return nil
 	}
 
@@ -318,6 +311,27 @@ func (g gitImporter) Import(storage archer.Storage) error {
 		ws[i] = nil
 	}
 	_ = bar.Clear()
+
+	fmt.Printf("Propagating changes to parents...\n")
+
+	propagateChangesToParents(reposDB, projectsDB, filesDB, peopleDB)
+
+	fmt.Printf("Writing results...\n")
+
+	err = storage.WriteProjects(projectsDB, archer.ChangedChanges)
+	if err != nil {
+		return err
+	}
+
+	err = storage.WriteFiles(filesDB, archer.ChangedChanges)
+	if err != nil {
+		return err
+	}
+
+	err = storage.WritePeople(peopleDB, archer.ChangedChanges)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -464,6 +478,88 @@ func countLines(text string) int {
 		result++
 	}
 	return result
+}
+
+func propagateChangesToParents(reposDB *model.Repositories, projectsDB *model.Projects, filesDB *model.Files, peopleDB *model.People) {
+	dirsByIDs := map[model.UUID]*model.ProjectDirectory{}
+	for _, p := range projectsDB.ListProjects(model.FilterExcludeExternal) {
+		for _, d := range p.Dirs {
+			dirsByIDs[d.ID] = d
+		}
+	}
+
+	for _, p := range projectsDB.ListProjects(model.FilterExcludeExternal) {
+		p.Changes.Clear()
+		for _, d := range p.Dirs {
+			d.Changes.Clear()
+		}
+	}
+	for _, p := range peopleDB.ListPeople() {
+		p.Changes.Clear()
+	}
+	for _, t := range peopleDB.ListTeams() {
+		t.Changes.Clear()
+	}
+
+	now := time.Now()
+
+	for _, repo := range reposDB.List() {
+		for _, c := range repo.ListCommits() {
+			inLast6Months := now.Sub(c.Date) < 6*30*24*time.Hour
+			addChanges := func(c *model.Changes) {
+				c.In6Months += utils.IIf(inLast6Months, 1, 0)
+				c.Total++
+			}
+
+			a := peopleDB.GetPersonByID(c.AuthorID)
+			addChanges(a.Changes)
+
+			projs := map[*model.Project]bool{}
+			dirs := map[*model.ProjectDirectory]bool{}
+			teams := map[*model.Team]bool{}
+			for _, cf := range c.Files {
+				addLines := func(c *model.Changes) {
+					c.ModifiedLines += cf.ModifiedLines
+					c.AddedLines += cf.AddedLines
+					c.DeletedLines += cf.DeletedLines
+				}
+
+				f := filesDB.GetByID(cf.FileID)
+				addChanges(f.Changes)
+				addLines(f.Changes)
+
+				addLines(a.Changes)
+
+				if f.ProjectID != nil {
+					p := projectsDB.GetByID(*f.ProjectID)
+					addLines(p.Changes)
+					projs[p] = true
+				}
+				if f.ProjectDirectoryID != nil {
+					d := dirsByIDs[*f.ProjectDirectoryID]
+					addLines(d.Changes)
+					dirs[d] = true
+				}
+				if f.TeamID != nil {
+					t := peopleDB.GetTeamByID(*f.TeamID)
+					addLines(t.Changes)
+					teams[t] = true
+				}
+			}
+
+			for _, p := range lo.Keys(projs) {
+				addChanges(p.Changes)
+			}
+
+			for _, d := range lo.Keys(dirs) {
+				addChanges(d.Changes)
+			}
+
+			for _, t := range lo.Keys(teams) {
+				addChanges(t.Changes)
+			}
+		}
+	}
 }
 
 type gitFileChange struct {

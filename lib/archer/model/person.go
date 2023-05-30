@@ -14,6 +14,7 @@ type Person struct {
 	names   map[string]bool
 	emails  map[string]bool
 	Size    *Size
+	Changes *Changes
 	Metrics *Metrics
 	Data    map[string]string
 }
@@ -32,6 +33,7 @@ func NewPerson(name string, id *UUID) *Person {
 		names:   map[string]bool{},
 		emails:  map[string]bool{},
 		Size:    NewSize(),
+		Changes: NewChanges(),
 		Metrics: NewMetrics(),
 		Data:    map[string]string{},
 	}

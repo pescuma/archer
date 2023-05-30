@@ -139,6 +139,7 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 		for k, v := range sp.Sizes {
 			p.Sizes[k] = toModelSize(v)
 		}
+		p.Changes = toModelChanges(sp.Changes)
 		p.Metrics = toModelMetricsAggregate(sp.Metrics)
 		p.Data = cloneMap(sp.Data)
 	}
@@ -159,6 +160,7 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 		d.ID = sd.ID
 		d.Type = sd.Type
 		d.Size = toModelSize(sd.Size)
+		d.Changes = toModelChanges(sd.Changes)
 		d.Metrics = toModelMetricsAggregate(sd.Metrics)
 		d.Data = cloneMap(sd.Data)
 	}
@@ -276,6 +278,7 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 		f.TeamID = sf.TeamID
 		f.Exists = sf.Exists
 		f.Size = toModelSize(sf.Size)
+		f.Changes = toModelChanges(sf.Changes)
 		f.Metrics = toModelMetrics(sf.Metrics)
 		f.Data = cloneMap(sf.Data)
 	}
@@ -345,13 +348,13 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 	for _, st := range teams {
 		t := result.GetOrCreateTeamEx(st.Name, &st.ID)
 		t.Size = toModelSize(st.Size)
+		t.Changes = toModelChanges(st.Changes)
 		t.Metrics = toModelMetricsAggregate(st.Metrics)
 		t.Data = cloneMap(st.Data)
 	}
 
 	for _, sp := range people {
 		p := result.GetOrCreatePersonEx(sp.Name, &sp.ID)
-
 		for _, name := range sp.Names {
 			p.AddName(name)
 		}
@@ -359,6 +362,7 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 			p.AddEmail(email)
 		}
 		p.Size = toModelSize(sp.Size)
+		p.Changes = toModelChanges(sp.Changes)
 		p.Metrics = toModelMetricsAggregate(sp.Metrics)
 		p.Data = cloneMap(sp.Data)
 
@@ -671,13 +675,31 @@ func toModelSize(size *sqlSize) *model.Size {
 	}
 }
 
+func toSqlChanges(c *model.Changes) *sqlChanges {
+	return &sqlChanges{
+		Semester:      encodeMetric(c.In6Months),
+		Total:         encodeMetric(c.Total),
+		ModifiedLines: encodeMetric(c.ModifiedLines),
+		AddedLines:    encodeMetric(c.AddedLines),
+		DeletedLines:  encodeMetric(c.DeletedLines),
+	}
+}
+
+func toModelChanges(sc *sqlChanges) *model.Changes {
+	return &model.Changes{
+		In6Months:     decodeMetric(sc.Semester),
+		Total:         decodeMetric(sc.Total),
+		ModifiedLines: decodeMetric(sc.ModifiedLines),
+		AddedLines:    decodeMetric(sc.AddedLines),
+		DeletedLines:  decodeMetric(sc.DeletedLines),
+	}
+}
+
 func toSqlMetrics(metrics *model.Metrics) *sqlMetrics {
 	return &sqlMetrics{
 		DependenciesGuice:    encodeMetric(metrics.GuiceDependencies),
 		ComplexityCyclomatic: encodeMetric(metrics.CyclomaticComplexity),
 		ComplexityCognitive:  encodeMetric(metrics.CognitiveComplexity),
-		ChangesSemester:      encodeMetric(metrics.ChangesIn6Months),
-		ChangesTotal:         encodeMetric(metrics.ChangesTotal),
 	}
 }
 
@@ -686,8 +708,6 @@ func toModelMetrics(metrics *sqlMetrics) *model.Metrics {
 		GuiceDependencies:    decodeMetric(metrics.DependenciesGuice),
 		CyclomaticComplexity: decodeMetric(metrics.ComplexityCyclomatic),
 		CognitiveComplexity:  decodeMetric(metrics.ComplexityCognitive),
-		ChangesIn6Months:     decodeMetric(metrics.ChangesSemester),
-		ChangesTotal:         decodeMetric(metrics.ChangesTotal),
 	}
 }
 
@@ -699,8 +719,6 @@ func toSqlMetricsAggregate(metrics *model.Metrics, size *model.Size) *sqlMetrics
 		ComplexityCyclomaticAvg:   encodeMetricAggregate(metrics.CyclomaticComplexity, size.Files),
 		ComplexityCognitiveTotal:  encodeMetric(metrics.CognitiveComplexity),
 		ComplexityCognitiveAvg:    encodeMetricAggregate(metrics.CognitiveComplexity, size.Files),
-		ChangesSemester:           encodeMetric(metrics.ChangesIn6Months),
-		ChangesTotal:              encodeMetric(metrics.ChangesTotal),
 	}
 }
 
@@ -709,8 +727,6 @@ func toModelMetricsAggregate(metrics *sqlMetricsAggregate) *model.Metrics {
 		GuiceDependencies:    decodeMetric(metrics.DependenciesGuiceTotal),
 		CyclomaticComplexity: decodeMetric(metrics.ComplexityCyclomaticTotal),
 		CognitiveComplexity:  decodeMetric(metrics.ComplexityCognitiveTotal),
-		ChangesIn6Months:     decodeMetric(metrics.ChangesSemester),
-		ChangesTotal:         decodeMetric(metrics.ChangesTotal),
 	}
 }
 
@@ -749,6 +765,7 @@ func toSqlProject(p *model.Project) *sqlProject {
 		ProjectFile: p.ProjectFile,
 		Size:        toSqlSize(size),
 		Sizes:       map[string]*sqlSize{},
+		Changes:     toSqlChanges(p.Changes),
 		Metrics:     toSqlMetricsAggregate(p.Metrics, size),
 		Data:        cloneMap(p.Data),
 	}
@@ -777,6 +794,7 @@ func toSqlProjectDirectory(d *model.ProjectDirectory, p *model.Project) *sqlProj
 		Name:      d.RelativePath,
 		Type:      d.Type,
 		Size:      toSqlSize(d.Size),
+		Changes:   toSqlChanges(d.Changes),
 		Metrics:   toSqlMetricsAggregate(d.Metrics, d.Size),
 		Data:      cloneMap(d.Data),
 	}
@@ -792,6 +810,7 @@ func toSqlFile(f *model.File) *sqlFile {
 		TeamID:             f.TeamID,
 		Exists:             f.Exists,
 		Size:               toSqlSize(f.Size),
+		Changes:            toSqlChanges(f.Changes),
 		Metrics:            toSqlMetrics(f.Metrics),
 		Data:               cloneMap(f.Data),
 	}
@@ -804,6 +823,7 @@ func toSqlPerson(p *model.Person) *sqlPerson {
 		Names:   p.ListNames(),
 		Emails:  p.ListEmails(),
 		Size:    toSqlSize(p.Size),
+		Changes: toSqlChanges(p.Changes),
 		Metrics: toSqlMetricsAggregate(p.Metrics, p.Size),
 		Data:    cloneMap(p.Data),
 	}
@@ -820,6 +840,7 @@ func toSqlTeam(t *model.Team) *sqlTeam {
 		ID:      t.ID,
 		Name:    t.Name,
 		Size:    toSqlSize(t.Size),
+		Changes: toSqlChanges(t.Changes),
 		Metrics: toSqlMetricsAggregate(t.Metrics, t.Size),
 		Data:    cloneMap(t.Data),
 	}

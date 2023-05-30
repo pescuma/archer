@@ -10,6 +10,7 @@ type Team struct {
 
 	people  map[string]*Person
 	Size    *Size
+	Changes *Changes
 	Metrics *Metrics
 	Data    map[string]string
 }
@@ -27,6 +28,7 @@ func NewTeam(name string, id *UUID) *Team {
 		ID:      uuid,
 		people:  map[string]*Person{},
 		Size:    NewSize(),
+		Changes: NewChanges(),
 		Metrics: NewMetrics(),
 		Data:    map[string]string{},
 	}

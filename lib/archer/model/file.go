@@ -13,6 +13,7 @@ type File struct {
 
 	Exists  bool
 	Size    *Size
+	Changes *Changes
 	Metrics *Metrics
 	Data    map[string]string
 }
@@ -30,6 +31,7 @@ func NewFile(path string, id *UUID) *File {
 		ID:      uuid,
 		Exists:  true,
 		Size:    NewSize(),
+		Changes: NewChanges(),
 		Metrics: NewMetrics(),
 		Data:    map[string]string{},
 	}

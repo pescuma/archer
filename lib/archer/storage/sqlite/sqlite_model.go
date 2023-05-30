@@ -27,6 +27,7 @@ type sqlProject struct {
 
 	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
 	Sizes   map[string]*sqlSize  `gorm:"serializer:json"`
+	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
 	Metrics *sqlMetricsAggregate `gorm:"embedded"`
 	Data    map[string]string    `gorm:"serializer:json"`
 
@@ -58,6 +59,7 @@ type sqlProjectDirectory struct {
 	Type      model.ProjectDirectoryType
 
 	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
+	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
 	Metrics *sqlMetricsAggregate `gorm:"embedded"`
 	Data    map[string]string    `gorm:"serializer:json"`
 
@@ -78,6 +80,7 @@ type sqlFile struct {
 
 	Exists  bool
 	Size    *sqlSize          `gorm:"embedded;embeddedPrefix:size_"`
+	Changes *sqlChanges       `gorm:"embedded;embeddedPrefix:changes_"`
 	Metrics *sqlMetrics       `gorm:"embedded"`
 	Data    map[string]string `gorm:"serializer:json"`
 
@@ -96,6 +99,7 @@ type sqlPerson struct {
 	Names   []string             `gorm:"serializer:json"`
 	Emails  []string             `gorm:"serializer:json"`
 	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
+	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
 	Metrics *sqlMetricsAggregate `gorm:"embedded"`
 	Data    map[string]string    `gorm:"serializer:json"`
 
@@ -111,6 +115,7 @@ type sqlTeam struct {
 	Name string
 
 	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
+	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
 	Metrics *sqlMetricsAggregate `gorm:"embedded"`
 	Data    map[string]string    `gorm:"serializer:json"`
 
@@ -180,8 +185,6 @@ type sqlMetrics struct {
 	DependenciesGuice    *int
 	ComplexityCyclomatic *int
 	ComplexityCognitive  *int
-	ChangesSemester      *int
-	ChangesTotal         *int
 }
 
 type sqlMetricsAggregate struct {
@@ -191,6 +194,12 @@ type sqlMetricsAggregate struct {
 	ComplexityCyclomaticAvg   *float32
 	ComplexityCognitiveTotal  *int
 	ComplexityCognitiveAvg    *float32
-	ChangesSemester           *int
-	ChangesTotal              *int
+}
+
+type sqlChanges struct {
+	Semester      *int
+	Total         *int
+	ModifiedLines *int
+	AddedLines    *int
+	DeletedLines  *int
 }

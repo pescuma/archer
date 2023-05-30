@@ -37,6 +37,10 @@ func (ps *People) GetOrCreatePersonEx(name string, id *UUID) *Person {
 		ps.peopleByID[result.ID] = result
 	}
 
+	if id != nil && result.ID != *id {
+		panic("id mismatch")
+	}
+
 	return result
 }
 
@@ -49,7 +53,9 @@ func (ps *People) ListPeople() []*Person {
 }
 
 func (ps *People) ChangePersonName(person *Person, name string) {
-	delete(ps.peopleByName, person.Name)
+	if _, ok := ps.peopleByName[name]; ok {
+		panic("name already exists")
+	}
 
 	person.Name = name
 

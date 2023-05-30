@@ -5,7 +5,6 @@ import (
 	"io/fs"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
@@ -17,7 +16,6 @@ import (
 	"github.com/Faire/archer/lib/archer/metrics/complexity"
 	"github.com/Faire/archer/lib/archer/metrics/dependencies"
 	"github.com/Faire/archer/lib/archer/model"
-	"github.com/Faire/archer/lib/archer/utils"
 )
 
 type metricsImporter struct {
@@ -45,11 +43,6 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 	}
 
 	filesDB, err := storage.LoadFiles()
-	if err != nil {
-		return err
-	}
-
-	reposDB, err := storage.LoadRepositories()
 	if err != nil {
 		return err
 	}
@@ -160,17 +153,8 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
-	fmt.Printf("Importing changes from %v files...\n", len(candidates))
+	fmt.Printf("Propagating changes to parents...\n")
 
-	dirsByIDs := map[model.UUID]*model.ProjectDirectory{}
-	for _, p := range projectsDB.ListProjects(model.FilterExcludeExternal) {
-		for _, d := range p.Dirs {
-			dirsByIDs[d.ID] = d
-		}
-	}
-
-	clearMetrics(projectsDB, peopleDB)
-	computeChanges(reposDB, projectsDB, filesDB, peopleDB, dirsByIDs)
 	updateParentMetrics(projectsDB, filesDB, peopleDB)
 
 	fmt.Printf("Writing results...\n")
@@ -193,82 +177,31 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 	return nil
 }
 
-func clearMetrics(projectsDB *model.Projects, peopleDB *model.People) {
+func updateParentMetrics(projectsDB *model.Projects, filesDB *model.Files, peopleDB *model.People) {
 	for _, p := range projectsDB.ListProjects(model.FilterExcludeExternal) {
 		p.Metrics.Clear()
 		for _, d := range p.Dirs {
 			d.Metrics.Clear()
 		}
 	}
-	for _, p := range peopleDB.ListPeople() {
-		p.Metrics.Clear()
-	}
 	for _, t := range peopleDB.ListTeams() {
 		t.Metrics.Clear()
 	}
-}
 
-func computeChanges(reposDB *model.Repositories, projectsDB *model.Projects, filesDB *model.Files, peopleDB *model.People, dirsByIDs map[model.UUID]*model.ProjectDirectory) {
-	now := time.Now()
-
-	for _, repo := range reposDB.List() {
-		for _, c := range repo.ListCommits() {
-			inLast6Months := now.Sub(c.Date) < 6*30*24*time.Hour
-			addChangesTo := func(metrics *model.Metrics) {
-				metrics.ChangesIn6Months += utils.IIf(inLast6Months, 1, 0)
-				metrics.ChangesTotal++
-			}
-
-			projs := map[model.UUID]bool{}
-			dirs := map[model.UUID]bool{}
-			teams := map[model.UUID]bool{}
-			for _, cf := range c.Files {
-				f := filesDB.GetByID(cf.FileID)
-				addChangesTo(f.Metrics)
-
-				if f.ProjectID != nil {
-					projs[*f.ProjectID] = true
-				}
-				if f.ProjectDirectoryID != nil {
-					teams[*f.ProjectDirectoryID] = true
-				}
-				if f.TeamID != nil {
-					teams[*f.TeamID] = true
-				}
-			}
-
-			for _, cp := range lo.Keys(projs) {
-				addChangesTo(projectsDB.GetByID(cp).Metrics)
-			}
-
-			for _, cd := range lo.Keys(dirs) {
-				addChangesTo(dirsByIDs[cd].Metrics)
-			}
-
-			for _, ct := range lo.Keys(teams) {
-				addChangesTo(peopleDB.GetTeamByID(ct).Metrics)
-			}
-
-			addChangesTo(peopleDB.GetPersonByID(c.AuthorID).Metrics)
-		}
-	}
-}
-
-func updateParentMetrics(projectsDB *model.Projects, filesDB *model.Files, peopleDB *model.People) {
 	filesByDir := filesDB.GroupByDirectory()
 
 	for _, proj := range projectsDB.ListProjects(model.FilterExcludeExternal) {
 		for _, dir := range proj.Dirs {
 			for _, file := range filesByDir[dir.ID] {
-				dir.Metrics.AddIgnoringChanges(file.Metrics)
+				dir.Metrics.Add(file.Metrics)
 
 				if file.TeamID != nil {
 					team := peopleDB.GetTeamByID(*file.TeamID)
-					team.Metrics.AddIgnoringChanges(file.Metrics)
+					team.Metrics.Add(file.Metrics)
 				}
 			}
 
-			proj.Metrics.AddIgnoringChanges(dir.Metrics)
+			proj.Metrics.Add(dir.Metrics)
 		}
 	}
 }

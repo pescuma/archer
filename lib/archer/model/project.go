@@ -21,6 +21,7 @@ type Project struct {
 	Dirs         map[string]*ProjectDirectory
 	Dependencies map[string]*ProjectDependency
 	Sizes        map[string]*Size
+	Changes      *Changes
 	Metrics      *Metrics
 	Data         map[string]string
 }
@@ -40,6 +41,7 @@ func NewProject(root, name string, id *UUID) *Project {
 		Dirs:         map[string]*ProjectDirectory{},
 		Dependencies: map[string]*ProjectDependency{},
 		Sizes:        map[string]*Size{},
+		Changes:      NewChanges(),
 		Metrics:      NewMetrics(),
 		Data:         map[string]string{},
 	}
@@ -94,7 +96,7 @@ func (p *Project) GetMetrics() *Metrics {
 	result := NewMetrics()
 
 	for _, v := range p.Dirs {
-		result.AddIgnoringChanges(v.Metrics)
+		result.Add(v.Metrics)
 	}
 
 	return result
