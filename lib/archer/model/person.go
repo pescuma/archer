@@ -17,10 +17,17 @@ type Person struct {
 	Data    map[string]string
 }
 
-func NewPerson(name string) *Person {
+func NewPerson(name string, id *UUID) *Person {
+	var uuid UUID
+	if id == nil {
+		uuid = NewUUID("a")
+	} else {
+		uuid = *id
+	}
+
 	return &Person{
 		Name:    name,
-		ID:      NewUUID("a"),
+		ID:      uuid,
 		names:   map[string]bool{},
 		emails:  map[string]bool{},
 		Metrics: NewMetrics(),

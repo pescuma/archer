@@ -6,6 +6,7 @@ import (
 
 type People struct {
 	peopleByName map[string]*Person
+	peopleByID   map[UUID]*Person
 	teamsByName  map[string]*Team
 	teamsByID    map[UUID]*Team
 }
@@ -13,12 +14,17 @@ type People struct {
 func NewPeople() *People {
 	return &People{
 		peopleByName: map[string]*Person{},
+		peopleByID:   map[UUID]*Person{},
 		teamsByName:  map[string]*Team{},
 		teamsByID:    map[UUID]*Team{},
 	}
 }
 
 func (ps *People) GetOrCreatePerson(name string) *Person {
+	return ps.GetOrCreatePersonEx(name, nil)
+}
+
+func (ps *People) GetOrCreatePersonEx(name string, id *UUID) *Person {
 	if len(name) == 0 {
 		panic("empty name not supported")
 	}
@@ -26,11 +32,16 @@ func (ps *People) GetOrCreatePerson(name string) *Person {
 	result, ok := ps.peopleByName[name]
 
 	if !ok {
-		result = NewPerson(name)
+		result = NewPerson(name, id)
 		ps.peopleByName[name] = result
+		ps.peopleByID[result.ID] = result
 	}
 
 	return result
+}
+
+func (ps *People) GetPersonByID(id UUID) *Person {
+	return ps.peopleByID[id]
 }
 
 func (ps *People) ListPeople() []*Person {
@@ -60,12 +71,13 @@ func (ps *People) GetOrCreateTeamEx(name string, id *UUID) *Team {
 	if !ok {
 		result = NewTeam(name, id)
 		ps.teamsByName[name] = result
+		ps.teamsByID[result.ID] = result
 	}
 
 	return result
 }
 
-func (ps *People) GeTeamByID(id UUID) *Team {
+func (ps *People) GetTeamByID(id UUID) *Team {
 	return ps.teamsByID[id]
 }
 

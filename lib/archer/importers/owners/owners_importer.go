@@ -69,8 +69,8 @@ func (m *ownersImporter) Import(storage archer.Storage) error {
 
 	type work struct {
 		file    *model.File
-		re      *regexp.Regexp
 		modTime string
+		re      *regexp.Regexp
 	}
 
 	var ws []*work
@@ -118,8 +118,8 @@ func (m *ownersImporter) Import(storage archer.Storage) error {
 
 		ws = append(ws, &work{
 			file:    file,
-			re:      re,
 			modTime: modTime,
+			re:      re,
 		})
 	}
 
@@ -155,12 +155,12 @@ func (m *ownersImporter) Import(storage archer.Storage) error {
 			_ = bar.Clear()
 			fmt.Printf("Writing results...")
 
-			err = storage.WritePeople(peopleDB, archer.ChangedBasicInfo)
+			err = storage.WritePeople(peopleDB, archer.ChangedTeams)
 			if err != nil {
 				return err
 			}
 
-			err = storage.WriteFiles(filesDB, archer.ChangedTeams)
+			err = storage.WriteFiles(filesDB, archer.ChangedData|archer.ChangedTeams)
 			if err != nil {
 				return err
 			}
@@ -171,12 +171,12 @@ func (m *ownersImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Writing results...\n")
 
-	err = storage.WritePeople(peopleDB, archer.ChangedBasicInfo)
+	err = storage.WritePeople(peopleDB, archer.ChangedTeams)
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteFiles(filesDB, archer.ChangedTeams)
+	err = storage.WriteFiles(filesDB, archer.ChangedData|archer.ChangedTeams)
 	if err != nil {
 		return err
 	}

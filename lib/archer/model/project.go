@@ -94,7 +94,7 @@ func (p *Project) GetMetrics() *Metrics {
 	result := NewMetrics()
 
 	for _, v := range p.Dirs {
-		result.Add(v.Metrics)
+		result.AddIgnoringChanges(v.Metrics)
 	}
 
 	return result

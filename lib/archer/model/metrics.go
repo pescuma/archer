@@ -22,12 +22,10 @@ func (m *Metrics) Clear() {
 	m.ChangesTotal = -1
 }
 
-func (m *Metrics) Add(other *Metrics) {
+func (m *Metrics) AddIgnoringChanges(other *Metrics) {
 	m.GuiceDependencies = add(m.GuiceDependencies, other.GuiceDependencies)
 	m.CyclomaticComplexity = add(m.CyclomaticComplexity, other.CyclomaticComplexity)
 	m.CognitiveComplexity = add(m.CognitiveComplexity, other.CognitiveComplexity)
-	m.ChangesIn6Months = add(m.ChangesIn6Months, other.ChangesIn6Months)
-	m.ChangesTotal = add(m.ChangesTotal, other.ChangesTotal)
 }
 
 func add(a, b int) int {

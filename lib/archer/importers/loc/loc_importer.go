@@ -40,6 +40,11 @@ func (l *locImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
+	peopleDB, err := storage.LoadPeople()
+	if err != nil {
+		return err
+	}
+
 	ps, err := projectsDB.FilterProjects(l.filters, model.FilterExcludeExternal)
 	if err != nil {
 		return err
@@ -61,14 +66,14 @@ func (l *locImporter) Import(storage archer.Storage) error {
 	bar := utils.NewProgressBar(len(candidates))
 	for _, file := range candidates {
 		stat, err := os.Stat(file.Path)
-		if err == nil {
+		if err == nil && !stat.IsDir() {
 			file.Exists = true
 
 			modTime := stat.ModTime().String()
 
 			if !l.options.Incremental || modTime != file.Data["loc:last_modified"] {
-				files = append(files, file)
 				file.Data["loc:last_modified"] = modTime
+				files = append(files, file)
 
 				file.Size.Clear()
 				file.Size.Files = 1
@@ -100,7 +105,7 @@ func (l *locImporter) Import(storage archer.Storage) error {
 		}
 	}
 
-	l.updateParents(ps, candidates)
+	updateParents(projectsDB, filesDB, peopleDB)
 
 	fmt.Printf("Writing results...\n")
 
@@ -114,16 +119,22 @@ func (l *locImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
+	err = storage.WritePeople(peopleDB, archer.ChangedSize)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func (l *locImporter) updateParents(ps []*model.Project, files []*model.File) {
-	filesByDir := lo.GroupBy(
-		lo.Filter(files, func(f *model.File, _ int) bool { return f.ProjectDirectoryID != nil }),
-		func(f *model.File) model.UUID { return *f.ProjectDirectoryID },
-	)
+func updateParents(projectsDB *model.Projects, filesDB *model.Files, peopleDB *model.People) {
+	for _, team := range peopleDB.ListTeams() {
+		team.Size.Clear()
+	}
 
-	for _, proj := range ps {
+	filesByDir := filesDB.GroupByDirectory()
+
+	for _, proj := range projectsDB.ListProjects(model.FilterExcludeExternal) {
 		proj.Sizes = map[string]*model.Size{}
 
 		for _, dir := range proj.Dirs {
@@ -131,6 +142,11 @@ func (l *locImporter) updateParents(ps []*model.Project, files []*model.File) {
 
 			for _, file := range filesByDir[dir.ID] {
 				dir.Size.Add(file.Size)
+
+				if file.TeamID != nil {
+					team := peopleDB.GetTeamByID(*file.TeamID)
+					team.Size.Add(file.Size)
+				}
 			}
 
 			proj.AddSize(dir.Type.String(), dir.Size)

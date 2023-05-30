@@ -35,7 +35,7 @@ func TestEqualsSomeFields(t *testing.T) {
 	assert.False(t, reflect.DeepEqual(p1, p2))
 }
 
-func TestEqualsMap(t *testing.T) {
+func TestEqualsSize(t *testing.T) {
 	p1 := &sqlProject{
 		Sizes: map[string]*sqlSize{
 			"a": {Bytes: 1},
@@ -50,5 +50,23 @@ func TestEqualsMap(t *testing.T) {
 	assert.True(t, reflect.DeepEqual(p1, p2))
 
 	p1.Sizes["a"].Bytes = 2
+	assert.False(t, reflect.DeepEqual(p1, p2))
+}
+
+func TestEqualsData(t *testing.T) {
+	p1 := &sqlProject{
+		Data: map[string]string{
+			"a": "b",
+		},
+	}
+	p2 := &sqlProject{
+		Data: map[string]string{
+			"a": "b",
+		},
+	}
+
+	assert.True(t, reflect.DeepEqual(p1, p2))
+
+	p1.Data["a"] = "c"
 	assert.False(t, reflect.DeepEqual(p1, p2))
 }

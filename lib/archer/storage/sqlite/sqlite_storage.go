@@ -3,6 +3,7 @@ package sqlite
 import (
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
@@ -138,8 +139,8 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 		for k, v := range sp.Sizes {
 			p.Sizes[k] = toModelSize(v)
 		}
-		p.Metrics = toModelMetrics(sp.Metrics)
-		p.Data = sp.Data
+		p.Metrics = toModelMetricsAggregate(sp.Metrics)
+		p.Data = cloneMap(sp.Data)
 	}
 
 	for _, sd := range deps {
@@ -148,7 +149,7 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 
 		d := source.GetDependency(target)
 		d.ID = sd.ID
-		d.Data = sd.Data
+		d.Data = cloneMap(sd.Data)
 	}
 
 	for _, sd := range dirs {
@@ -158,8 +159,8 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 		d.ID = sd.ID
 		d.Type = sd.Type
 		d.Size = toModelSize(sd.Size)
-		d.Metrics = toModelMetrics(sd.Metrics)
-		d.Data = sd.Data
+		d.Metrics = toModelMetricsAggregate(sd.Metrics)
+		d.Data = cloneMap(sd.Data)
 	}
 
 	return result, nil
@@ -268,8 +269,7 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 	})
 
 	for _, sf := range files {
-		f := result.GetOrCreate(sf.Name)
-		f.ID = sf.ID
+		f := result.GetOrCreateEx(sf.Name, &sf.ID)
 		f.ProjectID = sf.ProjectID
 		f.ProjectDirectoryID = sf.ProjectDirectoryID
 		f.RepositoryID = sf.RepositoryID
@@ -277,7 +277,7 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 		f.Exists = sf.Exists
 		f.Size = toModelSize(sf.Size)
 		f.Metrics = toModelMetrics(sf.Metrics)
-		f.Data = sf.Data
+		f.Data = cloneMap(sf.Data)
 	}
 
 	return result, nil
@@ -344,12 +344,13 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 
 	for _, st := range teams {
 		t := result.GetOrCreateTeamEx(st.Name, &st.ID)
-		t.Data = st.Data
+		t.Size = toModelSize(st.Size)
+		t.Metrics = toModelMetricsAggregate(st.Metrics)
+		t.Data = cloneMap(st.Data)
 	}
 
 	for _, sp := range people {
-		p := result.GetOrCreatePerson(sp.Name)
-		p.ID = sp.ID
+		p := result.GetOrCreatePersonEx(sp.Name, &sp.ID)
 
 		for _, name := range sp.Names {
 			p.AddName(name)
@@ -357,10 +358,10 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 		for _, email := range sp.Emails {
 			p.AddEmail(email)
 		}
-		p.Data = sp.Data
+		p.Data = cloneMap(sp.Data)
 
 		if sp.TeamID != nil {
-			p.Team = result.GeTeamByID(*sp.TeamID)
+			p.Team = result.GetTeamByID(*sp.TeamID)
 		}
 	}
 
@@ -368,28 +369,28 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 }
 
 func (s *sqliteStorage) WritePeople(peopleDB *model.People, changes archer.StorageChanges) error {
-	changed := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedData != 0
-	if !changed {
-		return nil
-	}
-
-	people := peopleDB.ListPeople()
+	changedPeople := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedData != 0
+	changedTeams := changes&archer.ChangedTeams != 0 || changes&archer.ChangedData != 0 || changes&archer.ChangedSize != 0 || changes&archer.ChangedMetrics != 0
 
 	var sqlPeople []*sqlPerson
-	for _, p := range people {
-		sp := toSqlPerson(p)
-		if prepareChange(&s.people, sp.ID, sp) {
-			sqlPeople = append(sqlPeople, sp)
+	if changedPeople {
+		people := peopleDB.ListPeople()
+		for _, p := range people {
+			sp := toSqlPerson(p)
+			if prepareChange(&s.people, sp.ID, sp) {
+				sqlPeople = append(sqlPeople, sp)
+			}
 		}
 	}
 
-	teams := peopleDB.ListTeams()
-
 	var sqlTeams []*sqlTeam
-	for _, t := range teams {
-		st := toSqlTeam(t)
-		if prepareChange(&s.teams, st.ID, st) {
-			sqlTeams = append(sqlTeams, st)
+	if changedTeams {
+		teams := peopleDB.ListTeams()
+		for _, t := range teams {
+			st := toSqlTeam(t)
+			if prepareChange(&s.teams, st.ID, st) {
+				sqlTeams = append(sqlTeams, st)
+			}
 		}
 	}
 
@@ -399,19 +400,23 @@ func (s *sqliteStorage) WritePeople(peopleDB *model.People, changes archer.Stora
 		CreateBatchSize: 100,
 	})
 
-	err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlPeople, 1000).Error
-	if err != nil {
-		return err
+	if changedPeople {
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlPeople, 1000).Error
+		if err != nil {
+			return err
+		}
+
+		addList(&s.people, sqlPeople, func(s *sqlPerson) model.UUID { return s.ID })
 	}
 
-	addList(&s.people, sqlPeople, func(s *sqlPerson) model.UUID { return s.ID })
+	if changedTeams {
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlTeams, 1000).Error
+		if err != nil {
+			return err
+		}
 
-	err = db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlTeams, 1000).Error
-	if err != nil {
-		return err
+		addList(&s.teams, sqlTeams, func(s *sqlTeam) model.UUID { return s.ID })
 	}
-
-	addList(&s.teams, sqlTeams, func(s *sqlTeam) model.UUID { return s.ID })
 
 	// TODO delete
 
@@ -488,7 +493,7 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 		r := result.GetOrCreateEx(sr.RootDir, &sr.ID)
 		r.Name = sr.Name
 		r.VCS = sr.VCS
-		r.Data = sr.Data
+		r.Data = cloneMap(sr.Data)
 	}
 
 	commitsById := map[model.UUID]*model.RepositoryCommit{}
@@ -684,6 +689,39 @@ func toModelMetrics(metrics *sqlMetrics) *model.Metrics {
 	}
 }
 
+func toSqlMetricsAggregate(metrics *model.Metrics, size *model.Size) *sqlMetricsAggregate {
+	return &sqlMetricsAggregate{
+		DependenciesGuiceTotal:    encodeMetric(metrics.GuiceDependencies),
+		DependenciesGuiceAvg:      encodeMetricAggregate(metrics.GuiceDependencies, size.Files),
+		ComplexityCyclomaticTotal: encodeMetric(metrics.CyclomaticComplexity),
+		ComplexityCyclomaticAvg:   encodeMetricAggregate(metrics.CyclomaticComplexity, size.Files),
+		ComplexityCognitiveTotal:  encodeMetric(metrics.CognitiveComplexity),
+		ComplexityCognitiveAvg:    encodeMetricAggregate(metrics.CognitiveComplexity, size.Files),
+		ChangesSemester:           encodeMetric(metrics.ChangesIn6Months),
+		ChangesTotal:              encodeMetric(metrics.ChangesTotal),
+	}
+}
+
+func toModelMetricsAggregate(metrics *sqlMetricsAggregate) *model.Metrics {
+	return &model.Metrics{
+		GuiceDependencies:    decodeMetric(metrics.DependenciesGuiceTotal),
+		CyclomaticComplexity: decodeMetric(metrics.ComplexityCyclomaticTotal),
+		CognitiveComplexity:  decodeMetric(metrics.ComplexityCognitiveTotal),
+		ChangesIn6Months:     decodeMetric(metrics.ChangesSemester),
+		ChangesTotal:         decodeMetric(metrics.ChangesTotal),
+	}
+}
+
+func encodeMetricAggregate(v int, t int) *float32 {
+	if v == -1 {
+		return nil
+	}
+	if t == 0 {
+		return nil
+	}
+	a := float32(math.Round(float64(v)*10/float64(t)) * 10)
+	return &a
+}
 func encodeMetric(v int) *int {
 	return utils.IIf(v == -1, nil, &v)
 }
@@ -709,8 +747,8 @@ func toSqlProject(p *model.Project) *sqlProject {
 		ProjectFile: p.ProjectFile,
 		Size:        toSqlSize(size),
 		Sizes:       map[string]*sqlSize{},
-		Metrics:     toSqlMetrics(p.Metrics),
-		Data:        p.Data,
+		Metrics:     toSqlMetricsAggregate(p.Metrics, size),
+		Data:        cloneMap(p.Data),
 	}
 
 	for k, v := range p.Sizes {
@@ -726,7 +764,7 @@ func toSqlProjectDependency(d *model.ProjectDependency) *sqlProjectDependency {
 		Name:     d.String(),
 		SourceID: d.Source.ID,
 		TargetID: d.Target.ID,
-		Data:     d.Data,
+		Data:     cloneMap(d.Data),
 	}
 }
 
@@ -737,8 +775,8 @@ func toSqlProjectDirectory(d *model.ProjectDirectory, p *model.Project) *sqlProj
 		Name:      d.RelativePath,
 		Type:      d.Type,
 		Size:      toSqlSize(d.Size),
-		Metrics:   toSqlMetrics(d.Metrics),
-		Data:      d.Data,
+		Metrics:   toSqlMetricsAggregate(d.Metrics, d.Size),
+		Data:      cloneMap(d.Data),
 	}
 }
 
@@ -753,7 +791,7 @@ func toSqlFile(f *model.File) *sqlFile {
 		Exists:             f.Exists,
 		Size:               toSqlSize(f.Size),
 		Metrics:            toSqlMetrics(f.Metrics),
-		Data:               f.Data,
+		Data:               cloneMap(f.Data),
 	}
 }
 
@@ -763,7 +801,7 @@ func toSqlPerson(p *model.Person) *sqlPerson {
 		Name:   p.Name,
 		Names:  p.ListNames(),
 		Emails: p.ListEmails(),
-		Data:   p.Data,
+		Data:   cloneMap(p.Data),
 	}
 
 	if p.Team != nil {
@@ -775,9 +813,11 @@ func toSqlPerson(p *model.Person) *sqlPerson {
 
 func toSqlTeam(t *model.Team) *sqlTeam {
 	return &sqlTeam{
-		ID:   t.ID,
-		Name: t.Name,
-		Data: t.Data,
+		ID:      t.ID,
+		Name:    t.Name,
+		Size:    toSqlSize(t.Size),
+		Metrics: toSqlMetricsAggregate(t.Metrics, t.Size),
+		Data:    cloneMap(t.Data),
 	}
 }
 
@@ -787,7 +827,7 @@ func toSqlRepository(r *model.Repository) *sqlRepository {
 		Name:    r.Name,
 		RootDir: r.RootDir,
 		VCS:     r.VCS,
-		Data:    r.Data,
+		Data:    cloneMap(r.Data),
 	}
 }
 
@@ -847,6 +887,14 @@ func prepareChange[K comparable, V any](byID *map[K]V, id K, n V) bool {
 		(*byID)[id] = n
 		return true
 	}
+}
+
+func cloneMap[K comparable, V any](m map[K]V) map[K]V {
+	result := make(map[K]V, len(m))
+	for k, v := range m {
+		result[k] = v
+	}
+	return result
 }
 
 type NamingStrategy struct {

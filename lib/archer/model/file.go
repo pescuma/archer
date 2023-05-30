@@ -17,10 +17,17 @@ type File struct {
 	Data    map[string]string
 }
 
-func NewFile(path string) *File {
+func NewFile(path string, id *UUID) *File {
+	var uuid UUID
+	if id == nil {
+		uuid = NewUUID("f")
+	} else {
+		uuid = *id
+	}
+
 	return &File{
 		Path:    path,
-		ID:      NewUUID("f"),
+		ID:      uuid,
 		Exists:  true,
 		Size:    NewSize(),
 		Metrics: NewMetrics(),

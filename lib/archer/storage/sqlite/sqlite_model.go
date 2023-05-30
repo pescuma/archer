@@ -25,10 +25,10 @@ type sqlProject struct {
 	RootDir     string
 	ProjectFile string
 
-	Size    *sqlSize            `gorm:"embedded;embeddedPrefix:size_"`
-	Sizes   map[string]*sqlSize `gorm:"serializer:json"`
-	Metrics *sqlMetrics         `gorm:"embedded"`
-	Data    map[string]string   `gorm:"serializer:json"`
+	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
+	Sizes   map[string]*sqlSize  `gorm:"serializer:json"`
+	Metrics *sqlMetricsAggregate `gorm:"embedded"`
+	Data    map[string]string    `gorm:"serializer:json"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -57,9 +57,9 @@ type sqlProjectDirectory struct {
 	Name      string
 	Type      model.ProjectDirectoryType
 
-	Size    *sqlSize          `gorm:"embedded;embeddedPrefix:size_"`
-	Metrics *sqlMetrics       `gorm:"embedded"`
-	Data    map[string]string `gorm:"serializer:json"`
+	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
+	Metrics *sqlMetricsAggregate `gorm:"embedded"`
+	Data    map[string]string    `gorm:"serializer:json"`
 
 	Files []sqlFile `gorm:"foreignKey:ProjectDirectoryID"`
 
@@ -108,7 +108,9 @@ type sqlTeam struct {
 	ID   model.UUID
 	Name string
 
-	Data map[string]string `gorm:"serializer:json"`
+	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
+	Metrics *sqlMetricsAggregate `gorm:"embedded"`
+	Data    map[string]string    `gorm:"serializer:json"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -178,4 +180,15 @@ type sqlMetrics struct {
 	ComplexityCognitive  *int
 	ChangesSemester      *int
 	ChangesTotal         *int
+}
+
+type sqlMetricsAggregate struct {
+	DependenciesGuiceTotal    *int
+	DependenciesGuiceAvg      *float32
+	ComplexityCyclomaticTotal *int
+	ComplexityCyclomaticAvg   *float32
+	ComplexityCognitiveTotal  *int
+	ComplexityCognitiveAvg    *float32
+	ChangesSemester           *int
+	ChangesTotal              *int
 }
