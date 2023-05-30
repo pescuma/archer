@@ -1,12 +1,12 @@
 package git
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/samber/lo"
 
 	"github.com/Faire/archer/lib/archer/model"
-	"github.com/Faire/archer/lib/archer/utils"
 )
 
 type nameEmailGrouper struct {
@@ -35,7 +35,7 @@ func (g *nameEmailGrouper) add(name string, email string, person *model.Person) 
 			Emails: map[string]bool{},
 		}
 
-		n.person = utils.Coalesce(n.person, person)
+		n.people = append(n.people, person)
 
 		n.Names[name] = true
 		g.byName[name] = n
@@ -53,6 +53,9 @@ func (g *nameEmailGrouper) add(name string, email string, person *model.Person) 
 
 	} else {
 		if n != e {
+			for _, p := range e.people {
+				n.people = append(n.people, p)
+			}
 			for k := range e.Names {
 				n.Names[k] = true
 				g.byName[k] = n
@@ -69,11 +72,21 @@ func (g *nameEmailGrouper) prepare() {
 	nes := g.list()
 
 	for _, ne := range nes {
-		ne.Name = lo.MaxBy(lo.Keys(ne.Names), func(a string, b string) bool {
-			aIsEmail := strings.Contains(a, "@")
-			bIsEmail := strings.Contains(b, "@")
-			if aIsEmail != bIsEmail {
-				return bIsEmail
+		names := lo.Keys(ne.Names)
+		sort.Slice(names, func(i, j int) bool {
+			return names[i] < names[j]
+		})
+		ne.Name = lo.MaxBy(names, func(a string, b string) bool {
+			ignoreA := strings.Contains(a, "@")
+			ignoreB := strings.Contains(b, "@")
+			if ignoreA != ignoreB {
+				return ignoreB
+			}
+
+			ignoreA = strings.Contains(a, "-")
+			ignoreB = strings.Contains(b, "-")
+			if ignoreA != ignoreB {
+				return ignoreB
 			}
 
 			return len(a) > len(b)
@@ -96,7 +109,7 @@ func (g *nameEmailGrouper) list() []*namesEmails {
 }
 
 type namesEmails struct {
-	person *model.Person
+	people []*model.Person
 	Name   string
 	Names  map[string]bool
 	Emails map[string]bool

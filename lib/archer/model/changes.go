@@ -9,15 +9,13 @@ type Changes struct {
 }
 
 func NewChanges() *Changes {
-	result := &Changes{}
-	result.Clear()
-	return result
+	return &Changes{}
 }
 
 func (m *Changes) Clear() {
-	m.In6Months = -1
-	m.Total = -1
-	m.ModifiedLines = -1
-	m.AddedLines = -1
-	m.DeletedLines = -1
+	m.In6Months = 0
+	m.Total = 0
+	m.ModifiedLines = 0
+	m.AddedLines = 0
+	m.DeletedLines = 0
 }

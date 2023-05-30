@@ -62,7 +62,7 @@ func NewSqliteStorage(file string) (archer.Storage, error) {
 		},
 	)
 
-	db, err := gorm.Open(sqlite.Open(file), &gorm.Config{
+	db, err := gorm.Open(sqlite.Open(file+"?_pragma=journal_mode(WAL)"), &gorm.Config{
 		NamingStrategy: &NamingStrategy{},
 		Logger:         newLogger,
 	})
@@ -181,9 +181,9 @@ func (s *sqliteStorage) WriteProject(proj *model.Project, changes archer.Storage
 }
 
 func (s *sqliteStorage) writeProjects(projs []*model.Project, changes archer.StorageChanges) error {
-	changedProjs := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedData != 0 || changes&archer.ChangedSize != 0 || changes&archer.ChangedMetrics != 0
-	changedDeps := changes&archer.ChangedDependencies != 0 || changes&archer.ChangedData != 0
-	changedDirs := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedSize != 0 || changes&archer.ChangedMetrics != 0
+	changedProjs := changed(changes, archer.ChangedBasicInfo, archer.ChangedData, archer.ChangedSize, archer.ChangedChanges, archer.ChangedMetrics)
+	changedDeps := changed(changes, archer.ChangedDependencies, archer.ChangedData)
+	changedDirs := changed(changes, archer.ChangedBasicInfo, archer.ChangedSize, archer.ChangedChanges, archer.ChangedMetrics)
 
 	var sqlProjs []*sqlProject
 	if changedProjs {
@@ -287,9 +287,8 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 }
 
 func (s *sqliteStorage) WriteFiles(files *model.Files, changes archer.StorageChanges) error {
-	changedFiles := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedData != 0 ||
-		changes&archer.ChangedSize != 0 || changes&archer.ChangedMetrics != 0 ||
-		changes&archer.ChangedTeams != 0
+	changedFiles := changed(changes, archer.ChangedBasicInfo, archer.ChangedData,
+		archer.ChangedSize, archer.ChangedChanges, archer.ChangedMetrics, archer.ChangedTeams)
 	if !changedFiles {
 		return nil
 	}
@@ -375,8 +374,8 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 }
 
 func (s *sqliteStorage) WritePeople(peopleDB *model.People, changes archer.StorageChanges) error {
-	changedPeople := changes&archer.ChangedBasicInfo != 0 || changes&archer.ChangedData != 0
-	changedTeams := changes&archer.ChangedTeams != 0 || changes&archer.ChangedData != 0 || changes&archer.ChangedSize != 0 || changes&archer.ChangedMetrics != 0
+	changedPeople := changed(changes, archer.ChangedBasicInfo, archer.ChangedData, archer.ChangedSize, archer.ChangedChanges, archer.ChangedMetrics)
+	changedTeams := changed(changes, archer.ChangedTeams, archer.ChangedData, archer.ChangedSize, archer.ChangedChanges, archer.ChangedMetrics)
 
 	var sqlPeople []*sqlPerson
 	if changedPeople {
@@ -531,9 +530,9 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 }
 
 func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.StorageChanges) error {
-	changedRepos := changes&archer.ChangedBasicInfo != 0
-	changedCommits := changes&archer.ChangedHistory != 0
-	changedFiles := changes&archer.ChangedHistory != 0
+	changedRepos := changed(changes, archer.ChangedBasicInfo)
+	changedCommits := changed(changes, archer.ChangedHistory)
+	changedFiles := changed(changes, archer.ChangedHistory)
 
 	var sqlRepos []*sqlRepository
 	if changedRepos {
@@ -737,7 +736,7 @@ func encodeMetricAggregate(v int, t int) *float32 {
 	if t == 0 {
 		return nil
 	}
-	a := float32(math.Round(float64(v)*10/float64(t)) * 10)
+	a := float32(math.Round(float64(v)*10/float64(t)) / 10)
 	return &a
 }
 func encodeMetric(v int) *int {
@@ -920,6 +919,16 @@ func cloneMap[K comparable, V any](m map[K]V) map[K]V {
 		result[k] = v
 	}
 	return result
+}
+
+func changed(changes archer.StorageChanges, desired ...archer.StorageChanges) bool {
+	for _, d := range desired {
+		if changes&d != 0 {
+			return true
+		}
+	}
+
+	return false
 }
 
 type NamingStrategy struct {

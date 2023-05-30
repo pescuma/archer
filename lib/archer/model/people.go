@@ -20,6 +20,10 @@ func NewPeople() *People {
 	}
 }
 
+func (ps *People) GetPerson(name string) *Person {
+	return ps.peopleByName[name]
+}
+
 func (ps *People) GetOrCreatePerson(name string) *Person {
 	return ps.GetOrCreatePersonEx(name, nil)
 }

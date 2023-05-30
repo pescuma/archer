@@ -151,13 +151,19 @@ func (g gitImporter) Import(storage archer.Storage) error {
 
 	for _, ne := range grouper.list() {
 		var person *model.Person
-		if ne.person == nil {
+		if len(ne.people) == 0 {
 			person = peopleDB.GetOrCreatePerson(ne.Name)
 
 		} else {
-			person = ne.person
-			if person.Name != ne.Name {
-				peopleDB.ChangePersonName(person, ne.Name)
+			people := lo.Filter(ne.people, func(p *model.Person, _ int) bool { return p.Name == ne.Name })
+			if len(people) > 0 {
+				person = people[0]
+			} else {
+				person = peopleDB.GetPerson(ne.Name)
+				if person == nil {
+					person = ne.people[0]
+					peopleDB.ChangePersonName(person, ne.Name)
+				}
 			}
 		}
 
@@ -493,6 +499,9 @@ func propagateChangesToParents(reposDB *model.Repositories, projectsDB *model.Pr
 		for _, d := range p.Dirs {
 			d.Changes.Clear()
 		}
+	}
+	for _, f := range filesDB.List() {
+		f.Changes.Clear()
 	}
 	for _, p := range peopleDB.ListPeople() {
 		p.Changes.Clear()

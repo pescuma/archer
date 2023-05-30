@@ -66,10 +66,14 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 		candidates = filesDB.ListByProjects(ps)
 	}
 
-	files := map[string]*model.File{}
-	modTimes := map[string]string{}
+	type work struct {
+		file    *model.File
+		modTime string
+	}
+	ws := map[string]*work{}
+
 	for _, file := range candidates {
-		if !m.options.ShouldContinue(len(files)) {
+		if !m.options.ShouldContinue(len(ws)) {
 			break
 		}
 
@@ -98,16 +102,19 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 			}
 		}
 
-		files[file.Path] = file
-		modTimes[file.Path] = modTime
+		ws[file.Path] = &work{
+			file:    file,
+			modTime: modTime,
+		}
 	}
 
-	fmt.Printf("Importing metrics from %v files...\n", len(files))
+	fmt.Printf("Importing metrics from %v files...\n", len(ws))
 
 	lastSave := 0
-	err = languages.ProcessKotlinFiles(lo.Keys(files),
+	err = languages.ProcessKotlinFiles(lo.Keys(ws),
 		func(path string, content kotlin_parser.IKotlinFileContext) error {
-			file := files[path]
+			w := ws[path]
+			file := w.file
 
 			file.Metrics.GuiceDependencies = dependencies.ComputeKotlinGuiceDependencies(file.Path, content)
 
@@ -115,7 +122,7 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 			file.Metrics.CyclomaticComplexity = c.CyclomaticComplexity
 			file.Metrics.CognitiveComplexity = c.CognitiveComplexity
 
-			file.Data["metrics:last_modified"] = modTimes[path]
+			file.Data["metrics:last_modified"] = w.modTime
 
 			return nil
 		},
@@ -130,14 +137,11 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 				if err != nil {
 					return err
 				}
-
-				fmt.Print("\r")
-				_ = bar.RenderBlank()
 			}
 			return nil
 		},
 		func(bar *progressbar.ProgressBar, index int, path string, err error) error {
-			file := files[path]
+			file := ws[path].file
 
 			if errors.Is(err, fs.ErrNotExist) {
 				file.Exists = false
