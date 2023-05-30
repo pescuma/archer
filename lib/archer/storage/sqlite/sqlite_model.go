@@ -93,9 +93,11 @@ type sqlPerson struct {
 	Name   string
 	TeamID *model.UUID
 
-	Names  []string          `gorm:"serializer:json"`
-	Emails []string          `gorm:"serializer:json"`
-	Data   map[string]string `gorm:"serializer:json"`
+	Names   []string             `gorm:"serializer:json"`
+	Emails  []string             `gorm:"serializer:json"`
+	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
+	Metrics *sqlMetricsAggregate `gorm:"embedded"`
+	Data    map[string]string    `gorm:"serializer:json"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

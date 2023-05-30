@@ -358,6 +358,8 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 		for _, email := range sp.Emails {
 			p.AddEmail(email)
 		}
+		p.Size = toModelSize(sp.Size)
+		p.Metrics = toModelMetricsAggregate(sp.Metrics)
 		p.Data = cloneMap(sp.Data)
 
 		if sp.TeamID != nil {
@@ -797,11 +799,13 @@ func toSqlFile(f *model.File) *sqlFile {
 
 func toSqlPerson(p *model.Person) *sqlPerson {
 	result := &sqlPerson{
-		ID:     p.ID,
-		Name:   p.Name,
-		Names:  p.ListNames(),
-		Emails: p.ListEmails(),
-		Data:   cloneMap(p.Data),
+		ID:      p.ID,
+		Name:    p.Name,
+		Names:   p.ListNames(),
+		Emails:  p.ListEmails(),
+		Size:    toSqlSize(p.Size),
+		Metrics: toSqlMetricsAggregate(p.Metrics, p.Size),
+		Data:    cloneMap(p.Data),
 	}
 
 	if p.Team != nil {
