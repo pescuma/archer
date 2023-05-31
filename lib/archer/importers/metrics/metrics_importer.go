@@ -3,6 +3,7 @@ package metrics
 import (
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"strings"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/Faire/archer/lib/archer/metrics/complexity"
 	"github.com/Faire/archer/lib/archer/metrics/dependencies"
 	"github.com/Faire/archer/lib/archer/model"
+	"github.com/Faire/archer/lib/archer/utils"
 )
 
 type metricsImporter struct {
@@ -197,6 +199,8 @@ func updateParentMetrics(projectsDB *model.Projects, filesDB *model.Files, peopl
 	for _, proj := range projectsDB.ListProjects(model.FilterExcludeExternal) {
 		for _, dir := range proj.Dirs {
 			for _, file := range filesByDir[dir.ID] {
+				file.Metrics.FocusedComplexity = computeFocusedComplexity(file.Size, file.Changes, file.Metrics)
+
 				dir.Metrics.Add(file.Metrics)
 
 				if file.TeamID != nil {
@@ -208,6 +212,26 @@ func updateParentMetrics(projectsDB *model.Projects, filesDB *model.Files, peopl
 			proj.Metrics.Add(dir.Metrics)
 		}
 	}
+}
+
+func computeFocusedComplexity(size *model.Size, changes *model.Changes, metrics *model.Metrics) int {
+	if size.Lines == 0 {
+		return 0
+	}
+
+	complexityBase := float64(utils.Max(metrics.CognitiveComplexity, 1))
+
+	deps := utils.Max(metrics.GuiceDependencies, 0)
+	depsLimit := 6.
+	depsExp := 0.4
+	depsFactor := math.Max(math.Pow(float64(deps)/depsLimit, depsExp), 0.01)
+
+	chs := changes.In6Months
+	chsLimit := 10.
+	chsExp := 0.2
+	chsFactor := math.Max(math.Pow(float64(chs)/chsLimit, chsExp), 0.01)
+
+	return int(math.Round(complexityBase * depsFactor * chsFactor))
 }
 
 func (l *Options) ShouldContinue(imported int) bool {

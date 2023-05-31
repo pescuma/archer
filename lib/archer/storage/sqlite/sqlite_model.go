@@ -185,6 +185,7 @@ type sqlMetrics struct {
 	DependenciesGuice    *int
 	ComplexityCyclomatic *int
 	ComplexityCognitive  *int
+	ComplexityFocus      *int
 }
 
 type sqlMetricsAggregate struct {
@@ -194,6 +195,8 @@ type sqlMetricsAggregate struct {
 	ComplexityCyclomaticAvg   *float32
 	ComplexityCognitiveTotal  *int
 	ComplexityCognitiveAvg    *float32
+	ComplexityFocusTotal      *int
+	ComplexityFocusAvg        *float32
 }
 
 type sqlChanges struct {

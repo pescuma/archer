@@ -699,6 +699,7 @@ func toSqlMetrics(metrics *model.Metrics) *sqlMetrics {
 		DependenciesGuice:    encodeMetric(metrics.GuiceDependencies),
 		ComplexityCyclomatic: encodeMetric(metrics.CyclomaticComplexity),
 		ComplexityCognitive:  encodeMetric(metrics.CognitiveComplexity),
+		ComplexityFocus:      encodeMetric(metrics.FocusedComplexity),
 	}
 }
 
@@ -707,6 +708,7 @@ func toModelMetrics(metrics *sqlMetrics) *model.Metrics {
 		GuiceDependencies:    decodeMetric(metrics.DependenciesGuice),
 		CyclomaticComplexity: decodeMetric(metrics.ComplexityCyclomatic),
 		CognitiveComplexity:  decodeMetric(metrics.ComplexityCognitive),
+		FocusedComplexity:    decodeMetric(metrics.ComplexityFocus),
 	}
 }
 
@@ -718,6 +720,8 @@ func toSqlMetricsAggregate(metrics *model.Metrics, size *model.Size) *sqlMetrics
 		ComplexityCyclomaticAvg:   encodeMetricAggregate(metrics.CyclomaticComplexity, size.Files),
 		ComplexityCognitiveTotal:  encodeMetric(metrics.CognitiveComplexity),
 		ComplexityCognitiveAvg:    encodeMetricAggregate(metrics.CognitiveComplexity, size.Files),
+		ComplexityFocusTotal:      encodeMetric(metrics.FocusedComplexity),
+		ComplexityFocusAvg:        encodeMetricAggregate(metrics.FocusedComplexity, size.Files),
 	}
 }
 
@@ -726,6 +730,7 @@ func toModelMetricsAggregate(metrics *sqlMetricsAggregate) *model.Metrics {
 		GuiceDependencies:    decodeMetric(metrics.DependenciesGuiceTotal),
 		CyclomaticComplexity: decodeMetric(metrics.ComplexityCyclomaticTotal),
 		CognitiveComplexity:  decodeMetric(metrics.ComplexityCognitiveTotal),
+		FocusedComplexity:    decodeMetric(metrics.ComplexityFocusTotal),
 	}
 }
 
