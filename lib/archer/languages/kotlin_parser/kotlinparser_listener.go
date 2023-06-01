@@ -1,4 +1,4 @@
-// Code generated from java-escape by ANTLR 4.11.1. DO NOT EDIT.
+// Code generated from KotlinParser.g4 by ANTLR 4.12.0. DO NOT EDIT.
 
 package kotlin_parser // KotlinParser
 import "github.com/antlr/antlr4/runtime/Go/antlr/v4"
