@@ -29,7 +29,7 @@ WS
 
 NL: '\n' | '\r' '\n'?;
 
-fragment Hidden: DelimitedComment | LineComment | WS;
+fragment Hidden: DelimitedComment | WS;
 
 // SECTION: separatorsAndOperations
 
