@@ -135,7 +135,7 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 				_ = bar.Clear()
 				fmt.Print("Writing metrics for files...")
 
-				err = storage.WriteFiles(filesDB, archer.ChangedMetrics)
+				err = storage.WriteFiles(filesDB, archer.ChangedData|archer.ChangedMetrics)
 				if err != nil {
 					return err
 				}
@@ -223,7 +223,7 @@ func computeFocusedComplexity(size *model.Size, changes *model.Changes, metrics 
 
 	deps := utils.Max(metrics.GuiceDependencies, 0)
 	depsLimit := 6.
-	depsExp := 0.4
+	depsExp := 0.3
 	depsFactor := math.Max(math.Pow(float64(deps)/depsLimit, depsExp), 0.01)
 
 	chs := changes.In6Months
