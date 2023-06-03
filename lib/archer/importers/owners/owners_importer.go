@@ -62,9 +62,9 @@ func (m *ownersImporter) Import(storage archer.Storage) error {
 
 	var candidates []*model.File
 	if len(m.filters) == 0 {
-		candidates = filesDB.List()
+		candidates = filesDB.ListFiles()
 	} else {
-		candidates = filesDB.ListByProjects(ps)
+		candidates = filesDB.ListFilesByProjects(ps)
 	}
 
 	type work struct {
@@ -140,8 +140,8 @@ func (m *ownersImporter) Import(storage archer.Storage) error {
 		contents := string(bytes)
 		ms := lo.Uniq(lo.Map(w.re.FindAllStringSubmatch(contents, -1), func(m []string, _ int) string { return m[1] }))
 		if len(ms) == 1 {
-			team := peopleDB.GetOrCreateTeam(ms[0])
-			w.file.TeamID = &team.ID
+			area := peopleDB.GetOrCreateProductArea(ms[0])
+			w.file.ProductAreaID = &area.ID
 
 		} else if len(ms) > 1 {
 			_ = bar.Clear()

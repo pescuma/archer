@@ -149,7 +149,7 @@ func (m *mysqlImporter) importFKs(db *sql.DB, projs *model.Projects) error {
 		proj := projs.GetOrCreate(fk.schemaName, fk.tableName)
 
 		dep := projs.GetOrCreate(fk.schemaName, fk.referencedTableName)
-		proj.GetDependency(dep)
+		proj.GetOrCreateDependency(dep)
 
 		toSave[rootAndName{fk.schemaName, fk.tableName}] = true
 	}

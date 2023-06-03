@@ -63,9 +63,9 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 
 	var candidates []*model.File
 	if len(m.filters) == 0 {
-		candidates = filesDB.List()
+		candidates = filesDB.ListFiles()
 	} else {
-		candidates = filesDB.ListByProjects(ps)
+		candidates = filesDB.ListFilesByProjects(ps)
 	}
 
 	type work struct {
@@ -111,6 +111,10 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 	}
 
 	fmt.Printf("Importing metrics from %v files...\n", len(ws))
+
+	for k, _ := range ws {
+		fmt.Printf("  %v\n", k)
+	}
 
 	lastSave := 0
 	err = languages.ProcessKotlinFiles(lo.Keys(ws),
@@ -190,11 +194,23 @@ func updateParentMetrics(projectsDB *model.Projects, filesDB *model.Files, peopl
 			d.Metrics.Clear()
 		}
 	}
-	for _, t := range peopleDB.ListTeams() {
+
+	for _, o := range peopleDB.ListOrganizations() {
+		o.Metrics.Clear()
+	}
+	gs := peopleDB.ListGroupsByID()
+	for _, g := range gs {
+		g.Metrics.Clear()
+	}
+	ts := peopleDB.ListTeamsByID()
+	for _, t := range ts {
 		t.Metrics.Clear()
 	}
+	for _, a := range peopleDB.ListProductAreas() {
+		a.Metrics.Clear()
+	}
 
-	filesByDir := filesDB.GroupByDirectory()
+	filesByDir := filesDB.GroupFilesByDirectory()
 
 	for _, proj := range projectsDB.ListProjects(model.FilterExcludeExternal) {
 		for _, dir := range proj.Dirs {
@@ -203,9 +219,17 @@ func updateParentMetrics(projectsDB *model.Projects, filesDB *model.Files, peopl
 
 				dir.Metrics.Add(file.Metrics)
 
+				if file.OrganizationID != nil {
+					peopleDB.GetOrganizationByID(*file.OrganizationID).Metrics.Add(file.Metrics)
+				}
+				if file.GroupID != nil {
+					gs[*file.GroupID].Metrics.Add(file.Metrics)
+				}
 				if file.TeamID != nil {
-					team := peopleDB.GetTeamByID(*file.TeamID)
-					team.Metrics.Add(file.Metrics)
+					ts[*file.TeamID].Metrics.Add(file.Metrics)
+				}
+				if file.ProductAreaID != nil {
+					peopleDB.GetProductAreaByID(*file.ProductAreaID).Metrics.Add(file.Metrics)
 				}
 			}
 
@@ -224,12 +248,12 @@ func computeFocusedComplexity(size *model.Size, changes *model.Changes, metrics 
 	deps := utils.Max(metrics.GuiceDependencies, 0)
 	depsLimit := 6.
 	depsExp := 0.3
-	depsFactor := math.Max(math.Pow(float64(deps)/depsLimit, depsExp), 0.01)
+	depsFactor := math.Max(math.Pow(float64(deps)/depsLimit, depsExp), 0.1)
 
 	chs := changes.In6Months
 	chsLimit := 10.
 	chsExp := 0.2
-	chsFactor := math.Max(math.Pow(float64(chs)/chsLimit, chsExp), 0.01)
+	chsFactor := math.Max(math.Pow(float64(chs)/chsLimit, chsExp), 0.1)
 
 	return int(math.Round(complexityBase * depsFactor * chsFactor))
 }

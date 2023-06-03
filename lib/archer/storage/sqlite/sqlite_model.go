@@ -76,7 +76,11 @@ type sqlFile struct {
 	ProjectID          *model.UUID `gorm:"index"`
 	ProjectDirectoryID *model.UUID `gorm:"index"`
 	RepositoryID       *model.UUID `gorm:"index"`
-	TeamID             *model.UUID `gorm:"index"`
+
+	ProductAreaID *model.UUID `gorm:"index"`
+	OrgID         *model.UUID `gorm:"index"`
+	OrgGroupID    *model.UUID `gorm:"index"`
+	OrgTeamID     *model.UUID `gorm:"index"`
 
 	Exists  bool
 	Size    *sqlSize          `gorm:"embedded;embeddedPrefix:size_"`
@@ -92,9 +96,8 @@ type sqlFile struct {
 }
 
 type sqlPerson struct {
-	ID     model.UUID
-	Name   string
-	TeamID *model.UUID
+	ID   model.UUID
+	Name string
 
 	Names   []string             `gorm:"serializer:json"`
 	Emails  []string             `gorm:"serializer:json"`
@@ -108,9 +111,10 @@ type sqlPerson struct {
 
 	CommitAuthored []sqlRepositoryCommit `gorm:"foreignKey:AuthorID"`
 	CommitCommited []sqlRepositoryCommit `gorm:"foreignKey:CommitterID"`
+	TeamMembers    []sqlTeamMember       `gorm:"foreignKey:PersonID"`
 }
 
-type sqlTeam struct {
+type sqlProductArea struct {
 	ID   model.UUID
 	Name string
 
@@ -122,7 +126,89 @@ type sqlTeam struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	People []sqlPerson `gorm:"foreignKey:TeamID"`
+	TeamAreas []sqlTeamArea `gorm:"foreignKey:CodeAreaID"`
+}
+
+type sqlOrg struct {
+	ID   model.UUID
+	Name string
+
+	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
+	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
+	Metrics *sqlMetricsAggregate `gorm:"embedded"`
+	Data    map[string]string    `gorm:"serializer:json"`
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	Groups      []sqlOrgGroup   `gorm:"foreignKey:OrgID"`
+	Teams       []sqlOrgTeam    `gorm:"foreignKey:OrgID"`
+	TeamMembers []sqlTeamMember `gorm:"foreignKey:OrgID"`
+	TeamAreas   []sqlTeamArea   `gorm:"foreignKey:OrgID"`
+}
+
+type sqlOrgGroup struct {
+	ID    model.UUID
+	Name  string
+	OrgID model.UUID
+
+	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
+	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
+	Metrics *sqlMetricsAggregate `gorm:"embedded"`
+	Data    map[string]string    `gorm:"serializer:json"`
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	Teams       []sqlOrgTeam    `gorm:"foreignKey:OrgGroupID"`
+	TeamMembers []sqlTeamMember `gorm:"foreignKey:OrgGroupID"`
+	TeamAreas   []sqlTeamArea   `gorm:"foreignKey:OrgGroupID"`
+}
+
+type sqlOrgTeam struct {
+	ID         model.UUID
+	Name       string
+	OrgGroupID model.UUID
+	OrgID      model.UUID
+
+	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
+	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
+	Metrics *sqlMetricsAggregate `gorm:"embedded"`
+	Data    map[string]string    `gorm:"serializer:json"`
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	TeamMembers []sqlTeamMember `gorm:"foreignKey:OrgTeamID"`
+	TeamAreas   []sqlTeamArea   `gorm:"foreignKey:OrgTeamID"`
+}
+
+type sqlTeamMember struct {
+	ID         model.UUID
+	PersonID   model.UUID `gorm:"index"`
+	OrgTeamID  model.UUID `gorm:"index"`
+	OrgGroupID model.UUID `gorm:"index"`
+	OrgID      model.UUID `gorm:"index"`
+
+	Start *time.Time
+	End   *time.Time
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type sqlTeamArea struct {
+	ID         model.UUID
+	CodeAreaID model.UUID `gorm:"index"`
+	OrgTeamID  model.UUID `gorm:"index"`
+	OrgGroupID model.UUID `gorm:"index"`
+	OrgID      model.UUID `gorm:"index"`
+
+	Start *time.Time
+	End   *time.Time
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type sqlRepository struct {

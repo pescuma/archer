@@ -94,7 +94,6 @@ func (g gitImporter) Import(storage archer.Storage) error {
 	imported := 0
 	ws := make([]*work, 0, len(g.rootDirs))
 	for _, rootDir := range g.rootDirs {
-		var err error
 		rootDir, err = filepath.Abs(rootDir)
 		if err != nil {
 			return err
@@ -221,7 +220,6 @@ func (g gitImporter) Import(storage archer.Storage) error {
 		}
 
 		touchedFiles := map[model.UUID]*model.File{}
-		importedFromRepo := 0
 		err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
 			if !g.options.ShouldContinue(commitNumber, imported, gitCommit.Committer.When) {
 				return abort
@@ -234,7 +232,6 @@ func (g gitImporter) Import(storage archer.Storage) error {
 			}
 
 			imported++
-			importedFromRepo++
 
 			bar.Describe(w.repo.Name + " " + gitCommit.Committer.When.Format("2006-01-02 15"))
 			_ = bar.Add(1)
@@ -280,10 +277,10 @@ func (g gitImporter) Import(storage archer.Storage) error {
 				filePath := filepath.Join(w.rootDir, gitFile.Name)
 				oldFilePath := filepath.Join(w.rootDir, gitFile.OldName)
 
-				file := filesDB.GetOrCreate(filePath)
+				file := filesDB.GetOrCreateFile(filePath)
 				file.RepositoryID = &w.repo.ID
 
-				oldFile := filesDB.GetOrCreate(oldFilePath)
+				oldFile := filesDB.GetOrCreateFile(oldFilePath)
 				oldFile.RepositoryID = &w.repo.ID
 
 				commit.AddFile(file.ID, utils.IIf(file != oldFile, &oldFile.ID, nil), gitFile.Modified, gitFile.Added, gitFile.Deleted)
@@ -295,7 +292,7 @@ func (g gitImporter) Import(storage archer.Storage) error {
 				touchedFiles[file.ID] = file
 			}
 
-			if g.options.SaveEvery != nil && importedFromRepo%*g.options.SaveEvery == 0 {
+			if g.options.SaveEvery != nil && imported%*g.options.SaveEvery == 0 {
 				err = write(w.repo)
 				if err != nil {
 					return err
@@ -500,14 +497,26 @@ func propagateChangesToParents(reposDB *model.Repositories, projectsDB *model.Pr
 			d.Changes.Clear()
 		}
 	}
-	for _, f := range filesDB.List() {
+	for _, f := range filesDB.ListFiles() {
 		f.Changes.Clear()
 	}
+
 	for _, p := range peopleDB.ListPeople() {
 		p.Changes.Clear()
 	}
-	for _, t := range peopleDB.ListTeams() {
+	for _, o := range peopleDB.ListOrganizations() {
+		o.Changes.Clear()
+	}
+	gs := peopleDB.ListGroupsByID()
+	for _, g := range gs {
+		g.Changes.Clear()
+	}
+	ts := peopleDB.ListTeamsByID()
+	for _, t := range ts {
 		t.Changes.Clear()
+	}
+	for _, a := range peopleDB.ListProductAreas() {
+		a.Changes.Clear()
 	}
 
 	now := time.Now()
@@ -520,11 +529,14 @@ func propagateChangesToParents(reposDB *model.Repositories, projectsDB *model.Pr
 				c.Total++
 			}
 
-			a := peopleDB.GetPersonByID(c.AuthorID)
-			addChanges(a.Changes)
+			author := peopleDB.GetPersonByID(c.AuthorID)
+			addChanges(author.Changes)
 
 			projs := map[*model.Project]bool{}
 			dirs := map[*model.ProjectDirectory]bool{}
+			areas := map[*model.ProductArea]bool{}
+			orgs := map[*model.Organization]bool{}
+			groups := map[*model.Group]bool{}
 			teams := map[*model.Team]bool{}
 			for _, cf := range c.Files {
 				addLines := func(c *model.Changes) {
@@ -533,24 +545,42 @@ func propagateChangesToParents(reposDB *model.Repositories, projectsDB *model.Pr
 					c.DeletedLines += cf.DeletedLines
 				}
 
-				f := filesDB.GetByID(cf.FileID)
-				addChanges(f.Changes)
-				addLines(f.Changes)
+				file := filesDB.GetFileByID(cf.FileID)
+				addChanges(file.Changes)
+				addLines(file.Changes)
 
-				addLines(a.Changes)
+				addLines(author.Changes)
 
-				if f.ProjectID != nil {
-					p := projectsDB.GetByID(*f.ProjectID)
+				if file.ProjectID != nil {
+					p := projectsDB.GetByID(*file.ProjectID)
 					addLines(p.Changes)
 					projs[p] = true
 				}
-				if f.ProjectDirectoryID != nil {
-					d := dirsByIDs[*f.ProjectDirectoryID]
+				if file.ProjectDirectoryID != nil {
+					d := dirsByIDs[*file.ProjectDirectoryID]
 					addLines(d.Changes)
 					dirs[d] = true
 				}
-				if f.TeamID != nil {
-					t := peopleDB.GetTeamByID(*f.TeamID)
+
+				if file.ProductAreaID != nil {
+					a := peopleDB.GetProductAreaByID(*file.ProductAreaID)
+					addLines(a.Changes)
+					areas[a] = true
+				}
+
+				// TODO Make this dependent on time
+				if file.OrganizationID != nil {
+					o := peopleDB.GetOrganizationByID(*file.OrganizationID)
+					addLines(o.Changes)
+					orgs[o] = true
+				}
+				if file.GroupID != nil {
+					g := gs[*file.GroupID]
+					addLines(g.Changes)
+					groups[g] = true
+				}
+				if file.TeamID != nil {
+					t := ts[*file.TeamID]
 					addLines(t.Changes)
 					teams[t] = true
 				}
@@ -559,11 +589,20 @@ func propagateChangesToParents(reposDB *model.Repositories, projectsDB *model.Pr
 			for _, p := range lo.Keys(projs) {
 				addChanges(p.Changes)
 			}
-
 			for _, d := range lo.Keys(dirs) {
 				addChanges(d.Changes)
 			}
 
+			for _, a := range lo.Keys(areas) {
+				addChanges(a.Changes)
+			}
+
+			for _, o := range lo.Keys(orgs) {
+				addChanges(o.Changes)
+			}
+			for _, g := range lo.Keys(groups) {
+				addChanges(g.Changes)
+			}
 			for _, t := range lo.Keys(teams) {
 				addChanges(t.Changes)
 			}

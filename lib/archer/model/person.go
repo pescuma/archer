@@ -22,7 +22,7 @@ type Person struct {
 func NewPerson(name string, id *UUID) *Person {
 	var uuid UUID
 	if id == nil {
-		uuid = NewUUID("a")
+		uuid = NewUUID("i")
 	} else {
 		uuid = *id
 	}

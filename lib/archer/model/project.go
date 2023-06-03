@@ -51,7 +51,7 @@ func (p *Project) String() string {
 	return fmt.Sprintf("%v:%v[%v]", p.Root, p.Name, p.Type)
 }
 
-func (p *Project) GetDependency(d *Project) *ProjectDependency {
+func (p *Project) GetOrCreateDependency(d *Project) *ProjectDependency {
 	result, ok := p.Dependencies[d.Name]
 
 	if !ok {

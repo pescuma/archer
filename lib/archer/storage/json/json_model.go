@@ -109,7 +109,7 @@ func ProjDepsFromJson(result *model.Projects, content string) error {
 	for _, jp := range jps.Deps {
 		target := result.GetOrCreate(jp.TargetRoot, jp.TargetName)
 
-		d := proj.GetDependency(target)
+		d := proj.GetOrCreateDependency(target)
 		d.ID = jp.ID
 		d.Data = jp.Config
 	}

@@ -54,9 +54,9 @@ func (l *locImporter) Import(storage archer.Storage) error {
 
 	var candidates []*model.File
 	if len(l.filters) == 0 {
-		candidates = filesDB.List()
+		candidates = filesDB.ListFiles()
 	} else {
-		candidates = filesDB.ListByProjects(ps)
+		candidates = filesDB.ListFilesByProjects(ps)
 	}
 
 	fmt.Printf("Importing size from %v files...\n", len(candidates))
@@ -128,11 +128,22 @@ func (l *locImporter) Import(storage archer.Storage) error {
 }
 
 func updateParents(projectsDB *model.Projects, filesDB *model.Files, peopleDB *model.People) {
-	for _, team := range peopleDB.ListTeams() {
-		team.Size.Clear()
+	for _, o := range peopleDB.ListOrganizations() {
+		o.Size.Clear()
+	}
+	gs := peopleDB.ListGroupsByID()
+	for _, g := range gs {
+		g.Size.Clear()
+	}
+	ts := peopleDB.ListTeamsByID()
+	for _, t := range ts {
+		t.Size.Clear()
+	}
+	for _, a := range peopleDB.ListProductAreas() {
+		a.Size.Clear()
 	}
 
-	filesByDir := filesDB.GroupByDirectory()
+	filesByDir := filesDB.GroupFilesByDirectory()
 
 	for _, proj := range projectsDB.ListProjects(model.FilterExcludeExternal) {
 		proj.Sizes = map[string]*model.Size{}
@@ -143,9 +154,17 @@ func updateParents(projectsDB *model.Projects, filesDB *model.Files, peopleDB *m
 			for _, file := range filesByDir[dir.ID] {
 				dir.Size.Add(file.Size)
 
+				if file.OrganizationID != nil {
+					peopleDB.GetOrganizationByID(*file.OrganizationID).Size.Add(file.Size)
+				}
+				if file.GroupID != nil {
+					gs[*file.GroupID].Size.Add(file.Size)
+				}
 				if file.TeamID != nil {
-					team := peopleDB.GetTeamByID(*file.TeamID)
-					team.Size.Add(file.Size)
+					ts[*file.TeamID].Size.Add(file.Size)
+				}
+				if file.ProductAreaID != nil {
+					peopleDB.GetProductAreaByID(*file.ProductAreaID).Size.Add(file.Size)
 				}
 			}
 

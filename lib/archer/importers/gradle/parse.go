@@ -111,7 +111,7 @@ func parseDeps(projects *model.Projects, content string, rootProj string, projsI
 				lp = utils.Last(stack)
 			}
 
-			lp.proj.GetDependency(p)
+			lp.proj.GetOrCreateDependency(p)
 			stack = append(stack, pd{p, depth})
 		}
 	}
