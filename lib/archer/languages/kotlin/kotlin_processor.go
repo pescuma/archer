@@ -1,4 +1,4 @@
-package languages
+package kotlin
 
 import (
 	"fmt"
@@ -21,7 +21,7 @@ type work struct {
 	err      error
 }
 
-func ProcessKotlinFiles(paths []string,
+func ProcessFiles(paths []string,
 	process func(file string, content kotlin_parser.IKotlinFileContext) error,
 	onProcessed func(bar *progressbar.ProgressBar, index int, file string) error,
 	onError func(bar *progressbar.ProgressBar, index int, file string, err error) error,

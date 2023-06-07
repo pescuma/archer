@@ -18,7 +18,7 @@ func computeGuiceDeps(contents string) int {
 
 	file := p.KotlinFile()
 
-	return ComputeKotlinGuiceDependencies("a.kt", file)
+	return ComputeKotlinGuiceDependencies("a.kt", nil, file)
 }
 
 func TestEmptyFile(t *testing.T) {

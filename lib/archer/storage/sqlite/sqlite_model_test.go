@@ -9,6 +9,8 @@ import (
 )
 
 func TestEqualsEmpty(t *testing.T) {
+	t.Parallel()
+
 	p1 := &sqlProject{}
 	p2 := &sqlProject{}
 
@@ -19,6 +21,8 @@ func TestEqualsEmpty(t *testing.T) {
 }
 
 func TestEqualsSomeFields(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now()
 	p1 := &sqlProject{
 		ID:        "a",
@@ -36,6 +40,8 @@ func TestEqualsSomeFields(t *testing.T) {
 }
 
 func TestEqualsSize(t *testing.T) {
+	t.Parallel()
+
 	p1 := &sqlProject{
 		Sizes: map[string]*sqlSize{
 			"a": {Bytes: 1},
@@ -54,6 +60,8 @@ func TestEqualsSize(t *testing.T) {
 }
 
 func TestEqualsData(t *testing.T) {
+	t.Parallel()
+
 	p1 := &sqlProject{
 		Data: map[string]string{
 			"a": "b",

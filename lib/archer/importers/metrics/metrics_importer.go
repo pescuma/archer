@@ -12,7 +12,7 @@ import (
 	"github.com/schollz/progressbar/v3"
 
 	"github.com/Faire/archer/lib/archer"
-	"github.com/Faire/archer/lib/archer/languages"
+	"github.com/Faire/archer/lib/archer/languages/kotlin"
 	"github.com/Faire/archer/lib/archer/languages/kotlin_parser"
 	"github.com/Faire/archer/lib/archer/metrics/complexity"
 	"github.com/Faire/archer/lib/archer/metrics/dependencies"
@@ -112,17 +112,16 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Importing metrics from %v files...\n", len(ws))
 
-	for k, _ := range ws {
-		fmt.Printf("  %v\n", k)
-	}
-
 	lastSave := 0
-	err = languages.ProcessKotlinFiles(lo.Keys(ws),
+	err = kotlin.ProcessFiles(lo.Keys(ws),
 		func(path string, content kotlin_parser.IKotlinFileContext) error {
 			w := ws[path]
 			file := w.file
 
-			file.Metrics.GuiceDependencies = dependencies.ComputeKotlinGuiceDependencies(file.Path, content)
+			structure := kotlin.ImportStructure(w.file.Path, content)
+
+			file.Metrics.GuiceDependencies = dependencies.ComputeKotlinGuiceDependencies(file.Path, structure, content)
+			file.Metrics.Abstracts = dependencies.ComputeKotlinAbstracts(file.Path, structure, content)
 
 			c := complexity.ComputeKotlinComplexity(file.Path, content)
 			file.Metrics.CyclomaticComplexity = c.CyclomaticComplexity

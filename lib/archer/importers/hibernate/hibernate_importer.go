@@ -14,7 +14,7 @@ import (
 
 	"github.com/Faire/archer/lib/archer"
 	"github.com/Faire/archer/lib/archer/common"
-	"github.com/Faire/archer/lib/archer/languages"
+	"github.com/Faire/archer/lib/archer/languages/kotlin"
 	"github.com/Faire/archer/lib/archer/languages/kotlin_parser"
 	"github.com/Faire/archer/lib/archer/model"
 	"github.com/Faire/archer/lib/archer/utils"
@@ -103,7 +103,7 @@ func (h *hibernateImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Importing tables from hibernate from %v files...\n", len(files))
 
-	err = languages.ProcessKotlinFiles(lo.Keys(files),
+	err = kotlin.ProcessFiles(lo.Keys(files),
 		func(path string, content kotlin_parser.IKotlinFileContext) error {
 			file := files[path]
 

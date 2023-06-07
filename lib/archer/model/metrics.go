@@ -2,6 +2,7 @@ package model
 
 type Metrics struct {
 	GuiceDependencies    int
+	Abstracts            int
 	CyclomaticComplexity int
 	CognitiveComplexity  int
 	FocusedComplexity    int

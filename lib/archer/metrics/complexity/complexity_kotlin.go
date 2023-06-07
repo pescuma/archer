@@ -3,7 +3,7 @@ package complexity
 import (
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
 
-	"github.com/Faire/archer/lib/archer/languages"
+	"github.com/Faire/archer/lib/archer/languages/kotlin"
 	"github.com/Faire/archer/lib/archer/languages/kotlin_parser"
 	"github.com/Faire/archer/lib/archer/utils"
 )
@@ -15,9 +15,9 @@ type Result struct {
 
 func ComputeKotlinComplexity(path string, file kotlin_parser.IKotlinFileContext) Result {
 	l := &complexityTreeListener{
-		KotlinASTListener: languages.NewKotlinASTListener(path),
-		cognitive:         NewCognitiveComplexity(),
-		cyclomatic:        NewCyclomaticComplexity(),
+		ASTListener: kotlin.NewASTListener(path),
+		cognitive:   NewCognitiveComplexity(),
+		cyclomatic:  NewCyclomaticComplexity(),
 	}
 
 	antlr.NewParseTreeWalker().Walk(l, file)
@@ -26,14 +26,14 @@ func ComputeKotlinComplexity(path string, file kotlin_parser.IKotlinFileContext)
 }
 
 type complexityTreeListener struct {
-	*languages.KotlinASTListener
+	*kotlin.ASTListener
 
 	cognitive  *CognitiveComplexity
 	cyclomatic *CyclomaticComplexity
 }
 
 func (l *complexityTreeListener) EnterAnonymousInitializer(ctx *kotlin_parser.AnonymousInitializerContext) {
-	l.KotlinASTListener.EnterAnonymousInitializer(ctx)
+	l.ASTListener.EnterAnonymousInitializer(ctx)
 
 	l.cognitive.OnEnterFunction()
 }
@@ -41,11 +41,11 @@ func (l *complexityTreeListener) EnterAnonymousInitializer(ctx *kotlin_parser.An
 func (l *complexityTreeListener) ExitAnonymousInitializer(ctx *kotlin_parser.AnonymousInitializerContext) {
 	l.cognitive.OnExitFunction()
 
-	l.KotlinASTListener.ExitAnonymousInitializer(ctx)
+	l.ASTListener.ExitAnonymousInitializer(ctx)
 }
 
 func (l *complexityTreeListener) EnterSecondaryConstructor(ctx *kotlin_parser.SecondaryConstructorContext) {
-	l.KotlinASTListener.EnterSecondaryConstructor(ctx)
+	l.ASTListener.EnterSecondaryConstructor(ctx)
 
 	l.cognitive.OnEnterFunction()
 }
@@ -53,11 +53,11 @@ func (l *complexityTreeListener) EnterSecondaryConstructor(ctx *kotlin_parser.Se
 func (l *complexityTreeListener) ExitSecondaryConstructor(ctx *kotlin_parser.SecondaryConstructorContext) {
 	l.cognitive.OnExitFunction()
 
-	l.KotlinASTListener.ExitSecondaryConstructor(ctx)
+	l.ASTListener.ExitSecondaryConstructor(ctx)
 }
 
 func (l *complexityTreeListener) EnterFunctionDeclaration(ctx *kotlin_parser.FunctionDeclarationContext) {
-	l.KotlinASTListener.EnterFunctionDeclaration(ctx)
+	l.ASTListener.EnterFunctionDeclaration(ctx)
 
 	l.cyclomatic.OnEnterFunction()
 	l.cognitive.OnEnterFunction()
@@ -66,11 +66,11 @@ func (l *complexityTreeListener) EnterFunctionDeclaration(ctx *kotlin_parser.Fun
 func (l *complexityTreeListener) ExitFunctionDeclaration(ctx *kotlin_parser.FunctionDeclarationContext) {
 	l.cognitive.OnExitFunction()
 
-	l.KotlinASTListener.ExitFunctionDeclaration(ctx)
+	l.ASTListener.ExitFunctionDeclaration(ctx)
 }
 
 func (l *complexityTreeListener) EnterLambdaLiteral(ctx *kotlin_parser.LambdaLiteralContext) {
-	l.KotlinASTListener.EnterLambdaLiteral(ctx)
+	l.ASTListener.EnterLambdaLiteral(ctx)
 
 	l.cognitive.OnEnterFunction()
 }
@@ -78,11 +78,11 @@ func (l *complexityTreeListener) EnterLambdaLiteral(ctx *kotlin_parser.LambdaLit
 func (l *complexityTreeListener) ExitLambdaLiteral(ctx *kotlin_parser.LambdaLiteralContext) {
 	l.cognitive.OnExitFunction()
 
-	l.KotlinASTListener.ExitLambdaLiteral(ctx)
+	l.ASTListener.ExitLambdaLiteral(ctx)
 }
 
 func (l *complexityTreeListener) EnterLoopStatement(ctx *kotlin_parser.LoopStatementContext) {
-	l.KotlinASTListener.EnterLoopStatement(ctx)
+	l.ASTListener.EnterLoopStatement(ctx)
 
 	l.cyclomatic.OnLoop()
 	l.cognitive.OnEnterLoop()
@@ -91,11 +91,11 @@ func (l *complexityTreeListener) EnterLoopStatement(ctx *kotlin_parser.LoopState
 func (l *complexityTreeListener) ExitLoopStatement(ctx *kotlin_parser.LoopStatementContext) {
 	l.cognitive.OnExitLoop()
 
-	l.KotlinASTListener.ExitLoopStatement(ctx)
+	l.ASTListener.ExitLoopStatement(ctx)
 }
 
 func (l *complexityTreeListener) EnterWhenExpression(ctx *kotlin_parser.WhenExpressionContext) {
-	l.KotlinASTListener.EnterWhenExpression(ctx)
+	l.ASTListener.EnterWhenExpression(ctx)
 
 	l.cognitive.OnEnterSwitch()
 }
@@ -103,17 +103,17 @@ func (l *complexityTreeListener) EnterWhenExpression(ctx *kotlin_parser.WhenExpr
 func (l *complexityTreeListener) ExitWhenExpression(ctx *kotlin_parser.WhenExpressionContext) {
 	l.cognitive.OnExitSwitch()
 
-	l.KotlinASTListener.ExitWhenExpression(ctx)
+	l.ASTListener.ExitWhenExpression(ctx)
 }
 
 func (l *complexityTreeListener) EnterWhenEntry(ctx *kotlin_parser.WhenEntryContext) {
-	l.KotlinASTListener.EnterWhenEntry(ctx)
+	l.ASTListener.EnterWhenEntry(ctx)
 
 	l.cyclomatic.OnConditional()
 }
 
 func (l *complexityTreeListener) EnterCatchBlock(ctx *kotlin_parser.CatchBlockContext) {
-	l.KotlinASTListener.EnterCatchBlock(ctx)
+	l.ASTListener.EnterCatchBlock(ctx)
 
 	l.cyclomatic.OnConditional()
 	l.cognitive.OnEnterCatch()
@@ -122,11 +122,11 @@ func (l *complexityTreeListener) EnterCatchBlock(ctx *kotlin_parser.CatchBlockCo
 func (l *complexityTreeListener) ExitCatchBlock(ctx *kotlin_parser.CatchBlockContext) {
 	l.cognitive.OnExitCatch()
 
-	l.KotlinASTListener.ExitCatchBlock(ctx)
+	l.ASTListener.ExitCatchBlock(ctx)
 }
 
 func (l *complexityTreeListener) EnterIfExpression(ctx *kotlin_parser.IfExpressionContext) {
-	l.KotlinASTListener.EnterIfExpression(ctx)
+	l.ASTListener.EnterIfExpression(ctx)
 
 	l.cyclomatic.OnConditional()
 	l.cognitive.OnEnterConditional(!isElseIf(ctx))
@@ -158,11 +158,11 @@ func isElseIf(ctx *kotlin_parser.IfExpressionContext) bool {
 func (l *complexityTreeListener) ExitIfExpression(ctx *kotlin_parser.IfExpressionContext) {
 	l.cognitive.OnExitConditional()
 
-	l.KotlinASTListener.ExitIfExpression(ctx)
+	l.ASTListener.ExitIfExpression(ctx)
 }
 
 func (l *complexityTreeListener) EnterJumpExpression(ctx *kotlin_parser.JumpExpressionContext) {
-	l.KotlinASTListener.EnterJumpExpression(ctx)
+	l.ASTListener.EnterJumpExpression(ctx)
 
 	if ctx.CONTINUE() != nil || ctx.CONTINUE_AT() != nil || ctx.BREAK() != nil || ctx.BREAK_AT() != nil {
 		l.cyclomatic.OnJump()
@@ -186,7 +186,7 @@ var nestingFunctions = map[string]bool{
 }
 
 func (l *complexityTreeListener) EnterCallSuffix(ctx *kotlin_parser.CallSuffixContext) {
-	l.KotlinASTListener.EnterCallSuffix(ctx)
+	l.ASTListener.EnterCallSuffix(ctx)
 
 	expr := getParentExpression[*kotlin_parser.PostfixUnaryExpressionContext](ctx)
 
@@ -238,7 +238,7 @@ func getParentExpression[T any](ctx *kotlin_parser.CallSuffixContext) T {
 }
 
 func (l *complexityTreeListener) EnterDisjunction(ctx *kotlin_parser.DisjunctionContext) {
-	l.KotlinASTListener.EnterDisjunction(ctx)
+	l.ASTListener.EnterDisjunction(ctx)
 
 	operators := len(ctx.AllConjunction()) - 1
 	if operators > 0 {
@@ -248,7 +248,7 @@ func (l *complexityTreeListener) EnterDisjunction(ctx *kotlin_parser.Disjunction
 }
 
 func (l *complexityTreeListener) EnterConjunction(ctx *kotlin_parser.ConjunctionContext) {
-	l.KotlinASTListener.EnterConjunction(ctx)
+	l.ASTListener.EnterConjunction(ctx)
 
 	operators := len(ctx.AllEquality()) - 1
 	if operators > 0 {
@@ -258,7 +258,7 @@ func (l *complexityTreeListener) EnterConjunction(ctx *kotlin_parser.Conjunction
 }
 
 func (l *complexityTreeListener) EnterElvis(ctx *kotlin_parser.ElvisContext) {
-	l.KotlinASTListener.EnterElvis(ctx)
+	l.ASTListener.EnterElvis(ctx)
 
 	l.cyclomatic.OnLogicalOperators(1)
 }

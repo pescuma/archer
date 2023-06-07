@@ -269,6 +269,7 @@ type sqlSize struct {
 
 type sqlMetrics struct {
 	DependenciesGuice    *int
+	Abstracts            *int
 	ComplexityCyclomatic *int
 	ComplexityCognitive  *int
 	ComplexityFocus      *int

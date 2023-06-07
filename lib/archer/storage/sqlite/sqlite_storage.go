@@ -805,6 +805,7 @@ func toModelChanges(sc *sqlChanges) *model.Changes {
 func toSqlMetrics(metrics *model.Metrics) *sqlMetrics {
 	return &sqlMetrics{
 		DependenciesGuice:    encodeMetric(metrics.GuiceDependencies),
+		Abstracts:            encodeMetric(metrics.Abstracts),
 		ComplexityCyclomatic: encodeMetric(metrics.CyclomaticComplexity),
 		ComplexityCognitive:  encodeMetric(metrics.CognitiveComplexity),
 		ComplexityFocus:      encodeMetric(metrics.FocusedComplexity),
@@ -814,6 +815,7 @@ func toSqlMetrics(metrics *model.Metrics) *sqlMetrics {
 func toModelMetrics(metrics *sqlMetrics) *model.Metrics {
 	return &model.Metrics{
 		GuiceDependencies:    decodeMetric(metrics.DependenciesGuice),
+		Abstracts:            decodeMetric(metrics.Abstracts),
 		CyclomaticComplexity: decodeMetric(metrics.ComplexityCyclomatic),
 		CognitiveComplexity:  decodeMetric(metrics.ComplexityCognitive),
 		FocusedComplexity:    decodeMetric(metrics.ComplexityFocus),
