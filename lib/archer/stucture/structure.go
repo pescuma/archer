@@ -178,7 +178,7 @@ type FieldStructure struct {
 
 func addIfNotExists[T StructureElement](m map[string]T, e T) {
 	if _, ok := m[e.FullName()]; ok {
-		panic(fmt.Sprintf("Already exists: %v %t", e, e))
+		panic(fmt.Sprintf("Already exists: %v %T", e, e))
 	}
 
 	m[e.FullName()] = e

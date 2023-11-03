@@ -74,7 +74,7 @@ func (l *ASTListener) ExitClassDeclaration(ctx *kotlin_parser.ClassDeclarationCo
 }
 
 func (l *ASTListener) EnterAnonymousInitializer(ctx *kotlin_parser.AnonymousInitializerContext) {
-	l.Location.EnterFunction(fmt.Sprintf("<init%v>", utils.Last(l.inits)), []string{}, "")
+	l.Location.EnterFunction(fmt.Sprintf("<init:%v>", utils.Last(l.inits)), []string{}, "")
 
 	if l.OnEnterFunction != nil {
 		l.OnEnterFunction(ctx, l.Location.CurrentFunctionName(), l.Location.CurrentFunctionParams(), l.Location.CurrentFunctionResult())
@@ -98,7 +98,7 @@ func (l *ASTListener) EnterPrimaryConstructor(ctx *kotlin_parser.PrimaryConstruc
 		params = append(params, t)
 	}
 
-	l.Location.EnterFunction(fmt.Sprintf("<constructor%v>", utils.Last(l.inits)), params, l.Location.CurrentClassName())
+	l.Location.EnterFunction(fmt.Sprintf("<constructor:%v>", utils.Last(l.inits)), params, l.Location.CurrentClassName())
 }
 
 func (l *ASTListener) ExitPrimaryConstructor(_ *kotlin_parser.PrimaryConstructorContext) {
@@ -114,7 +114,7 @@ func (l *ASTListener) EnterSecondaryConstructor(ctx *kotlin_parser.SecondaryCons
 		params = append(params, t)
 	}
 
-	l.Location.EnterFunction(fmt.Sprintf("<constructor%v>", utils.Last(l.inits)), params, l.Location.CurrentClassName())
+	l.Location.EnterFunction(fmt.Sprintf("<constructor:%v>", utils.Last(l.inits)), params, l.Location.CurrentClassName())
 }
 
 func (l *ASTListener) ExitSecondaryConstructor(_ *kotlin_parser.SecondaryConstructorContext) {
@@ -164,7 +164,7 @@ func (l *ASTListener) EnterLambdaLiteral(ctx *kotlin_parser.LambdaLiteralContext
 		}
 	}
 
-	l.Location.EnterFunction(fmt.Sprintf("<lambda%v>", utils.Last(l.inits)), params, "")
+	l.Location.EnterFunction(fmt.Sprintf("<lambda:%v>", utils.Last(l.inits)), params, "")
 }
 
 func (l *ASTListener) ExitLambdaLiteral(_ *kotlin_parser.LambdaLiteralContext) {
@@ -191,7 +191,7 @@ func (l *ASTListener) ExitClassMemberDeclaration(ctx *kotlin_parser.ClassMemberD
 }
 
 func (l *ASTListener) EnterPropertyDelegate(_ *kotlin_parser.PropertyDelegateContext) {
-	l.Location.EnterFunction(fmt.Sprintf("<by delegate%v>", utils.Last(l.delegates)), []string{}, "")
+	l.Location.EnterFunction(fmt.Sprintf("<by delegate:%v>", utils.Last(l.delegates)), []string{}, "")
 }
 
 func (l *ASTListener) ExitPropertyDelegate(_ *kotlin_parser.PropertyDelegateContext) {
@@ -199,7 +199,10 @@ func (l *ASTListener) ExitPropertyDelegate(_ *kotlin_parser.PropertyDelegateCont
 }
 
 func GetTypeName(t kotlin_parser.ITypeContext) string {
-	if t.FunctionType() != nil {
+	if t == nil {
+		return "void"
+
+	} else if t.FunctionType() != nil {
 		ft := t.FunctionType().(*kotlin_parser.FunctionTypeContext)
 		return ft.GetText()
 

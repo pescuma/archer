@@ -5,7 +5,6 @@ import (
 	"log"
 	"math"
 	"os"
-	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -48,13 +47,21 @@ func NewSqliteStorage(file string) (archer.Storage, error) {
 
 	if _, err := os.Stat(file); err != nil {
 		fmt.Printf("Creating workspace at %v\n", file)
-		root := path.Base(file)
+		root := filepath.Dir(file)
 		err = os.MkdirAll(root, 0o700)
 		if err != nil {
 			return nil, err
 		}
 	}
 
+	return newFrom(file + "?_pragma=journal_mode(WAL)")
+}
+
+func NewSqliteMemoryStorage(file string) (archer.Storage, error) {
+	return newFrom(":memory:")
+}
+
+func newFrom(dsn string) (archer.Storage, error) {
 	newLogger := logger.New(
 		log.New(os.Stdout, "\r\n", log.LstdFlags),
 		logger.Config{
@@ -65,7 +72,7 @@ func NewSqliteStorage(file string) (archer.Storage, error) {
 		},
 	)
 
-	db, err := gorm.Open(sqlite.Open(file+"?_pragma=journal_mode(WAL)"), &gorm.Config{
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
 		NamingStrategy: &NamingStrategy{},
 		Logger:         newLogger,
 	})

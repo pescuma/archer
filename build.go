@@ -8,7 +8,14 @@ import (
 
 func main() {
 	cfg := build.NewBuilderConfig()
-	cfg.Archs = []string{"darwin"}
+	cfg.Archs = []string{
+		"darwin/amd64",
+		"darwin/arm64",
+		"linux/386",
+		"linux/amd64",
+		//"windows/386", go-sqlite does not compile
+		"windows/amd64",
+	}
 
 	b, err := build.NewBuilder(cfg)
 	if err != nil {

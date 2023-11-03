@@ -20,7 +20,7 @@ func TestCognitiveNoCode(t *testing.T) {
 		MaxImportedFiles: &mif,
 	})
 
-	ws, err := archer.NewWorkspace(sqlite.NewSqliteStorage, "")
+	ws, err := archer.NewWorkspace(sqlite.NewSqliteMemoryStorage, "")
 	assert.Nil(t, err)
 
 	err = ws.Import(g)
