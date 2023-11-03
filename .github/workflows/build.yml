@@ -1,0 +1,22 @@
+on: [ push, pull_request ]
+name: Build
+
+jobs:
+  build:
+    name: "Build and test"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest,  macos-latest, windows-latest]
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      - name: Install toolchain
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          check-latest: true
+      - name: add deps
+        run: go get github.com/pescuma/go-build
+      - name: build
+        run: go run ./build.go
