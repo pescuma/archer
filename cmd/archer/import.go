@@ -83,7 +83,17 @@ func (c *ImportMetricsCmd) Run(ctx *context) error {
 	return ctx.ws.Import(g)
 }
 
-type ImportGitCmd struct {
+type ImportGitPeopleCmd struct {
+	Paths []string `arg:"" help:"Paths with the roots of git repositories." type:"existingpath"`
+}
+
+func (c *ImportGitPeopleCmd) Run(ctx *context) error {
+	g := git.NewPeopleImporter(c.Paths)
+
+	return ctx.ws.Import(g)
+}
+
+type ImportGitHistoryCmd struct {
 	Paths         []string      `arg:"" help:"Paths with the roots of git repositories." type:"existingpath"`
 	Incremental   bool          `default:"true" negatable:"" help:"Don't import commits already imported."`
 	LimitImported int           `help:"Limit the number of imported commits. Can be used to incrementally import data. Counted from the latest commit."`
@@ -94,8 +104,8 @@ type ImportGitCmd struct {
 	SaveEvery     int           `help:"Save results after some number of commits."`
 }
 
-func (c *ImportGitCmd) Run(ctx *context) error {
-	options := git.Options{
+func (c *ImportGitHistoryCmd) Run(ctx *context) error {
+	options := git.HistoryOptions{
 		Incremental: c.Incremental,
 	}
 
@@ -130,7 +140,7 @@ func (c *ImportGitCmd) Run(ctx *context) error {
 		options.SaveEvery = &c.SaveEvery
 	}
 
-	g := git.NewImporter(c.Paths, options)
+	g := git.NewHistoryImporter(c.Paths, options)
 
 	return ctx.ws.Import(g)
 }

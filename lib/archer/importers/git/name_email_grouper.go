@@ -14,6 +14,26 @@ type nameEmailGrouper struct {
 	byEmail map[string]*namesEmails
 }
 
+func newNameEmailGrouperFrom(peopleDB *model.People) *nameEmailGrouper {
+	grouper := newNameEmailGrouper()
+
+	for _, p := range peopleDB.ListPeople() {
+		emails := p.ListEmails()
+		if len(emails) == 0 {
+			continue
+		}
+
+		for _, email := range emails {
+			grouper.add(p.Name, email, p)
+		}
+		for _, name := range p.ListNames() {
+			grouper.add(name, emails[0], p)
+		}
+	}
+
+	return grouper
+}
+
 func newNameEmailGrouper() *nameEmailGrouper {
 	return &nameEmailGrouper{
 		byName:  map[string]*namesEmails{},

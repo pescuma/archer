@@ -23,8 +23,11 @@ var cli struct {
 		Mysql     ImportMySqlCmd     `cmd:"" help:"Import information from MySQL schema."`
 		LOC       ImportLOCCmd       `cmd:"" help:"Import counts of lines of code to existing projects."`
 		Metrics   ImportMetricsCmd   `cmd:"" help:"Import code metrics to existing projects."`
-		Git       ImportGitCmd       `cmd:"" help:"Import information from git."`
-		Owners    ImportOwnersCmd    `cmd:"" help:"Import file owners."`
+		Git       struct {
+			People  ImportGitPeopleCmd  `cmd:"" help:"Import people information from git."`
+			History ImportGitHistoryCmd `cmd:"" help:"Import history information from git."`
+		} `cmd:""`
+		Owners ImportOwnersCmd `cmd:"" help:"Import file owners."`
 	} `cmd:""`
 }
 

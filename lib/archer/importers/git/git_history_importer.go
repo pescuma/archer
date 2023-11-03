@@ -21,12 +21,12 @@ import (
 	"github.com/pescuma/archer/lib/archer/utils"
 )
 
-type gitImporter struct {
+type gitHistoryImporter struct {
 	rootDirs []string
-	options  Options
+	options  HistoryOptions
 }
 
-type Options struct {
+type HistoryOptions struct {
 	Incremental        bool
 	MaxImportedCommits *int
 	MaxCommits         *int
@@ -35,8 +35,8 @@ type Options struct {
 	SaveEvery          *int
 }
 
-func NewImporter(rootDirs []string, options Options) archer.Importer {
-	return &gitImporter{
+func NewHistoryImporter(rootDirs []string, options HistoryOptions) archer.Importer {
+	return &gitHistoryImporter{
 		rootDirs: rootDirs,
 		options:  options,
 	}
@@ -47,7 +47,7 @@ type work struct {
 	repo    *model.Repository
 }
 
-func (g gitImporter) Import(storage archer.Storage) error {
+func (g gitHistoryImporter) Import(storage archer.Storage) error {
 	fmt.Printf("Loading existing data...\n")
 
 	projectsDB, err := storage.LoadProjects()
@@ -72,23 +72,9 @@ func (g gitImporter) Import(storage archer.Storage) error {
 
 	abort := errors.New("ABORT")
 
-	fmt.Printf("Preparing and grouping authors...\n")
+	fmt.Printf("Preparing...\n")
 
-	grouper := newNameEmailGrouper()
-
-	for _, p := range peopleDB.ListPeople() {
-		emails := p.ListEmails()
-		if len(emails) == 0 {
-			continue
-		}
-
-		for _, email := range emails {
-			grouper.add(p.Name, email, p)
-		}
-		for _, name := range p.ListNames() {
-			grouper.add(name, emails[0], p)
-		}
-	}
+	grouper := newNameEmailGrouperFrom(peopleDB)
 
 	commitNumber := 0
 	imported := 0
@@ -129,9 +115,6 @@ func (g gitImporter) Import(storage archer.Storage) error {
 
 			imported++
 			importedFromRepo++
-
-			grouper.add(gc.Author.Name, gc.Author.Email, nil)
-			grouper.add(gc.Committer.Name, gc.Committer.Email, nil)
 			return nil
 		})
 		if err != nil && err != abort {
@@ -144,41 +127,6 @@ func (g gitImporter) Import(storage archer.Storage) error {
 				repo:    repo,
 			})
 		}
-	}
-
-	grouper.prepare()
-
-	for _, ne := range grouper.list() {
-		var person *model.Person
-		if len(ne.people) == 0 {
-			person = peopleDB.GetOrCreatePerson(ne.Name)
-
-		} else {
-			people := lo.Filter(ne.people, func(p *model.Person, _ int) bool { return p.Name == ne.Name })
-			if len(people) > 0 {
-				person = people[0]
-			} else {
-				person = peopleDB.GetPerson(ne.Name)
-				if person == nil {
-					person = ne.people[0]
-					peopleDB.ChangePersonName(person, ne.Name)
-				}
-			}
-		}
-
-		for n := range ne.Names {
-			person.AddName(n)
-		}
-		for e := range ne.Emails {
-			person.AddEmail(e)
-		}
-	}
-
-	fmt.Printf("Writing people...\n")
-
-	err = storage.WritePeople(peopleDB, archer.ChangedBasicInfo)
-	if err != nil {
-		return err
 	}
 
 	fmt.Printf("Loading history...\n")
@@ -331,7 +279,7 @@ func (g gitImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
-	err = storage.WritePeople(peopleDB, archer.ChangedChanges)
+	err = storage.WritePeople(peopleDB, archer.ChangedBasicInfo|archer.ChangedChanges)
 	if err != nil {
 		return err
 	}
@@ -618,7 +566,7 @@ type gitFileChange struct {
 	Deleted  int
 }
 
-func (l *Options) ShouldContinue(commit int, imported int, date time.Time) bool {
+func (l *HistoryOptions) ShouldContinue(commit int, imported int, date time.Time) bool {
 	if l.After != nil && date.Before(*l.After) {
 		return false
 	}
