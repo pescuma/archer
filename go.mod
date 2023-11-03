@@ -1,6 +1,8 @@
 module github.com/pescuma/archer
 
-go 1.19
+go 1.21
+
+toolchain go1.21.0
 
 require (
 	github.com/alecthomas/kong v0.7.1
@@ -11,6 +13,7 @@ require (
 	github.com/glebarez/sqlite v1.8.0
 	github.com/go-git/go-git/v5 v5.7.0
 	github.com/go-sql-driver/mysql v1.7.1
+	github.com/hashicorp/go-set/v2 v2.0.0-alpha.3
 	github.com/hexops/gotextdiff v1.0.3
 	github.com/hhatto/gocloc v0.5.0
 	github.com/lithammer/shortuuid/v4 v4.0.0

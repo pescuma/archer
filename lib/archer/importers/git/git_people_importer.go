@@ -64,26 +64,26 @@ func (g gitPeopleImporter) Import(storage archer.Storage) error {
 
 	for _, ne := range grouper.list() {
 		var person *model.Person
-		if len(ne.people) == 0 {
+		if ne.people.Empty() {
 			person = peopleDB.GetOrCreatePerson(ne.Name)
 
 		} else {
-			people := lo.Filter(ne.people, func(p *model.Person, _ int) bool { return p.Name == ne.Name })
+			people := lo.Filter(ne.people.Slice(), func(p *model.Person, _ int) bool { return p.Name == ne.Name })
 			if len(people) > 0 {
 				person = people[0]
 			} else {
 				person = peopleDB.GetPerson(ne.Name)
 				if person == nil {
-					person = ne.people[0]
+					person = ne.people.Slice()[0]
 					peopleDB.ChangePersonName(person, ne.Name)
 				}
 			}
 		}
 
-		for n := range ne.Names {
+		for _, n := range ne.Names.Slice() {
 			person.AddName(n)
 		}
-		for e := range ne.Emails {
+		for _, e := range ne.Emails.Slice() {
 			person.AddEmail(e)
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/hashicorp/go-set/v2"
 	"github.com/samber/lo"
 
 	"github.com/pescuma/archer/lib/archer/model"
@@ -31,6 +32,8 @@ func newNameEmailGrouperFrom(peopleDB *model.People) *nameEmailGrouper {
 		}
 	}
 
+	grouper.prepare()
+
 	return grouper
 }
 
@@ -46,45 +49,41 @@ func (g *nameEmailGrouper) add(name string, email string, person *model.Person) 
 		name = email
 	}
 
+	var r *namesEmails
 	n := g.byName[name]
 	e := g.byEmail[email]
 
 	if n == nil && e == nil {
-		n = &namesEmails{
-			Names:  map[string]bool{},
-			Emails: map[string]bool{},
+		r = &namesEmails{
+			Names:  set.New[string](10),
+			Emails: set.New[string](10),
+			people: set.New[*model.Person](10),
 		}
-
-		n.people = append(n.people, person)
-
-		n.Names[name] = true
-		g.byName[name] = n
-
-		n.Emails[email] = true
-		g.byEmail[email] = n
 
 	} else if n == nil && e != nil {
-		e.Names[name] = true
-		g.byName[name] = e
+		r = e
 
 	} else if n != nil && e == nil {
-		n.Emails[email] = true
-		g.byEmail[email] = n
+		r = n
 
 	} else {
+		r = n
+
 		if n != e {
-			for _, p := range e.people {
-				n.people = append(n.people, p)
-			}
-			for k := range e.Names {
-				n.Names[k] = true
-				g.byName[k] = n
-			}
-			for k := range e.Emails {
-				n.Emails[k] = true
-				g.byEmail[k] = n
-			}
+			n.people.InsertSet(e.people)
+			n.Names.InsertSet(e.Names)
+			n.Emails.InsertSet(e.Emails)
 		}
+	}
+
+	r.Names.Insert(name)
+	g.byName[name] = r
+
+	r.Emails.Insert(email)
+	g.byEmail[email] = r
+
+	if person != nil {
+		r.people.Insert(person)
 	}
 }
 
@@ -92,7 +91,7 @@ func (g *nameEmailGrouper) prepare() {
 	nes := g.list()
 
 	for _, ne := range nes {
-		names := lo.Keys(ne.Names)
+		names := ne.Names.Slice()
 		sort.Slice(names, func(i, j int) bool {
 			return names[i] < names[j]
 		})
@@ -129,8 +128,8 @@ func (g *nameEmailGrouper) list() []*namesEmails {
 }
 
 type namesEmails struct {
-	people []*model.Person
 	Name   string
-	Names  map[string]bool
-	Emails map[string]bool
+	Names  *set.Set[string]
+	Emails *set.Set[string]
+	people *set.Set[*model.Person]
 }
