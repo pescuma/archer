@@ -1,4 +1,4 @@
-module github.com/Faire/archer
+module github.com/pescuma/archer
 
 go 1.19
 

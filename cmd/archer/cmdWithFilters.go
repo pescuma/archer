@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/Faire/archer/lib/archer/model"
+	"github.com/pescuma/archer/lib/archer/model"
 )
 
 type cmdWithFilters struct {

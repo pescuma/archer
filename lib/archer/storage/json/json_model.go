@@ -3,7 +3,7 @@ package json
 import (
 	"encoding/json"
 
-	"github.com/Faire/archer/lib/archer/model"
+	"github.com/pescuma/archer/lib/archer/model"
 )
 
 func ProjNamesToJson(root string, names []string) (string, error) {

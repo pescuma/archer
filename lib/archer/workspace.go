@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Faire/archer/lib/archer/model"
-	"github.com/Faire/archer/lib/archer/utils"
+	"github.com/pescuma/archer/lib/archer/model"
+	"github.com/pescuma/archer/lib/archer/utils"
 )
 
 type Workspace struct {

@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/Faire/archer/lib/archer/model"
+	"github.com/pescuma/archer/lib/archer/model"
 )
 
 type ConfigSetCmd struct {

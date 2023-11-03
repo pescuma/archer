@@ -1,7 +1,7 @@
 package complexity
 
 import (
-	"github.com/Faire/archer/lib/archer/utils"
+	"github.com/pescuma/archer/lib/archer/utils"
 )
 
 // https://www.sonarsource.com/docs/CognitiveComplexity.pdf
@@ -89,4 +89,3 @@ func (c *CognitiveComplexity) OnRecursiveCall() {
 func (c *CognitiveComplexity) OnJumpToLabel() {
 	c.addSimpleComplexity()
 }
-

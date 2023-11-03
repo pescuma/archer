@@ -12,12 +12,12 @@ import (
 	"github.com/samber/lo"
 	"github.com/schollz/progressbar/v3"
 
-	"github.com/Faire/archer/lib/archer"
-	"github.com/Faire/archer/lib/archer/common"
-	"github.com/Faire/archer/lib/archer/languages/kotlin"
-	"github.com/Faire/archer/lib/archer/languages/kotlin_parser"
-	"github.com/Faire/archer/lib/archer/model"
-	"github.com/Faire/archer/lib/archer/utils"
+	"github.com/pescuma/archer/lib/archer"
+	"github.com/pescuma/archer/lib/archer/common"
+	"github.com/pescuma/archer/lib/archer/languages/kotlin"
+	"github.com/pescuma/archer/lib/archer/languages/kotlin_parser"
+	"github.com/pescuma/archer/lib/archer/model"
+	"github.com/pescuma/archer/lib/archer/utils"
 )
 
 type hibernateImporter struct {

@@ -6,7 +6,7 @@ import (
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/Faire/archer/lib/archer/languages/kotlin_parser"
+	"github.com/pescuma/archer/lib/archer/languages/kotlin_parser"
 )
 
 func computeCognitive(contents string) int {

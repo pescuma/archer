@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 
-	"github.com/Faire/archer/lib/archer/utils"
+	"github.com/pescuma/archer/lib/archer/utils"
 )
 
 func CreateIgnoreFilter() Filter {

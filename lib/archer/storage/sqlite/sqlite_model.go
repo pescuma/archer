@@ -3,7 +3,7 @@ package sqlite
 import (
 	"time"
 
-	"github.com/Faire/archer/lib/archer/model"
+	"github.com/pescuma/archer/lib/archer/model"
 )
 
 type sqlConfig struct {

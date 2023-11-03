@@ -9,8 +9,8 @@ import (
 
 	"github.com/samber/lo"
 
-	"github.com/Faire/archer/lib/archer"
-	"github.com/Faire/archer/lib/archer/model"
+	"github.com/pescuma/archer/lib/archer"
+	"github.com/pescuma/archer/lib/archer/model"
 )
 
 const (

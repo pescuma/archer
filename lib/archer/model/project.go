@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Faire/archer/lib/archer/utils"
+	"github.com/pescuma/archer/lib/archer/utils"
 )
 
 type Project struct {

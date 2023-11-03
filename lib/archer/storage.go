@@ -1,7 +1,7 @@
 package archer
 
 import (
-	"github.com/Faire/archer/lib/archer/model"
+	"github.com/pescuma/archer/lib/archer/model"
 )
 
 type StorageChanges uint16

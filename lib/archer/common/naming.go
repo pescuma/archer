@@ -5,7 +5,7 @@ import (
 
 	"github.com/gertd/go-pluralize"
 
-	"github.com/Faire/archer/lib/archer/model"
+	"github.com/pescuma/archer/lib/archer/model"
 )
 
 func CreateTableNameParts(projs []*model.Project) {

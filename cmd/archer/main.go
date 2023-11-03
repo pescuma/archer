@@ -3,8 +3,8 @@ package main
 import (
 	"github.com/alecthomas/kong"
 
-	"github.com/Faire/archer/lib/archer"
-	"github.com/Faire/archer/lib/archer/storage/sqlite"
+	"github.com/pescuma/archer/lib/archer"
+	"github.com/pescuma/archer/lib/archer/storage/sqlite"
 )
 
 var cli struct {

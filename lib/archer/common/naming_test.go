@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/Faire/archer/lib/archer/common"
-	"github.com/Faire/archer/lib/archer/model"
+	"github.com/pescuma/archer/lib/archer/common"
+	"github.com/pescuma/archer/lib/archer/model"
 )
 
 func TestCreateTableNameParts(t *testing.T) {

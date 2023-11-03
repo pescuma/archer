@@ -9,9 +9,9 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pkg/errors"
 
-	"github.com/Faire/archer/lib/archer"
-	"github.com/Faire/archer/lib/archer/common"
-	"github.com/Faire/archer/lib/archer/model"
+	"github.com/pescuma/archer/lib/archer"
+	"github.com/pescuma/archer/lib/archer/common"
+	"github.com/pescuma/archer/lib/archer/model"
 )
 
 type mysqlImporter struct {

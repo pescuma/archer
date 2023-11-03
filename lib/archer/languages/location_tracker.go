@@ -3,7 +3,7 @@ package languages
 import (
 	"strings"
 
-	"github.com/Faire/archer/lib/archer/utils"
+	"github.com/pescuma/archer/lib/archer/utils"
 )
 
 type LocationTracker struct {

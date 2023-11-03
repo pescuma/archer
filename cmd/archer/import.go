@@ -3,13 +3,13 @@ package main
 import (
 	"time"
 
-	"github.com/Faire/archer/lib/archer/importers/git"
-	"github.com/Faire/archer/lib/archer/importers/gradle"
-	"github.com/Faire/archer/lib/archer/importers/hibernate"
-	"github.com/Faire/archer/lib/archer/importers/loc"
-	"github.com/Faire/archer/lib/archer/importers/metrics"
-	"github.com/Faire/archer/lib/archer/importers/mysql"
-	"github.com/Faire/archer/lib/archer/importers/owners"
+	"github.com/pescuma/archer/lib/archer/importers/git"
+	"github.com/pescuma/archer/lib/archer/importers/gradle"
+	"github.com/pescuma/archer/lib/archer/importers/hibernate"
+	"github.com/pescuma/archer/lib/archer/importers/loc"
+	"github.com/pescuma/archer/lib/archer/importers/metrics"
+	"github.com/pescuma/archer/lib/archer/importers/mysql"
+	"github.com/pescuma/archer/lib/archer/importers/owners"
 )
 
 type ImportGradleCmd struct {

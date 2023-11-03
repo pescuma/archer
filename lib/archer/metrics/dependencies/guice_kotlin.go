@@ -4,10 +4,10 @@ import (
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
 	"github.com/samber/lo"
 
-	"github.com/Faire/archer/lib/archer/languages/kotlin"
-	"github.com/Faire/archer/lib/archer/languages/kotlin_parser"
-	"github.com/Faire/archer/lib/archer/stucture"
-	"github.com/Faire/archer/lib/archer/utils"
+	"github.com/pescuma/archer/lib/archer/languages/kotlin"
+	"github.com/pescuma/archer/lib/archer/languages/kotlin_parser"
+	"github.com/pescuma/archer/lib/archer/stucture"
+	"github.com/pescuma/archer/lib/archer/utils"
 )
 
 func ComputeKotlinGuiceDependencies(path string, structure *stucture.FileStructure, file kotlin_parser.IKotlinFileContext) int {

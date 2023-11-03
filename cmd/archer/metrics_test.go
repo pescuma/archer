@@ -5,9 +5,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/Faire/archer/lib/archer"
-	"github.com/Faire/archer/lib/archer/importers/metrics"
-	"github.com/Faire/archer/lib/archer/storage/sqlite"
+	"github.com/pescuma/archer/lib/archer"
+	"github.com/pescuma/archer/lib/archer/importers/metrics"
+	"github.com/pescuma/archer/lib/archer/storage/sqlite"
 )
 
 func TestCognitiveNoCode(t *testing.T) {
