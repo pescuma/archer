@@ -16,6 +16,7 @@ func NewMetrics() *Metrics {
 
 func (m *Metrics) Clear() {
 	m.GuiceDependencies = -1
+	m.Abstracts = -1
 	m.CyclomaticComplexity = -1
 	m.CognitiveComplexity = -1
 	m.FocusedComplexity = -1
@@ -23,6 +24,7 @@ func (m *Metrics) Clear() {
 
 func (m *Metrics) Add(other *Metrics) {
 	m.GuiceDependencies = add(m.GuiceDependencies, other.GuiceDependencies)
+	m.Abstracts = add(m.Abstracts, other.Abstracts)
 	m.CyclomaticComplexity = add(m.CyclomaticComplexity, other.CyclomaticComplexity)
 	m.CognitiveComplexity = add(m.CognitiveComplexity, other.CognitiveComplexity)
 	m.FocusedComplexity = add(m.FocusedComplexity, other.FocusedComplexity)
