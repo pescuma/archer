@@ -27,6 +27,10 @@ type Storage interface {
 	LoadFiles() (*model.Files, error)
 	WriteFiles(files *model.Files, changes StorageChanges) error
 
+	LoadFileContents(fileID model.UUID) (*model.FileContents, error)
+	WriteFileContents(contents *model.FileContents, changes StorageChanges) error
+	ComputeBlamePerAuthor() ([]*BlamePerAuthor, error)
+
 	LoadPeople() (*model.People, error)
 	WritePeople(people *model.People, changes StorageChanges) error
 
@@ -39,3 +43,11 @@ type Storage interface {
 }
 
 type StorageFactory = func(path string) (Storage, error)
+
+type BlamePerAuthor struct {
+	AuthorID model.UUID
+	CommitID model.UUID
+	FileID   model.UUID
+	LineType model.FileLineType
+	Lines    int
+}

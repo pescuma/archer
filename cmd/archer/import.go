@@ -116,6 +116,14 @@ func (c *ImportGitHistoryCmd) Run(ctx *context) error {
 		options.MaxCommits = &c.LimitCommits
 	}
 
+	emptyTime := time.Time{}
+	if c.After != emptyTime {
+		options.After = &c.After
+	}
+	if c.Before != emptyTime {
+		options.Before = &c.Before
+	}
+
 	if c.LimitDuration != 0 {
 		before := time.Now()
 		after := before.Add(-c.LimitDuration)
@@ -128,19 +136,36 @@ func (c *ImportGitHistoryCmd) Run(ctx *context) error {
 		}
 	}
 
-	emptyTime := time.Time{}
-	if c.After != emptyTime {
-		options.After = &c.After
+	if c.SaveEvery != 0 {
+		options.SaveEvery = &c.SaveEvery
 	}
-	if c.Before != emptyTime {
-		options.Before = &c.Before
+
+	g := git.NewHistoryImporter(c.Paths, options)
+
+	return ctx.ws.Import(g)
+}
+
+type ImportGitBlameCmd struct {
+	Paths         []string `arg:"" help:"Paths with the roots of git repositories." type:"existingpath"`
+	Incremental   bool     `default:"true" negatable:"" help:"Don't import files already imported."`
+	LimitImported int      `help:"Limit the number of imported files. Can be used to incrementally import data. Counted by file name."`
+	SaveEvery     int      `help:"Save results after some number of commits."`
+}
+
+func (c *ImportGitBlameCmd) Run(ctx *context) error {
+	options := git.BlameOptions{
+		Incremental: c.Incremental,
+	}
+
+	if c.LimitImported != 0 {
+		options.MaxImportedFiles = &c.LimitImported
 	}
 
 	if c.SaveEvery != 0 {
 		options.SaveEvery = &c.SaveEvery
 	}
 
-	g := git.NewHistoryImporter(c.Paths, options)
+	g := git.NewBlameImporter(c.Paths, options)
 
 	return ctx.ws.Import(g)
 }

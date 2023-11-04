@@ -42,12 +42,12 @@ func NewHistoryImporter(rootDirs []string, options HistoryOptions) archer.Import
 	}
 }
 
-type work struct {
-	rootDir string
-	repo    *model.Repository
-}
+func (g *gitHistoryImporter) Import(storage archer.Storage) error {
+	type work struct {
+		rootDir string
+		repo    *model.Repository
+	}
 
-func (g gitHistoryImporter) Import(storage archer.Storage) error {
 	fmt.Printf("Loading existing data...\n")
 
 	projectsDB, err := storage.LoadProjects()
@@ -135,7 +135,7 @@ func (g gitHistoryImporter) Import(storage archer.Storage) error {
 
 	write := func(repo *model.Repository) error {
 		_ = bar.Clear()
-		fmt.Printf("Writing results...")
+		fmt.Printf("Writing results...\n")
 
 		err = storage.WriteFiles(filesDB, archer.ChangedBasicInfo)
 		if err != nil {
@@ -211,7 +211,7 @@ func (g gitHistoryImporter) Import(storage archer.Storage) error {
 				return err
 			}
 
-			gitChanges, err := computeChanges(gitCommit, firstParent)
+			gitChanges, err := g.computeChanges(gitCommit, firstParent)
 			if err != nil {
 				return err
 			}
@@ -219,7 +219,6 @@ func (g gitHistoryImporter) Import(storage archer.Storage) error {
 			commit.ModifiedLines = 0
 			commit.AddedLines = 0
 			commit.DeletedLines = 0
-			commit.Files = nil
 
 			for _, gitFile := range gitChanges {
 				filePath := filepath.Join(w.rootDir, gitFile.Name)
@@ -265,7 +264,7 @@ func (g gitHistoryImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Propagating changes to parents...\n")
 
-	propagateChangesToParents(reposDB, projectsDB, filesDB, peopleDB)
+	g.propagateChangesToParents(reposDB, projectsDB, filesDB, peopleDB)
 
 	fmt.Printf("Writing results...\n")
 
@@ -287,7 +286,7 @@ func (g gitHistoryImporter) Import(storage archer.Storage) error {
 	return nil
 }
 
-func computeChanges(commit *object.Commit, parent *object.Commit) ([]*gitFileChange, error) {
+func (g *gitHistoryImporter) computeChanges(commit *object.Commit, parent *object.Commit) ([]*gitFileChange, error) {
 	commitTree, err := commit.Tree()
 	if err != nil {
 		return nil, err
@@ -313,12 +312,12 @@ func computeChanges(commit *object.Commit, parent *object.Commit) ([]*gitFileCha
 			return nil, err
 		}
 
-		commitContent, commitIsBinary, err := fileContent(commitFile)
+		commitContent, commitIsBinary, err := g.fileContent(commitFile)
 		if err != nil {
 			return nil, err
 		}
 
-		parentContent, parentIsBinary, err := fileContent(parentFile)
+		parentContent, parentIsBinary, err := g.fileContent(parentFile)
 		if err != nil {
 			return nil, err
 		}
@@ -337,8 +336,8 @@ func computeChanges(commit *object.Commit, parent *object.Commit) ([]*gitFileCha
 		}
 
 		if !commitIsBinary && !parentIsBinary {
-			commitLines := countLines(commitContent)
-			parentLines := countLines(parentContent)
+			commitLines := g.countLines(commitContent)
+			parentLines := g.countLines(parentContent)
 
 			if parentLines == 0 {
 				gitChange.Added += commitLines
@@ -352,9 +351,9 @@ func computeChanges(commit *object.Commit, parent *object.Commit) ([]*gitFileCha
 				for _, d := range diffs {
 					switch d.Type {
 					case diffmatchpatch.DiffDelete:
-						gitChange.Deleted += countLines(d.Text)
+						gitChange.Deleted += g.countLines(d.Text)
 					case diffmatchpatch.DiffInsert:
-						gitChange.Added += countLines(d.Text)
+						gitChange.Added += g.countLines(d.Text)
 					}
 				}
 
@@ -397,7 +396,7 @@ func computeChanges(commit *object.Commit, parent *object.Commit) ([]*gitFileCha
 	return result, nil
 }
 
-func fileContent(f *object.File) (string, bool, error) {
+func (g *gitHistoryImporter) fileContent(f *object.File) (string, bool, error) {
 	if f == nil {
 		return "", false, nil
 	}
@@ -419,7 +418,7 @@ func fileContent(f *object.File) (string, bool, error) {
 	return content, isBinary, err
 }
 
-func countLines(text string) int {
+func (g *gitHistoryImporter) countLines(text string) int {
 	if text == "" {
 		return 0
 	}
@@ -431,7 +430,7 @@ func countLines(text string) int {
 	return result
 }
 
-func propagateChangesToParents(reposDB *model.Repositories, projectsDB *model.Projects, filesDB *model.Files, peopleDB *model.People) {
+func (g *gitHistoryImporter) propagateChangesToParents(reposDB *model.Repositories, projectsDB *model.Projects, filesDB *model.Files, peopleDB *model.People) {
 	dirsByIDs := map[model.UUID]*model.ProjectDirectory{}
 	for _, p := range projectsDB.ListProjects(model.FilterExcludeExternal) {
 		for _, d := range p.Dirs {

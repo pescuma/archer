@@ -446,6 +446,16 @@ func (s *jsonStorage) WriteFiles(files *model.Files, changes archer.StorageChang
 	panic("implement me")
 }
 
+func (s *jsonStorage) LoadFileContents(file model.UUID) (*model.FileContents, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *jsonStorage) WriteFileContents(contents *model.FileContents, changes archer.StorageChanges) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (s *jsonStorage) LoadPeople() (*model.People, error) {
 	// TODO implement me
 	panic("implement me")

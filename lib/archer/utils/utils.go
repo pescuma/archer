@@ -1,10 +1,13 @@
 package utils
 
 import (
+	"bufio"
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
+	"github.com/pkg/errors"
 	"golang.org/x/exp/constraints"
 )
 
@@ -127,4 +130,41 @@ func PathAbs(path string) (string, error) {
 	}
 
 	return path, nil
+}
+
+func IsTextFile(path string) (bool, error) {
+	return IsTextFileExt(path, 10)
+}
+
+func IsTextFileExt(path string, sampleLines int) (bool, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+
+	fileScanner := bufio.NewScanner(file)
+
+	for i := 0; i < sampleLines; i++ {
+		if !fileScanner.Scan() {
+			return true, nil
+		}
+
+		if !utf8.ValidString(fileScanner.Text()) {
+			return false, nil
+		}
+	}
+
+	return true, err
+}
+
+func FileExists(path string) (bool, error) {
+	if _, err := os.Stat(path); err == nil {
+		return true, nil
+
+	} else if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+
+	} else {
+		return false, err
+	}
 }

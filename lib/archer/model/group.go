@@ -10,6 +10,7 @@ type Group struct {
 
 	teamsByName map[string]*Team
 	Size        *Size
+	Blame       *Size
 	Changes     *Changes
 	Metrics     *Metrics
 	Data        map[string]string
@@ -28,6 +29,7 @@ func NewGroup(name string, id *UUID) *Group {
 		ID:          uuid,
 		teamsByName: map[string]*Team{},
 		Size:        NewSize(),
+		Blame:       NewSize(),
 		Changes:     NewChanges(),
 		Metrics:     NewMetrics(),
 		Data:        map[string]string{},

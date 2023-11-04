@@ -18,23 +18,33 @@ type RepositoryCommit struct {
 	ModifiedLines int
 	AddedLines    int
 	DeletedLines  int
+	SurvivedLines int
 
-	Files []*RepositoryCommitFile
+	Files map[UUID]*RepositoryCommitFile
 }
 
 func NewRepositoryCommit(hash string) *RepositoryCommit {
-	return &RepositoryCommit{
-		Hash: hash,
-		ID:   NewUUID("c"),
+	result := &RepositoryCommit{
+		Hash:          hash,
+		ID:            NewUUID("c"),
+		ModifiedLines: -1,
+		AddedLines:    -1,
+		DeletedLines:  -1,
+		SurvivedLines: -1,
+		Files:         make(map[UUID]*RepositoryCommitFile),
 	}
+
+	return result
 }
 
-func (c *RepositoryCommit) AddFile(fileID UUID, oldFileID *UUID, modifiedLines, addedLines, deletedLines int) {
-	c.Files = append(c.Files, &RepositoryCommitFile{
-		FileID:        fileID,
-		OldFileID:     oldFileID,
-		ModifiedLines: modifiedLines,
-		AddedLines:    addedLines,
-		DeletedLines:  deletedLines,
-	})
+func (c *RepositoryCommit) AddFile(fileID UUID, oldFileID *UUID, modifiedLines, addedLines, deletedLines int) *RepositoryCommitFile {
+	file := NewRepositoryCommitFile(fileID)
+	file.OldFileID = oldFileID
+	file.ModifiedLines = modifiedLines
+	file.AddedLines = addedLines
+	file.DeletedLines = deletedLines
+
+	c.Files[fileID] = file
+
+	return file
 }

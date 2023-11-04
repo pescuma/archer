@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -83,8 +84,8 @@ func newFrom(dsn string) (archer.Storage, error) {
 	err = db.AutoMigrate(
 		&sqlConfig{},
 		&sqlProject{}, &sqlProjectDependency{}, &sqlProjectDirectory{},
-		&sqlFile{}, &sqlProductArea{},
-		&sqlPerson{}, &sqlOrg{}, &sqlOrgGroup{}, &sqlOrgTeam{}, &sqlTeamMember{}, &sqlTeamArea{},
+		&sqlFile{}, &sqlFileLine{},
+		&sqlPerson{}, &sqlOrg{}, &sqlOrgGroup{}, &sqlOrgTeam{}, &sqlTeamMember{}, &sqlTeamArea{}, &sqlProductArea{},
 		&sqlRepository{}, &sqlRepositoryCommit{}, &sqlRepositoryCommitFile{},
 	)
 	if err != nil {
@@ -232,11 +233,11 @@ func (s *sqliteStorage) writeProjects(projs []*model.Project, changes archer.Sto
 	now := time.Now().Local()
 	db := s.db.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
-		CreateBatchSize: 100,
+		CreateBatchSize: 1000,
 	})
 
 	if changedProjs {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlProjs, 1000).Error
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlProjs).Error
 		if err != nil {
 			return err
 		}
@@ -245,7 +246,7 @@ func (s *sqliteStorage) writeProjects(projs []*model.Project, changes archer.Sto
 	}
 
 	if changedDeps {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlDeps, 1000).Error
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlDeps).Error
 		if err != nil {
 			return err
 		}
@@ -254,7 +255,7 @@ func (s *sqliteStorage) writeProjects(projs []*model.Project, changes archer.Sto
 	}
 
 	if changedDirs {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlDirs, 1000).Error
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlDirs).Error
 		if err != nil {
 			return err
 		}
@@ -319,10 +320,10 @@ func (s *sqliteStorage) WriteFiles(files *model.Files, changes archer.StorageCha
 	now := time.Now().Local()
 	db := s.db.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
-		CreateBatchSize: 100,
+		CreateBatchSize: 1000,
 	})
 
-	err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlFiles, 1000).Error
+	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlFiles).Error
 	if err != nil {
 		return err
 	}
@@ -332,6 +333,84 @@ func (s *sqliteStorage) WriteFiles(files *model.Files, changes archer.StorageCha
 	// TODO delete
 
 	return nil
+}
+
+func (s *sqliteStorage) LoadFileContents(fileID model.UUID) (*model.FileContents, error) {
+	result := model.NewFileContents(fileID)
+
+	var lines []*sqlFileLine
+	err := s.db.Where("file_id = ?", fileID).Find(&lines).Error
+	if err != nil {
+		return nil, err
+	}
+
+	sort.Slice(lines, func(i, j int) bool {
+		return lines[i].Line <= lines[j].Line
+	})
+
+	for _, sf := range lines {
+		line := result.AppendLine()
+
+		if sf.Line != line.Line {
+			return nil, fmt.Errorf("invalid line number: %v (should be %v)", line.Line, sf.Line)
+		}
+
+		line.CommitID = sf.CommitID
+		line.Type = sf.Type
+		line.Text = sf.Text
+	}
+
+	return result, nil
+}
+
+func (s *sqliteStorage) WriteFileContents(contents *model.FileContents, changes archer.StorageChanges) error {
+	changed := changed(changes, archer.ChangedBasicInfo, archer.ChangedChanges)
+	if !changed {
+		return nil
+	}
+
+	var sqlLines []*sqlFileLine
+	for _, f := range contents.Lines {
+		sf := toSqlFileLine(contents.FileID, f)
+		sqlLines = append(sqlLines, sf)
+	}
+
+	now := time.Now().Local()
+	db := s.db.Session(&gorm.Session{
+		NowFunc:         func() time.Time { return now },
+		CreateBatchSize: 1000,
+	})
+
+	return db.Transaction(func(tx *gorm.DB) error {
+		err := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlLines).Error
+		if err != nil {
+			return err
+		}
+
+		err = tx.Where("file_id = ? and line > ?", contents.FileID, len(contents.Lines)).Delete(&sqlFileLine{}).Error
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
+func (s *sqliteStorage) ComputeBlamePerAuthor() ([]*archer.BlamePerAuthor, error) {
+	var result []*archer.BlamePerAuthor
+
+	err := s.db.Raw(`
+		select c.author_id, l.commit_id, l.file_id, l.type line_type, count(*) lines
+		from file_lines l
+				 join repository_commits c
+					  on l.commit_id = c.id
+		group by c.author_id, l.commit_id, l.file_id, l.type
+		`).Scan(&result).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 func (s *sqliteStorage) LoadPeople() (*model.People, error) {
@@ -399,6 +478,7 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 			p.AddEmail(email)
 		}
 		p.Size = toModelSize(sp.Size)
+		p.Blame = toModelSize(sp.Blame)
 		p.Changes = toModelChanges(sp.Changes)
 		p.Metrics = toModelMetricsAggregate(sp.Metrics)
 		p.Data = cloneMap(sp.Data)
@@ -415,6 +495,7 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 	for _, so := range orgs {
 		o := result.GetOrCreateOrganizationEx(so.Name, &so.ID)
 		o.Size = toModelSize(so.Size)
+		o.Blame = toModelSize(so.Blame)
 		o.Changes = toModelChanges(so.Changes)
 		o.Metrics = toModelMetricsAggregate(so.Metrics)
 		o.Data = cloneMap(so.Data)
@@ -422,6 +503,7 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 		for _, sg := range groupsByOrg[so.ID] {
 			g := o.GetOrCreateGroupEx(sg.Name, &sg.ID)
 			g.Size = toModelSize(sg.Size)
+			g.Blame = toModelSize(sg.Blame)
 			g.Changes = toModelChanges(sg.Changes)
 			g.Metrics = toModelMetricsAggregate(sg.Metrics)
 			g.Data = cloneMap(sg.Data)
@@ -429,6 +511,7 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 			for _, st := range teamsByGroup[sg.ID] {
 				t := g.GetOrCreateTeamEx(st.Name, &st.ID)
 				t.Size = toModelSize(st.Size)
+				t.Blame = toModelSize(st.Blame)
 				t.Changes = toModelChanges(st.Changes)
 				t.Metrics = toModelMetricsAggregate(st.Metrics)
 				t.Data = cloneMap(st.Data)
@@ -496,11 +579,11 @@ func (s *sqliteStorage) WritePeople(peopleDB *model.People, changes archer.Stora
 	now := time.Now().Local()
 	db := s.db.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
-		CreateBatchSize: 100,
+		CreateBatchSize: 1000,
 	})
 
 	if changedPeople {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlPeople, 1000).Error
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlPeople).Error
 		if err != nil {
 			return err
 		}
@@ -509,7 +592,7 @@ func (s *sqliteStorage) WritePeople(peopleDB *model.People, changes archer.Stora
 	}
 
 	if changedAreas {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlAreas, 1000).Error
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlAreas).Error
 		if err != nil {
 			return err
 		}
@@ -518,17 +601,17 @@ func (s *sqliteStorage) WritePeople(peopleDB *model.People, changes archer.Stora
 	}
 
 	if changedTeams {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlOrgs, 1000).Error
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlOrgs).Error
 		if err != nil {
 			return err
 		}
 
-		err = db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlGroups, 1000).Error
+		err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlGroups).Error
 		if err != nil {
 			return err
 		}
 
-		err = db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlTeams, 1000).Error
+		err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlTeams).Error
 		if err != nil {
 			return err
 		}
@@ -631,6 +714,7 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 		c.ModifiedLines = sc.ModifiedLines
 		c.AddedLines = sc.AddedLines
 		c.DeletedLines = sc.DeletedLines
+		c.SurvivedLines = decodeMetric(sc.SurvivedLines)
 
 		commitsById[c.ID] = c
 	}
@@ -638,7 +722,8 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 	for _, sf := range commitFiles {
 		commit := commitsById[sf.CommitID]
 
-		commit.AddFile(sf.FileID, sf.OldFileID, sf.ModifiedLines, sf.AddedLines, sf.DeletedLines)
+		file := commit.AddFile(sf.FileID, sf.OldFileID, sf.ModifiedLines, sf.AddedLines, sf.DeletedLines)
+		file.SurvivedLines = decodeMetric(sf.SurvivedLines)
 	}
 
 	return result, nil
@@ -682,11 +767,11 @@ func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.S
 	now := time.Now().Local()
 	db := s.db.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
-		CreateBatchSize: 100,
+		CreateBatchSize: 1000,
 	})
 
 	if changedRepos {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlRepos, 1000).Error
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlRepos).Error
 		if err != nil {
 			return err
 		}
@@ -695,7 +780,7 @@ func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.S
 	}
 
 	if changedCommits {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlCommits, 1000).Error
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommits).Error
 		if err != nil {
 			return err
 		}
@@ -704,7 +789,7 @@ func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.S
 	}
 
 	if changedFiles {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlCommitFiles, 1000).Error
+		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommitFiles).Error
 		if err != nil {
 			return err
 		}
@@ -749,10 +834,10 @@ func (s *sqliteStorage) WriteConfig(configs *map[string]string) error {
 	now := time.Now().Local()
 	db := s.db.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
-		CreateBatchSize: 100,
+		CreateBatchSize: 1000,
 	})
 
-	err := db.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(&sqlConfigs, 1000).Error
+	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlConfigs).Error
 	if err != nil {
 		return err
 	}
@@ -940,6 +1025,16 @@ func toSqlFile(f *model.File) *sqlFile {
 	}
 }
 
+func toSqlFileLine(fileID model.UUID, f *model.FileLine) *sqlFileLine {
+	return &sqlFileLine{
+		FileID:   fileID,
+		Line:     f.Line,
+		CommitID: f.CommitID,
+		Type:     f.Type,
+		Text:     f.Text,
+	}
+}
+
 func toSqlPerson(p *model.Person) *sqlPerson {
 	result := &sqlPerson{
 		ID:      p.ID,
@@ -947,6 +1042,7 @@ func toSqlPerson(p *model.Person) *sqlPerson {
 		Names:   p.ListNames(),
 		Emails:  p.ListEmails(),
 		Size:    toSqlSize(p.Size),
+		Blame:   toSqlSize(p.Blame),
 		Changes: toSqlChanges(p.Changes),
 		Metrics: toSqlMetricsAggregate(p.Metrics, p.Size),
 		Data:    cloneMap(p.Data),
@@ -971,6 +1067,7 @@ func toSqlOrg(o *model.Organization) *sqlOrg {
 		ID:      o.ID,
 		Name:    o.Name,
 		Size:    toSqlSize(o.Size),
+		Blame:   toSqlSize(o.Blame),
 		Changes: toSqlChanges(o.Changes),
 		Metrics: toSqlMetricsAggregate(o.Metrics, o.Size),
 		Data:    cloneMap(o.Data),
@@ -982,6 +1079,7 @@ func toSqlOrgGroup(g *model.Group) *sqlOrgGroup {
 		ID:      g.ID,
 		Name:    g.Name,
 		Size:    toSqlSize(g.Size),
+		Blame:   toSqlSize(g.Blame),
 		Changes: toSqlChanges(g.Changes),
 		Metrics: toSqlMetricsAggregate(g.Metrics, g.Size),
 		Data:    cloneMap(g.Data),
@@ -993,6 +1091,7 @@ func toSqlOrgTeam(t *model.Team) *sqlOrgTeam {
 		ID:      t.ID,
 		Name:    t.Name,
 		Size:    toSqlSize(t.Size),
+		Blame:   toSqlSize(t.Blame),
 		Changes: toSqlChanges(t.Changes),
 		Metrics: toSqlMetricsAggregate(t.Metrics, t.Size),
 		Data:    cloneMap(t.Data),
@@ -1023,6 +1122,7 @@ func toSqlRepositoryCommit(r *model.Repository, c *model.RepositoryCommit) *sqlR
 		ModifiedLines: c.ModifiedLines,
 		AddedLines:    c.AddedLines,
 		DeletedLines:  c.DeletedLines,
+		SurvivedLines: encodeMetric(c.SurvivedLines),
 	}
 }
 
@@ -1035,6 +1135,7 @@ func toSqlRepositoryCommitFile(r *model.Repository, c *model.RepositoryCommit, f
 		ModifiedLines: f.ModifiedLines,
 		AddedLines:    f.AddedLines,
 		DeletedLines:  f.DeletedLines,
+		SurvivedLines: encodeMetric(f.SurvivedLines),
 	}
 }
 

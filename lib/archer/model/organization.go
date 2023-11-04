@@ -10,6 +10,7 @@ type Organization struct {
 
 	groupsByName map[string]*Group
 	Size         *Size
+	Blame        *Size
 	Changes      *Changes
 	Metrics      *Metrics
 	Data         map[string]string
@@ -28,6 +29,7 @@ func NewOrganization(name string, id *UUID) *Organization {
 		ID:           uuid,
 		groupsByName: map[string]*Group{},
 		Size:         NewSize(),
+		Blame:        NewSize(),
 		Changes:      NewChanges(),
 		Metrics:      NewMetrics(),
 		Data:         map[string]string{},

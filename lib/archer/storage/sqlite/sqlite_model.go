@@ -93,6 +93,19 @@ type sqlFile struct {
 
 	CommitFiles    []sqlRepositoryCommitFile `gorm:"foreignKey:FileID"`
 	CommitOldFiles []sqlRepositoryCommitFile `gorm:"foreignKey:OldFileID"`
+	Lines          []sqlFileLine             `gorm:"foreignKey:FileID"`
+}
+
+type sqlFileLine struct {
+	FileID model.UUID `gorm:"primaryKey"`
+	Line   int        `gorm:"primaryKey"`
+
+	CommitID *model.UUID `gorm:"index"`
+	Type     model.FileLineType
+	Text     string
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type sqlPerson struct {
@@ -102,6 +115,7 @@ type sqlPerson struct {
 	Names   []string             `gorm:"serializer:json"`
 	Emails  []string             `gorm:"serializer:json"`
 	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
+	Blame   *sqlSize             `gorm:"embedded;embeddedPrefix:blame_"`
 	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
 	Metrics *sqlMetricsAggregate `gorm:"embedded"`
 	Data    map[string]string    `gorm:"serializer:json"`
@@ -134,6 +148,7 @@ type sqlOrg struct {
 	Name string
 
 	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
+	Blame   *sqlSize             `gorm:"embedded;embeddedPrefix:blame_"`
 	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
 	Metrics *sqlMetricsAggregate `gorm:"embedded"`
 	Data    map[string]string    `gorm:"serializer:json"`
@@ -153,6 +168,7 @@ type sqlOrgGroup struct {
 	OrgID model.UUID
 
 	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
+	Blame   *sqlSize             `gorm:"embedded;embeddedPrefix:blame_"`
 	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
 	Metrics *sqlMetricsAggregate `gorm:"embedded"`
 	Data    map[string]string    `gorm:"serializer:json"`
@@ -172,6 +188,7 @@ type sqlOrgTeam struct {
 	OrgID      model.UUID
 
 	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
+	Blame   *sqlSize             `gorm:"embedded;embeddedPrefix:blame_"`
 	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
 	Metrics *sqlMetricsAggregate `gorm:"embedded"`
 	Data    map[string]string    `gorm:"serializer:json"`
@@ -240,11 +257,13 @@ type sqlRepositoryCommit struct {
 	AddedLines    int
 	ModifiedLines int
 	DeletedLines  int
+	SurvivedLines *int
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
 	CommitFiles []sqlRepositoryCommitFile `gorm:"foreignKey:CommitID"`
+	Lines       []sqlFileLine             `gorm:"foreignKey:CommitID"`
 }
 
 type sqlRepositoryCommitFile struct {
@@ -255,6 +274,7 @@ type sqlRepositoryCommitFile struct {
 	AddedLines    int        // TODO *
 	ModifiedLines int
 	DeletedLines  int
+	SurvivedLines *int
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

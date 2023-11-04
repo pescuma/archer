@@ -9,7 +9,13 @@ type Changes struct {
 }
 
 func NewChanges() *Changes {
-	return &Changes{}
+	return &Changes{
+		In6Months:     -1,
+		Total:         -1,
+		ModifiedLines: -1,
+		AddedLines:    -1,
+		DeletedLines:  -1,
+	}
 }
 
 func (m *Changes) Clear() {
