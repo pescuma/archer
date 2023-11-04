@@ -78,9 +78,6 @@ type sqlFile struct {
 	RepositoryID       *model.UUID `gorm:"index"`
 
 	ProductAreaID *model.UUID `gorm:"index"`
-	OrgID         *model.UUID `gorm:"index"`
-	OrgGroupID    *model.UUID `gorm:"index"`
-	OrgTeamID     *model.UUID `gorm:"index"`
 
 	Exists  bool
 	Size    *sqlSize          `gorm:"embedded;embeddedPrefix:size_"`
@@ -125,7 +122,6 @@ type sqlPerson struct {
 	CommitAuthors    []sqlRepositoryCommit `gorm:"foreignKey:AuthorID"`
 	CommitCommitters []sqlRepositoryCommit `gorm:"foreignKey:CommitterID"`
 	FileLineAuthors  []sqlFileLine         `gorm:"foreignKey:AuthorID"`
-	TeamMembers      []sqlOrgTeamMember    `gorm:"foreignKey:PersonID"`
 }
 
 type sqlProductArea struct {
@@ -136,93 +132,6 @@ type sqlProductArea struct {
 	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
 	Metrics *sqlMetricsAggregate `gorm:"embedded"`
 	Data    map[string]string    `gorm:"serializer:json"`
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
-
-	TeamAreas []sqlOrgTeamArea `gorm:"foreignKey:CodeAreaID"`
-}
-
-type sqlOrg struct {
-	ID   model.UUID
-	Name string
-
-	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
-	Blame   *sqlSize             `gorm:"embedded;embeddedPrefix:blame_"`
-	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
-	Metrics *sqlMetricsAggregate `gorm:"embedded"`
-	Data    map[string]string    `gorm:"serializer:json"`
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
-
-	Groups      []sqlOrgGroup      `gorm:"foreignKey:OrgID"`
-	Teams       []sqlOrgTeam       `gorm:"foreignKey:OrgID"`
-	TeamMembers []sqlOrgTeamMember `gorm:"foreignKey:OrgID"`
-	TeamAreas   []sqlOrgTeamArea   `gorm:"foreignKey:OrgID"`
-}
-
-type sqlOrgGroup struct {
-	ID    model.UUID
-	Name  string
-	OrgID model.UUID
-
-	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
-	Blame   *sqlSize             `gorm:"embedded;embeddedPrefix:blame_"`
-	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
-	Metrics *sqlMetricsAggregate `gorm:"embedded"`
-	Data    map[string]string    `gorm:"serializer:json"`
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
-
-	Teams       []sqlOrgTeam       `gorm:"foreignKey:OrgGroupID"`
-	TeamMembers []sqlOrgTeamMember `gorm:"foreignKey:OrgGroupID"`
-	TeamAreas   []sqlOrgTeamArea   `gorm:"foreignKey:OrgGroupID"`
-}
-
-type sqlOrgTeam struct {
-	ID         model.UUID
-	Name       string
-	OrgGroupID model.UUID
-	OrgID      model.UUID
-
-	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
-	Blame   *sqlSize             `gorm:"embedded;embeddedPrefix:blame_"`
-	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
-	Metrics *sqlMetricsAggregate `gorm:"embedded"`
-	Data    map[string]string    `gorm:"serializer:json"`
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
-
-	TeamMembers []sqlOrgTeamMember `gorm:"foreignKey:OrgTeamID"`
-	TeamAreas   []sqlOrgTeamArea   `gorm:"foreignKey:OrgTeamID"`
-}
-
-type sqlOrgTeamMember struct {
-	ID         model.UUID
-	PersonID   model.UUID `gorm:"index"`
-	OrgTeamID  model.UUID `gorm:"index"`
-	OrgGroupID model.UUID `gorm:"index"`
-	OrgID      model.UUID `gorm:"index"`
-
-	Start *time.Time
-	End   *time.Time
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
-type sqlOrgTeamArea struct {
-	ID         model.UUID
-	CodeAreaID model.UUID `gorm:"index"`
-	OrgTeamID  model.UUID `gorm:"index"`
-	OrgGroupID model.UUID `gorm:"index"`
-	OrgID      model.UUID `gorm:"index"`
-
-	Start *time.Time
-	End   *time.Time
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

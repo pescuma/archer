@@ -128,17 +128,6 @@ func (l *locImporter) Import(storage archer.Storage) error {
 }
 
 func updateParents(projectsDB *model.Projects, filesDB *model.Files, peopleDB *model.People) {
-	for _, o := range peopleDB.ListOrganizations() {
-		o.Size.Clear()
-	}
-	gs := peopleDB.ListGroupsByID()
-	for _, g := range gs {
-		g.Size.Clear()
-	}
-	ts := peopleDB.ListTeamsByID()
-	for _, t := range ts {
-		t.Size.Clear()
-	}
 	for _, a := range peopleDB.ListProductAreas() {
 		a.Size.Clear()
 	}
@@ -154,15 +143,6 @@ func updateParents(projectsDB *model.Projects, filesDB *model.Files, peopleDB *m
 			for _, file := range filesByDir[dir.ID] {
 				dir.Size.Add(file.Size)
 
-				if file.OrganizationID != nil {
-					peopleDB.GetOrganizationByID(*file.OrganizationID).Size.Add(file.Size)
-				}
-				if file.GroupID != nil {
-					gs[*file.GroupID].Size.Add(file.Size)
-				}
-				if file.TeamID != nil {
-					ts[*file.TeamID].Size.Add(file.Size)
-				}
 				if file.ProductAreaID != nil {
 					peopleDB.GetProductAreaByID(*file.ProductAreaID).Size.Add(file.Size)
 				}

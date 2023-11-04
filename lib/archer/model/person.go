@@ -9,7 +9,6 @@ import (
 type Person struct {
 	Name string
 	ID   UUID
-	Team *Team
 
 	names   map[string]bool
 	emails  map[string]bool

@@ -451,17 +451,6 @@ func (g *gitHistoryImporter) propagateChangesToParents(reposDB *model.Repositori
 	for _, p := range peopleDB.ListPeople() {
 		p.Changes.Clear()
 	}
-	for _, o := range peopleDB.ListOrganizations() {
-		o.Changes.Clear()
-	}
-	gs := peopleDB.ListGroupsByID()
-	for _, g := range gs {
-		g.Changes.Clear()
-	}
-	ts := peopleDB.ListTeamsByID()
-	for _, t := range ts {
-		t.Changes.Clear()
-	}
 	for _, a := range peopleDB.ListProductAreas() {
 		a.Changes.Clear()
 	}
@@ -482,9 +471,6 @@ func (g *gitHistoryImporter) propagateChangesToParents(reposDB *model.Repositori
 			projs := map[*model.Project]bool{}
 			dirs := map[*model.ProjectDirectory]bool{}
 			areas := map[*model.ProductArea]bool{}
-			orgs := map[*model.Organization]bool{}
-			groups := map[*model.Group]bool{}
-			teams := map[*model.Team]bool{}
 			for _, cf := range c.Files {
 				addLines := func(c *model.Changes) {
 					c.ModifiedLines += cf.ModifiedLines
@@ -514,23 +500,6 @@ func (g *gitHistoryImporter) propagateChangesToParents(reposDB *model.Repositori
 					addLines(a.Changes)
 					areas[a] = true
 				}
-
-				// TODO Make this dependent on time
-				if file.OrganizationID != nil {
-					o := peopleDB.GetOrganizationByID(*file.OrganizationID)
-					addLines(o.Changes)
-					orgs[o] = true
-				}
-				if file.GroupID != nil {
-					g := gs[*file.GroupID]
-					addLines(g.Changes)
-					groups[g] = true
-				}
-				if file.TeamID != nil {
-					t := ts[*file.TeamID]
-					addLines(t.Changes)
-					teams[t] = true
-				}
 			}
 
 			for _, p := range lo.Keys(projs) {
@@ -542,16 +511,6 @@ func (g *gitHistoryImporter) propagateChangesToParents(reposDB *model.Repositori
 
 			for _, a := range lo.Keys(areas) {
 				addChanges(a.Changes)
-			}
-
-			for _, o := range lo.Keys(orgs) {
-				addChanges(o.Changes)
-			}
-			for _, g := range lo.Keys(groups) {
-				addChanges(g.Changes)
-			}
-			for _, t := range lo.Keys(teams) {
-				addChanges(t.Changes)
 			}
 		}
 	}

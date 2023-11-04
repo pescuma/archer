@@ -5,22 +5,18 @@ import (
 )
 
 type People struct {
-	peopleByName        map[string]*Person
-	peopleByID          map[UUID]*Person
-	organizationsByName map[string]*Organization
-	organizationsByID   map[UUID]*Organization
-	productAreasByName  map[string]*ProductArea
-	productAreasByID    map[UUID]*ProductArea
+	peopleByName       map[string]*Person
+	peopleByID         map[UUID]*Person
+	productAreasByName map[string]*ProductArea
+	productAreasByID   map[UUID]*ProductArea
 }
 
 func NewPeople() *People {
 	return &People{
-		peopleByName:        map[string]*Person{},
-		peopleByID:          map[UUID]*Person{},
-		organizationsByName: map[string]*Organization{},
-		organizationsByID:   map[UUID]*Organization{},
-		productAreasByName:  map[string]*ProductArea{},
-		productAreasByID:    map[UUID]*ProductArea{},
+		peopleByName:       map[string]*Person{},
+		peopleByID:         map[UUID]*Person{},
+		productAreasByName: map[string]*ProductArea{},
+		productAreasByID:   map[UUID]*ProductArea{},
 	}
 }
 
@@ -68,57 +64,6 @@ func (ps *People) ChangePersonName(person *Person, name string) {
 	person.Name = name
 
 	ps.peopleByName[name] = person
-}
-
-func (ps *People) GetOrCreateOrganization(name string) *Organization {
-	return ps.GetOrCreateOrganizationEx(name, nil)
-
-}
-
-func (ps *People) GetOrCreateOrganizationEx(name string, id *UUID) *Organization {
-	if len(name) == 0 {
-		panic("empty name not supported")
-	}
-
-	result, ok := ps.organizationsByName[name]
-
-	if !ok {
-		result = NewOrganization(name, id)
-		ps.organizationsByName[name] = result
-		ps.organizationsByID[result.ID] = result
-	}
-
-	return result
-}
-
-func (ps *People) GetOrganizationByID(id UUID) *Organization {
-	return ps.organizationsByID[id]
-}
-
-func (ps *People) ListOrganizations() []*Organization {
-	return lo.Values(ps.organizationsByName)
-}
-
-func (ps *People) ListGroupsByID() map[UUID]*Group {
-	result := map[UUID]*Group{}
-	for _, o := range ps.ListOrganizations() {
-		for _, g := range o.ListGroups() {
-			result[g.ID] = g
-		}
-	}
-	return result
-}
-
-func (ps *People) ListTeamsByID() map[UUID]*Team {
-	result := map[UUID]*Team{}
-	for _, o := range ps.ListOrganizations() {
-		for _, g := range o.ListGroups() {
-			for _, t := range g.ListTeams() {
-				result[t.ID] = t
-			}
-		}
-	}
-	return result
 }
 
 func (ps *People) GetOrCreateProductArea(name string) *ProductArea {

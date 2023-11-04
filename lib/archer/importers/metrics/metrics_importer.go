@@ -194,17 +194,6 @@ func updateParentMetrics(projectsDB *model.Projects, filesDB *model.Files, peopl
 		}
 	}
 
-	for _, o := range peopleDB.ListOrganizations() {
-		o.Metrics.Clear()
-	}
-	gs := peopleDB.ListGroupsByID()
-	for _, g := range gs {
-		g.Metrics.Clear()
-	}
-	ts := peopleDB.ListTeamsByID()
-	for _, t := range ts {
-		t.Metrics.Clear()
-	}
 	for _, a := range peopleDB.ListProductAreas() {
 		a.Metrics.Clear()
 	}
@@ -218,15 +207,6 @@ func updateParentMetrics(projectsDB *model.Projects, filesDB *model.Files, peopl
 
 				dir.Metrics.Add(file.Metrics)
 
-				if file.OrganizationID != nil {
-					peopleDB.GetOrganizationByID(*file.OrganizationID).Metrics.Add(file.Metrics)
-				}
-				if file.GroupID != nil {
-					gs[*file.GroupID].Metrics.Add(file.Metrics)
-				}
-				if file.TeamID != nil {
-					ts[*file.TeamID].Metrics.Add(file.Metrics)
-				}
 				if file.ProductAreaID != nil {
 					peopleDB.GetProductAreaByID(*file.ProductAreaID).Metrics.Add(file.Metrics)
 				}

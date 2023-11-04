@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bufio"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -132,17 +133,18 @@ func PathAbs(path string) (string, error) {
 	return path, nil
 }
 
-func IsTextFile(path string) (bool, error) {
-	return IsTextFileExt(path, 10)
+func IsTextReader(reader io.ReadCloser, err error) (bool, error) {
+	return IsTextReaderOpts(reader, err, 10)
 }
 
-func IsTextFileExt(path string, sampleLines int) (bool, error) {
-	file, err := os.Open(path)
+func IsTextReaderOpts(reader io.ReadCloser, err error, sampleLines int) (bool, error) {
 	if err != nil {
 		return false, err
 	}
 
-	fileScanner := bufio.NewScanner(file)
+	defer reader.Close()
+
+	fileScanner := bufio.NewScanner(reader)
 
 	for i := 0; i < sampleLines; i++ {
 		if !fileScanner.Scan() {
@@ -155,6 +157,10 @@ func IsTextFileExt(path string, sampleLines int) (bool, error) {
 	}
 
 	return true, err
+}
+
+func IsTextFile(path string) (bool, error) {
+	return IsTextReader(os.Open(path))
 }
 
 func FileExists(path string) (bool, error) {

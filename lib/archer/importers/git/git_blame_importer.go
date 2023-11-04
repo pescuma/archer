@@ -127,7 +127,7 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 				}
 			}
 
-			isText, err := utils.IsTextFile(path)
+			isText, err := utils.IsTextReader(gitFile.Reader())
 			if err != nil {
 				return err
 			}

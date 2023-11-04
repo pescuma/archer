@@ -33,9 +33,6 @@ type sqliteStorage struct {
 	files           map[model.UUID]*sqlFile
 	people          map[model.UUID]*sqlPerson
 	area            map[model.UUID]*sqlProductArea
-	orgs            map[model.UUID]*sqlOrg
-	groups          map[model.UUID]*sqlOrgGroup
-	teams           map[model.UUID]*sqlOrgTeam
 	repos           map[model.UUID]*sqlRepository
 	repoCommits     map[model.UUID]*sqlRepositoryCommit
 	repoCommitFiles map[model.UUID]*sqlRepositoryCommitFile
@@ -85,7 +82,7 @@ func newFrom(dsn string) (archer.Storage, error) {
 		&sqlConfig{},
 		&sqlProject{}, &sqlProjectDependency{}, &sqlProjectDirectory{},
 		&sqlFile{}, &sqlFileLine{},
-		&sqlPerson{}, &sqlOrg{}, &sqlOrgGroup{}, &sqlOrgTeam{}, &sqlOrgTeamMember{}, &sqlOrgTeamArea{}, &sqlProductArea{},
+		&sqlPerson{}, &sqlProductArea{},
 		&sqlRepository{}, &sqlRepositoryCommit{}, &sqlRepositoryCommitFile{},
 	)
 	if err != nil {
@@ -287,9 +284,6 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 		f.ProjectDirectoryID = sf.ProjectDirectoryID
 		f.RepositoryID = sf.RepositoryID
 		f.ProductAreaID = sf.ProductAreaID
-		f.OrganizationID = sf.OrgID
-		f.GroupID = sf.OrgGroupID
-		f.TeamID = sf.OrgTeamID
 		f.Exists = sf.Exists
 		f.Size = toModelSize(sf.Size)
 		f.Changes = toModelChanges(sf.Changes)
@@ -435,39 +429,6 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 		return i.ID, i
 	})
 
-	var orgs []*sqlOrg
-	err = s.db.Find(&orgs).Error
-	if err != nil {
-		return nil, err
-	}
-
-	s.orgs = lo.Associate(orgs, func(i *sqlOrg) (model.UUID, *sqlOrg) {
-		return i.ID, i
-	})
-
-	var groups []*sqlOrgGroup
-	err = s.db.Find(&groups).Error
-	if err != nil {
-		return nil, err
-	}
-
-	s.groups = lo.Associate(groups, func(i *sqlOrgGroup) (model.UUID, *sqlOrgGroup) {
-		return i.ID, i
-	})
-
-	var teams []*sqlOrgTeam
-	err = s.db.Find(&teams).Error
-	if err != nil {
-		return nil, err
-	}
-
-	s.teams = lo.Associate(teams, func(i *sqlOrgTeam) (model.UUID, *sqlOrgTeam) {
-		return i.ID, i
-	})
-
-	groupsByOrg := lo.GroupBy(groups, func(t *sqlOrgGroup) model.UUID { return t.OrgID })
-	teamsByGroup := lo.GroupBy(teams, func(t *sqlOrgTeam) model.UUID { return t.OrgGroupID })
-
 	for _, sp := range people {
 		p := result.GetOrCreatePersonEx(sp.Name, &sp.ID)
 		for _, name := range sp.Names {
@@ -489,40 +450,12 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 		a.Data = cloneMap(sa.Data)
 	}
 
-	for _, so := range orgs {
-		o := result.GetOrCreateOrganizationEx(so.Name, &so.ID)
-		o.Size = toModelSize(so.Size)
-		o.Blame = toModelSize(so.Blame)
-		o.Changes = toModelChanges(so.Changes)
-		o.Metrics = toModelMetricsAggregate(so.Metrics)
-		o.Data = cloneMap(so.Data)
-
-		for _, sg := range groupsByOrg[so.ID] {
-			g := o.GetOrCreateGroupEx(sg.Name, &sg.ID)
-			g.Size = toModelSize(sg.Size)
-			g.Blame = toModelSize(sg.Blame)
-			g.Changes = toModelChanges(sg.Changes)
-			g.Metrics = toModelMetricsAggregate(sg.Metrics)
-			g.Data = cloneMap(sg.Data)
-
-			for _, st := range teamsByGroup[sg.ID] {
-				t := g.GetOrCreateTeamEx(st.Name, &st.ID)
-				t.Size = toModelSize(st.Size)
-				t.Blame = toModelSize(st.Blame)
-				t.Changes = toModelChanges(st.Changes)
-				t.Metrics = toModelMetricsAggregate(st.Metrics)
-				t.Data = cloneMap(st.Data)
-			}
-		}
-	}
-
 	return result, nil
 }
 
 func (s *sqliteStorage) WritePeople(peopleDB *model.People, changes archer.StorageChanges) error {
 	changedPeople := changed(changes, archer.ChangedBasicInfo, archer.ChangedData, archer.ChangedSize, archer.ChangedChanges, archer.ChangedMetrics)
 	changedAreas := changed(changes, archer.ChangedBasicInfo, archer.ChangedData, archer.ChangedSize, archer.ChangedChanges, archer.ChangedMetrics)
-	changedTeams := changed(changes, archer.ChangedTeams, archer.ChangedData, archer.ChangedSize, archer.ChangedChanges, archer.ChangedMetrics)
 
 	var sqlPeople []*sqlPerson
 	if changedPeople {
@@ -542,33 +475,6 @@ func (s *sqliteStorage) WritePeople(peopleDB *model.People, changes archer.Stora
 			sp := toSqlProductArea(p)
 			if prepareChange(&s.area, sp.ID, sp) {
 				sqlAreas = append(sqlAreas, sp)
-			}
-		}
-	}
-
-	var sqlOrgs []*sqlOrg
-	var sqlGroups []*sqlOrgGroup
-	var sqlTeams []*sqlOrgTeam
-	if changedTeams {
-		orgs := peopleDB.ListOrganizations()
-		for _, o := range orgs {
-			so := toSqlOrg(o)
-			if prepareChange(&s.orgs, so.ID, so) {
-				sqlOrgs = append(sqlOrgs, so)
-			}
-
-			for _, g := range o.ListGroups() {
-				sg := toSqlOrgGroup(g)
-				if prepareChange(&s.groups, sg.ID, sg) {
-					sqlGroups = append(sqlGroups, sg)
-				}
-
-				for _, t := range g.ListTeams() {
-					st := toSqlOrgTeam(t)
-					if prepareChange(&s.teams, st.ID, st) {
-						sqlTeams = append(sqlTeams, st)
-					}
-				}
 			}
 		}
 	}
@@ -595,27 +501,6 @@ func (s *sqliteStorage) WritePeople(peopleDB *model.People, changes archer.Stora
 		}
 
 		addList(&s.area, sqlAreas, func(s *sqlProductArea) model.UUID { return s.ID })
-	}
-
-	if changedTeams {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlOrgs).Error
-		if err != nil {
-			return err
-		}
-
-		err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlGroups).Error
-		if err != nil {
-			return err
-		}
-
-		err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlTeams).Error
-		if err != nil {
-			return err
-		}
-
-		addList(&s.orgs, sqlOrgs, func(s *sqlOrg) model.UUID { return s.ID })
-		addList(&s.groups, sqlGroups, func(s *sqlOrgGroup) model.UUID { return s.ID })
-		addList(&s.teams, sqlTeams, func(s *sqlOrgTeam) model.UUID { return s.ID })
 	}
 
 	// TODO delete
@@ -1011,9 +896,6 @@ func toSqlFile(f *model.File) *sqlFile {
 		ProjectDirectoryID: f.ProjectDirectoryID,
 		RepositoryID:       f.RepositoryID,
 		ProductAreaID:      f.ProductAreaID,
-		OrgID:              f.OrganizationID,
-		OrgGroupID:         f.GroupID,
-		OrgTeamID:          f.TeamID,
 		Exists:             f.Exists,
 		Size:               toSqlSize(f.Size),
 		Changes:            toSqlChanges(f.Changes),
@@ -1055,42 +937,6 @@ func toSqlProductArea(a *model.ProductArea) *sqlProductArea {
 		Changes: toSqlChanges(a.Changes),
 		Metrics: toSqlMetricsAggregate(a.Metrics, a.Size),
 		Data:    cloneMap(a.Data),
-	}
-}
-
-func toSqlOrg(o *model.Organization) *sqlOrg {
-	return &sqlOrg{
-		ID:      o.ID,
-		Name:    o.Name,
-		Size:    toSqlSize(o.Size),
-		Blame:   toSqlSize(o.Blame),
-		Changes: toSqlChanges(o.Changes),
-		Metrics: toSqlMetricsAggregate(o.Metrics, o.Size),
-		Data:    cloneMap(o.Data),
-	}
-}
-
-func toSqlOrgGroup(g *model.Group) *sqlOrgGroup {
-	return &sqlOrgGroup{
-		ID:      g.ID,
-		Name:    g.Name,
-		Size:    toSqlSize(g.Size),
-		Blame:   toSqlSize(g.Blame),
-		Changes: toSqlChanges(g.Changes),
-		Metrics: toSqlMetricsAggregate(g.Metrics, g.Size),
-		Data:    cloneMap(g.Data),
-	}
-}
-
-func toSqlOrgTeam(t *model.Team) *sqlOrgTeam {
-	return &sqlOrgTeam{
-		ID:      t.ID,
-		Name:    t.Name,
-		Size:    toSqlSize(t.Size),
-		Blame:   toSqlSize(t.Blame),
-		Changes: toSqlChanges(t.Changes),
-		Metrics: toSqlMetricsAggregate(t.Metrics, t.Size),
-		Data:    cloneMap(t.Data),
 	}
 }
 
