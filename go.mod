@@ -16,12 +16,12 @@ require (
 	github.com/hashicorp/go-set/v2 v2.0.0-alpha.3
 	github.com/hexops/gotextdiff v1.0.3
 	github.com/hhatto/gocloc v0.5.2
-	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/pkg/errors v0.9.1
 	github.com/samber/lo v1.38.1
 	github.com/schollz/progressbar/v3 v3.13.1
 	github.com/sergi/go-diff v1.3.1
 	github.com/stretchr/testify v1.8.1
+	github.com/teris-io/shortid v0.0.0-20220617161101-71ec9f2aa569
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
 	gorm.io/gorm v1.25.5
 )
@@ -42,7 +42,6 @@ require (
 	github.com/go-git/go-billy/v5 v5.5.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/uuid v1.4.0 // indirect
-	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
