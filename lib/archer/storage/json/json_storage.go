@@ -456,6 +456,11 @@ func (s *jsonStorage) WriteFileContents(contents *model.FileContents, changes ar
 	panic("implement me")
 }
 
+func (s *jsonStorage) ComputeBlamePerAuthor() ([]*archer.BlamePerAuthor, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (s *jsonStorage) LoadPeople() (*model.People, error) {
 	// TODO implement me
 	panic("implement me")

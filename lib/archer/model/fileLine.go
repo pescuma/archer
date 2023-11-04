@@ -10,6 +10,7 @@ const (
 
 type FileLine struct {
 	Line     int
+	AuthorID *UUID
 	CommitID *UUID
 	Type     FileLineType
 	Text     string

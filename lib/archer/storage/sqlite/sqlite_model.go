@@ -100,6 +100,7 @@ type sqlFileLine struct {
 	FileID model.UUID `gorm:"primaryKey"`
 	Line   int        `gorm:"primaryKey"`
 
+	AuthorID *model.UUID `gorm:"index"`
 	CommitID *model.UUID `gorm:"index"`
 	Type     model.FileLineType
 	Text     string
@@ -121,9 +122,10 @@ type sqlPerson struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	CommitAuthored []sqlRepositoryCommit `gorm:"foreignKey:AuthorID"`
-	CommitCommited []sqlRepositoryCommit `gorm:"foreignKey:CommitterID"`
-	TeamMembers    []sqlOrgTeamMember    `gorm:"foreignKey:PersonID"`
+	CommitAuthors    []sqlRepositoryCommit `gorm:"foreignKey:AuthorID"`
+	CommitCommitters []sqlRepositoryCommit `gorm:"foreignKey:CommitterID"`
+	FileLineAuthors  []sqlFileLine         `gorm:"foreignKey:AuthorID"`
+	TeamMembers      []sqlOrgTeamMember    `gorm:"foreignKey:PersonID"`
 }
 
 type sqlProductArea struct {

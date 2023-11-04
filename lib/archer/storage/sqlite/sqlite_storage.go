@@ -355,6 +355,7 @@ func (s *sqliteStorage) LoadFileContents(fileID model.UUID) (*model.FileContents
 			return nil, fmt.Errorf("invalid line number: %v (should be %v)", line.Line, sf.Line)
 		}
 
+		line.AuthorID = sf.AuthorID
 		line.CommitID = sf.CommitID
 		line.Type = sf.Type
 		line.Text = sf.Text
@@ -400,11 +401,9 @@ func (s *sqliteStorage) ComputeBlamePerAuthor() ([]*archer.BlamePerAuthor, error
 	var result []*archer.BlamePerAuthor
 
 	err := s.db.Raw(`
-		select c.author_id, l.commit_id, l.file_id, l.type line_type, count(*) lines
+		select author_id, commit_id, file_id, type line_type, count(*) lines
 		from file_lines l
-				 join repository_commits c
-					  on l.commit_id = c.id
-		group by c.author_id, l.commit_id, l.file_id, l.type
+		group by author_id, commit_id, file_id, type
 		`).Scan(&result).Error
 	if err != nil {
 		return nil, err
@@ -1027,6 +1026,7 @@ func toSqlFileLine(fileID model.UUID, f *model.FileLine) *sqlFileLine {
 	return &sqlFileLine{
 		FileID:   fileID,
 		Line:     f.Line,
+		AuthorID: f.AuthorID,
 		CommitID: f.CommitID,
 		Type:     f.Type,
 		Text:     f.Text,

@@ -238,6 +238,7 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 			commit := w.repo.GetCommit(blameLine.Hash.String())
 
 			fileLine.CommitID = &commit.ID
+			fileLine.AuthorID = &commit.AuthorID
 			fileLine.Type = lt
 			fileLine.Text = blameLine.Text
 		}
