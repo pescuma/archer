@@ -9,6 +9,9 @@ type Size struct {
 
 func NewSize() *Size {
 	return &Size{
+		Lines: -1,
+		Files: -1,
+		Bytes: -1,
 		Other: map[string]int{},
 	}
 }

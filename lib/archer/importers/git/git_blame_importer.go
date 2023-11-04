@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/hashicorp/go-set/v2"
 	"github.com/hhatto/gocloc"
 	"github.com/pescuma/archer/lib/archer"
 	"github.com/pescuma/archer/lib/archer/model"
@@ -380,8 +381,11 @@ func (g *gitBlameImporter) propagateChangesToParents(storage archer.Storage, peo
 		}
 	}
 
+	filesPerPerson := make(map[model.UUID]*set.Set[model.UUID])
+
 	for _, p := range peopleDB.ListPeople() {
 		p.Blame.Clear()
+		filesPerPerson[p.ID] = set.New[model.UUID](10)
 	}
 
 	for _, blame := range blames {
@@ -395,6 +399,9 @@ func (g *gitBlameImporter) propagateChangesToParents(storage archer.Storage, peo
 		}
 
 		p := peopleDB.GetPersonByID(blame.AuthorID)
+
+		filesPerPerson[p.ID].Insert(blame.FileID)
+
 		add := func(t string, l int) {
 			p.Blame.Lines += l
 
@@ -415,6 +422,10 @@ func (g *gitBlameImporter) propagateChangesToParents(storage archer.Storage, peo
 		default:
 			panic(blame.LineType)
 		}
+	}
+
+	for _, p := range peopleDB.ListPeople() {
+		p.Blame.Files = filesPerPerson[p.ID].Size()
 	}
 
 	return nil

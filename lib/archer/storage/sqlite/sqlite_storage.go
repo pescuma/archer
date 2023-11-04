@@ -85,7 +85,7 @@ func newFrom(dsn string) (archer.Storage, error) {
 		&sqlConfig{},
 		&sqlProject{}, &sqlProjectDependency{}, &sqlProjectDirectory{},
 		&sqlFile{}, &sqlFileLine{},
-		&sqlPerson{}, &sqlOrg{}, &sqlOrgGroup{}, &sqlOrgTeam{}, &sqlTeamMember{}, &sqlTeamArea{}, &sqlProductArea{},
+		&sqlPerson{}, &sqlOrg{}, &sqlOrgGroup{}, &sqlOrgTeam{}, &sqlOrgTeamMember{}, &sqlOrgTeamArea{}, &sqlProductArea{},
 		&sqlRepository{}, &sqlRepositoryCommit{}, &sqlRepositoryCommitFile{},
 	)
 	if err != nil {
@@ -477,10 +477,8 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 		for _, email := range sp.Emails {
 			p.AddEmail(email)
 		}
-		p.Size = toModelSize(sp.Size)
 		p.Blame = toModelSize(sp.Blame)
 		p.Changes = toModelChanges(sp.Changes)
-		p.Metrics = toModelMetricsAggregate(sp.Metrics)
 		p.Data = cloneMap(sp.Data)
 	}
 
@@ -1041,10 +1039,8 @@ func toSqlPerson(p *model.Person) *sqlPerson {
 		Name:    p.Name,
 		Names:   p.ListNames(),
 		Emails:  p.ListEmails(),
-		Size:    toSqlSize(p.Size),
 		Blame:   toSqlSize(p.Blame),
 		Changes: toSqlChanges(p.Changes),
-		Metrics: toSqlMetricsAggregate(p.Metrics, p.Size),
 		Data:    cloneMap(p.Data),
 	}
 

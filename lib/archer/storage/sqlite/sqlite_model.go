@@ -112,20 +112,18 @@ type sqlPerson struct {
 	ID   model.UUID
 	Name string
 
-	Names   []string             `gorm:"serializer:json"`
-	Emails  []string             `gorm:"serializer:json"`
-	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
-	Blame   *sqlSize             `gorm:"embedded;embeddedPrefix:blame_"`
-	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
-	Metrics *sqlMetricsAggregate `gorm:"embedded"`
-	Data    map[string]string    `gorm:"serializer:json"`
+	Names   []string          `gorm:"serializer:json"`
+	Emails  []string          `gorm:"serializer:json"`
+	Blame   *sqlSize          `gorm:"embedded;embeddedPrefix:blame_"`
+	Changes *sqlChanges       `gorm:"embedded;embeddedPrefix:changes_"`
+	Data    map[string]string `gorm:"serializer:json"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
 	CommitAuthored []sqlRepositoryCommit `gorm:"foreignKey:AuthorID"`
 	CommitCommited []sqlRepositoryCommit `gorm:"foreignKey:CommitterID"`
-	TeamMembers    []sqlTeamMember       `gorm:"foreignKey:PersonID"`
+	TeamMembers    []sqlOrgTeamMember    `gorm:"foreignKey:PersonID"`
 }
 
 type sqlProductArea struct {
@@ -140,7 +138,7 @@ type sqlProductArea struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	TeamAreas []sqlTeamArea `gorm:"foreignKey:CodeAreaID"`
+	TeamAreas []sqlOrgTeamArea `gorm:"foreignKey:CodeAreaID"`
 }
 
 type sqlOrg struct {
@@ -156,10 +154,10 @@ type sqlOrg struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	Groups      []sqlOrgGroup   `gorm:"foreignKey:OrgID"`
-	Teams       []sqlOrgTeam    `gorm:"foreignKey:OrgID"`
-	TeamMembers []sqlTeamMember `gorm:"foreignKey:OrgID"`
-	TeamAreas   []sqlTeamArea   `gorm:"foreignKey:OrgID"`
+	Groups      []sqlOrgGroup      `gorm:"foreignKey:OrgID"`
+	Teams       []sqlOrgTeam       `gorm:"foreignKey:OrgID"`
+	TeamMembers []sqlOrgTeamMember `gorm:"foreignKey:OrgID"`
+	TeamAreas   []sqlOrgTeamArea   `gorm:"foreignKey:OrgID"`
 }
 
 type sqlOrgGroup struct {
@@ -176,9 +174,9 @@ type sqlOrgGroup struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	Teams       []sqlOrgTeam    `gorm:"foreignKey:OrgGroupID"`
-	TeamMembers []sqlTeamMember `gorm:"foreignKey:OrgGroupID"`
-	TeamAreas   []sqlTeamArea   `gorm:"foreignKey:OrgGroupID"`
+	Teams       []sqlOrgTeam       `gorm:"foreignKey:OrgGroupID"`
+	TeamMembers []sqlOrgTeamMember `gorm:"foreignKey:OrgGroupID"`
+	TeamAreas   []sqlOrgTeamArea   `gorm:"foreignKey:OrgGroupID"`
 }
 
 type sqlOrgTeam struct {
@@ -196,11 +194,11 @@ type sqlOrgTeam struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	TeamMembers []sqlTeamMember `gorm:"foreignKey:OrgTeamID"`
-	TeamAreas   []sqlTeamArea   `gorm:"foreignKey:OrgTeamID"`
+	TeamMembers []sqlOrgTeamMember `gorm:"foreignKey:OrgTeamID"`
+	TeamAreas   []sqlOrgTeamArea   `gorm:"foreignKey:OrgTeamID"`
 }
 
-type sqlTeamMember struct {
+type sqlOrgTeamMember struct {
 	ID         model.UUID
 	PersonID   model.UUID `gorm:"index"`
 	OrgTeamID  model.UUID `gorm:"index"`
@@ -214,7 +212,7 @@ type sqlTeamMember struct {
 	UpdatedAt time.Time
 }
 
-type sqlTeamArea struct {
+type sqlOrgTeamArea struct {
 	ID         model.UUID
 	CodeAreaID model.UUID `gorm:"index"`
 	OrgTeamID  model.UUID `gorm:"index"`
