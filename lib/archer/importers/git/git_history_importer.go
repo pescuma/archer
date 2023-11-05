@@ -184,11 +184,11 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 			bar.Describe(w.repo.Name + " " + gitCommit.Committer.When.Format("2006-01-02 15"))
 			_ = bar.Add(1)
 
-			author := peopleDB.GetOrCreatePerson(grouper.getName(gitCommit.Author.Email))
+			author := peopleDB.GetOrCreatePerson(grouper.getName(gitCommit.Author.Email, gitCommit.Author.Name))
 			author.AddName(gitCommit.Author.Name)
 			author.AddEmail(gitCommit.Author.Email)
 
-			committer := peopleDB.GetOrCreatePerson(grouper.getName(gitCommit.Committer.Email))
+			committer := peopleDB.GetOrCreatePerson(grouper.getName(gitCommit.Committer.Email, gitCommit.Committer.Name))
 			committer.AddName(gitCommit.Committer.Name)
 			committer.AddEmail(gitCommit.Committer.Email)
 

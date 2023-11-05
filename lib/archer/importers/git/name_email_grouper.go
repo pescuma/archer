@@ -113,8 +113,12 @@ func (g *nameEmailGrouper) prepare() {
 	}
 }
 
-func (g *nameEmailGrouper) getName(email string) string {
-	return g.byEmail[email].Name
+func (g *nameEmailGrouper) getName(email string, name string) string {
+	if p, ok := g.byEmail[email]; ok {
+		return p.Name
+	} else {
+		return name
+	}
 }
 
 func (g *nameEmailGrouper) list() []*namesEmails {

@@ -1,8 +1,10 @@
 package loc
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/hhatto/gocloc"
 	"github.com/pkg/errors"
@@ -82,8 +84,6 @@ func (l *locImporter) Import(storage archer.Storage) error {
 
 		} else {
 			file.Exists = false
-
-			file.Size.Clear()
 		}
 
 		_ = bar.Add(1)
@@ -102,6 +102,16 @@ func (l *locImporter) Import(storage archer.Storage) error {
 			file.Size.Other["Code"] = int(floc.Code)
 			file.Size.Other["Comments"] = int(floc.Comments)
 			file.Size.Other["Blanks"] = int(floc.Blanks)
+
+		} else if isText, err := utils.IsTextFile(file.Path); err == nil && isText {
+			text, blanks, err := countLines(file.Path)
+			if err != nil {
+				return err
+			}
+
+			file.Size.Lines = text + blanks
+			file.Size.Other["Code"] = text
+			file.Size.Other["Blanks"] = blanks
 		}
 	}
 
@@ -127,6 +137,31 @@ func (l *locImporter) Import(storage archer.Storage) error {
 	return nil
 }
 
+func countLines(path string) (int, int, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	defer file.Close()
+
+	text := 0
+	blank := 0
+
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			blank++
+		} else {
+			text++
+		}
+	}
+
+	return text, blank, scanner.Err()
+}
+
 func updateParents(projectsDB *model.Projects, filesDB *model.Files, peopleDB *model.People) {
 	for _, a := range peopleDB.ListProductAreas() {
 		a.Size.Clear()
@@ -141,6 +176,10 @@ func updateParents(projectsDB *model.Projects, filesDB *model.Files, peopleDB *m
 			dir.Size.Clear()
 
 			for _, file := range filesByDir[dir.ID] {
+				if !file.Exists {
+					continue
+				}
+
 				dir.Size.Add(file.Size)
 
 				if file.ProductAreaID != nil {

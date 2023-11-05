@@ -17,18 +17,18 @@ func NewSize() *Size {
 }
 
 func (s *Size) Add(other *Size) {
-	s.Lines += other.Lines
-	s.Files += other.Files
-	s.Bytes += other.Bytes
+	s.Lines = add(s.Lines, other.Lines)
+	s.Files = add(s.Files, other.Files)
+	s.Bytes = add(s.Bytes, other.Bytes)
 
-	for k, v := range other.Other {
-		o, _ := s.Other[k]
-		s.Other[k] = o + v
+	for k, o := range other.Other {
+		v, _ := s.Other[k]
+		s.Other[k] = v + o
 	}
 }
 
 func (s *Size) IsEmpty() bool {
-	return s.Lines == 0 && s.Files == 0 && s.Bytes == 0 && len(s.Other) == 0
+	return s.Lines == -1 && s.Files == -1 && s.Bytes == -1 && len(s.Other) == 0
 }
 
 func (s *Size) Clear() {
