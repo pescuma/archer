@@ -1,0 +1,181 @@
+package gomod
+
+import (
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/pescuma/archer/lib/archer"
+	"github.com/pescuma/archer/lib/archer/model"
+	"github.com/pescuma/archer/lib/archer/utils"
+	"github.com/rogpeppe/go-internal/modfile"
+	"golang.org/x/mod/module"
+)
+
+type gomodImporter struct {
+	rootDir  string
+	rootName string
+}
+
+func NewImporter(rootDir string, rootName string) archer.Importer {
+	return &gomodImporter{
+		rootDir:  rootDir,
+		rootName: rootName,
+	}
+}
+
+func (i *gomodImporter) Import(storage archer.Storage) error {
+	projsDB, err := storage.LoadProjects()
+	if err != nil {
+		return err
+	}
+
+	filesDB, err := storage.LoadFiles()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Finding projects...\n")
+
+	rootDir, err := utils.PathAbs(i.rootDir)
+	if err != nil {
+		return err
+	}
+
+	queue := make([]string, 0, 100)
+	err = filepath.WalkDir(rootDir, func(path string, entry fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
+			return nil
+
+		case entry.IsDir() && strings.HasPrefix(entry.Name(), "."):
+			return filepath.SkipDir
+
+		case !entry.IsDir() && entry.Name() == "go.mod":
+			queue = append(queue, path)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Processing projects...\n")
+
+	bar := utils.NewProgressBar(len(queue))
+	for _, path := range queue {
+		path, err = utils.PathAbs(path)
+		if err != nil {
+			return err
+		}
+
+		relativePath, err := filepath.Rel(rootDir, path)
+		if err != nil {
+			return err
+		}
+
+		bar.Describe(relativePath)
+		_ = bar.Add(1)
+
+		err = i.process(projsDB, filesDB, path)
+		if err != nil {
+			return err
+		}
+	}
+	_ = bar.Clear()
+
+	fmt.Printf("Writing results...\n")
+
+	err = storage.WriteProjects(projsDB, archer.ChangedBasicInfo|archer.ChangedDependencies)
+	if err != nil {
+		return err
+	}
+
+	err = storage.WriteFiles(filesDB, archer.ChangedBasicInfo)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (i *gomodImporter) process(projsDB *model.Projects, filesDB *model.Files, path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	ast, err := modfile.ParseLax(path, data, nil)
+	if err != nil {
+		return err
+	}
+
+	name := ast.Module.Mod.Path
+	if name == "" {
+		fmt.Printf("Ignoring %v because of empty module name", path)
+		return nil
+	}
+
+	proj := projsDB.GetOrCreate(i.rootName, name)
+	proj.Type = model.CodeType
+	proj.RootDir = filepath.Dir(path)
+	proj.ProjectFile = path
+
+	for _, req := range ast.Require {
+		i.addDep(projsDB, proj, req.Mod)
+	}
+
+	for _, rep := range ast.Replace {
+		i.addDep(projsDB, proj, rep.New)
+	}
+
+	dir := proj.GetDirectory(".")
+	dir.Type = model.SourceDir
+
+	err = filepath.WalkDir(proj.RootDir, func(path string, entry fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
+			return nil
+
+		case entry.IsDir() && strings.HasPrefix(entry.Name(), "."):
+			return filepath.SkipDir
+
+		case entry.IsDir():
+			return nil
+
+		default:
+			if entry.Name() == "go.mod" || strings.HasSuffix(entry.Name(), ".go") {
+				path, err := utils.PathAbs(path)
+				if err != nil {
+					return err
+				}
+
+				file := filesDB.GetOrCreateFile(path)
+				file.ProjectID = &proj.ID
+				file.ProjectDirectoryID = &dir.ID
+			}
+			return nil
+		}
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (i *gomodImporter) addDep(projsDB *model.Projects, proj *model.Project, mod module.Version) {
+	if mod.Path == "" {
+		return
+	}
+
+	dp := projsDB.GetOrCreate(i.rootName, mod.Path)
+
+	dep := proj.GetOrCreateDependency(dp)
+	if mod.Version != "" {
+		dep.Versions.Insert(strings.TrimPrefix(mod.Version, "v"))
+	}
+}

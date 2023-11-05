@@ -46,7 +46,8 @@ type sqlProjectDependency struct {
 	SourceID model.UUID `gorm:"index"`
 	TargetID model.UUID `gorm:"index"`
 
-	Data map[string]string `gorm:"serializer:json"`
+	Versions []string          `gorm:"serializer:json"`
+	Data     map[string]string `gorm:"serializer:json"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -190,9 +191,9 @@ type sqlRepositoryCommitFile struct {
 }
 
 type sqlSize struct {
-	Lines int
-	Files int
-	Bytes int
+	Lines *int
+	Files *int
+	Bytes *int
 	Other map[string]int `gorm:"serializer:json"`
 }
 

@@ -17,12 +17,14 @@ require (
 	github.com/hexops/gotextdiff v1.0.3
 	github.com/hhatto/gocloc v0.5.2
 	github.com/pkg/errors v0.9.1
+	github.com/rogpeppe/go-internal v1.11.0
 	github.com/samber/lo v1.38.1
 	github.com/schollz/progressbar/v3 v3.13.1
 	github.com/sergi/go-diff v1.3.1
 	github.com/stretchr/testify v1.8.1
 	github.com/teris-io/shortid v0.0.0-20220617161101-71ec9f2aa569
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
+	golang.org/x/mod v0.14.0
 	gorm.io/gorm v1.25.5
 )
 
@@ -56,7 +58,6 @@ require (
 	github.com/skeema/knownhosts v1.2.1 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	golang.org/x/crypto v0.14.0 // indirect
-	golang.org/x/mod v0.13.0 // indirect
 	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/term v0.13.0 // indirect

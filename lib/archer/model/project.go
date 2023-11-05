@@ -37,6 +37,7 @@ func NewProject(root, name string, id *UUID) *Project {
 	return &Project{
 		Root:         root,
 		Name:         name,
+		NameParts:    []string{name},
 		ID:           uuid,
 		Dirs:         map[string]*ProjectDirectory{},
 		Dependencies: map[string]*ProjectDependency{},

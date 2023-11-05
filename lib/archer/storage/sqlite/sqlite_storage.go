@@ -149,7 +149,7 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 		}
 		p.Changes = toModelChanges(sp.Changes)
 		p.Metrics = toModelMetricsAggregate(sp.Metrics)
-		p.Data = cloneMap(sp.Data)
+		p.Data = decodeMap(sp.Data)
 	}
 
 	for _, sd := range deps {
@@ -158,7 +158,8 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 
 		d := source.GetOrCreateDependency(target)
 		d.ID = sd.ID
-		d.Data = cloneMap(sd.Data)
+		d.Versions.InsertSlice(sd.Versions)
+		d.Data = decodeMap(sd.Data)
 	}
 
 	for _, sd := range dirs {
@@ -170,7 +171,7 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 		d.Size = toModelSize(sd.Size)
 		d.Changes = toModelChanges(sd.Changes)
 		d.Metrics = toModelMetricsAggregate(sd.Metrics)
-		d.Data = cloneMap(sd.Data)
+		d.Data = decodeMap(sd.Data)
 	}
 
 	return result, nil
@@ -288,7 +289,7 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 		f.Size = toModelSize(sf.Size)
 		f.Changes = toModelChanges(sf.Changes)
 		f.Metrics = toModelMetrics(sf.Metrics)
-		f.Data = cloneMap(sf.Data)
+		f.Data = decodeMap(sf.Data)
 	}
 
 	return result, nil
@@ -439,7 +440,7 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 		}
 		p.Blame = toModelSize(sp.Blame)
 		p.Changes = toModelChanges(sp.Changes)
-		p.Data = cloneMap(sp.Data)
+		p.Data = decodeMap(sp.Data)
 	}
 
 	for _, sa := range areas {
@@ -447,7 +448,7 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 		a.Size = toModelSize(sa.Size)
 		a.Changes = toModelChanges(sa.Changes)
 		a.Metrics = toModelMetricsAggregate(sa.Metrics)
-		a.Data = cloneMap(sa.Data)
+		a.Data = decodeMap(sa.Data)
 	}
 
 	return result, nil
@@ -578,7 +579,7 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 		r := result.GetOrCreateEx(sr.RootDir, &sr.ID)
 		r.Name = sr.Name
 		r.VCS = sr.VCS
-		r.Data = cloneMap(sr.Data)
+		r.Data = decodeMap(sr.Data)
 	}
 
 	commitsById := map[model.UUID]*model.RepositoryCommit{}
@@ -740,19 +741,19 @@ func toSqlConfig(k string, v string) *sqlConfig {
 
 func toSqlSize(size *model.Size) *sqlSize {
 	return &sqlSize{
-		Lines: size.Lines,
-		Files: size.Files,
-		Bytes: size.Bytes,
-		Other: size.Other,
+		Lines: encodeMetric(size.Lines),
+		Files: encodeMetric(size.Files),
+		Bytes: encodeMetric(size.Bytes),
+		Other: encodeMap(size.Other),
 	}
 }
 
 func toModelSize(size *sqlSize) *model.Size {
 	return &model.Size{
-		Lines: size.Lines,
-		Files: size.Files,
-		Bytes: size.Bytes,
-		Other: size.Other,
+		Lines: decodeMetric(size.Lines),
+		Files: decodeMetric(size.Files),
+		Bytes: decodeMetric(size.Bytes),
+		Other: decodeMap(size.Other),
 	}
 }
 
@@ -839,6 +840,26 @@ func decodeMetric(v *int) int {
 	}
 }
 
+func encodeMap[K comparable, V any](m map[K]V) map[K]V {
+	if len(m) == 0 {
+		return nil
+	}
+
+	return cloneMap(m)
+}
+
+func decodeMap[K comparable, V any](m map[K]V) map[K]V {
+	return cloneMap(m)
+}
+
+func cloneMap[K comparable, V any](m map[K]V) map[K]V {
+	result := make(map[K]V, len(m))
+	for k, v := range m {
+		result[k] = v
+	}
+	return result
+}
+
 func toSqlProject(p *model.Project) *sqlProject {
 	size := p.GetSize()
 
@@ -855,11 +876,15 @@ func toSqlProject(p *model.Project) *sqlProject {
 		Sizes:       map[string]*sqlSize{},
 		Changes:     toSqlChanges(p.Changes),
 		Metrics:     toSqlMetricsAggregate(p.Metrics, size),
-		Data:        cloneMap(p.Data),
+		Data:        encodeMap(p.Data),
 	}
 
 	for k, v := range p.Sizes {
 		sp.Sizes[k] = toSqlSize(v)
+	}
+
+	if len(sp.Sizes) == 0 {
+		sp.Sizes = nil
 	}
 
 	return sp
@@ -871,7 +896,8 @@ func toSqlProjectDependency(d *model.ProjectDependency) *sqlProjectDependency {
 		Name:     d.String(),
 		SourceID: d.Source.ID,
 		TargetID: d.Target.ID,
-		Data:     cloneMap(d.Data),
+		Versions: d.Versions.Slice(),
+		Data:     encodeMap(d.Data),
 	}
 }
 
@@ -884,7 +910,7 @@ func toSqlProjectDirectory(d *model.ProjectDirectory, p *model.Project) *sqlProj
 		Size:      toSqlSize(d.Size),
 		Changes:   toSqlChanges(d.Changes),
 		Metrics:   toSqlMetricsAggregate(d.Metrics, d.Size),
-		Data:      cloneMap(d.Data),
+		Data:      encodeMap(d.Data),
 	}
 }
 
@@ -900,7 +926,7 @@ func toSqlFile(f *model.File) *sqlFile {
 		Size:               toSqlSize(f.Size),
 		Changes:            toSqlChanges(f.Changes),
 		Metrics:            toSqlMetrics(f.Metrics),
-		Data:               cloneMap(f.Data),
+		Data:               encodeMap(f.Data),
 	}
 }
 
@@ -923,7 +949,7 @@ func toSqlPerson(p *model.Person) *sqlPerson {
 		Emails:  p.ListEmails(),
 		Blame:   toSqlSize(p.Blame),
 		Changes: toSqlChanges(p.Changes),
-		Data:    cloneMap(p.Data),
+		Data:    encodeMap(p.Data),
 	}
 
 	return result
@@ -936,7 +962,7 @@ func toSqlProductArea(a *model.ProductArea) *sqlProductArea {
 		Size:    toSqlSize(a.Size),
 		Changes: toSqlChanges(a.Changes),
 		Metrics: toSqlMetricsAggregate(a.Metrics, a.Size),
-		Data:    cloneMap(a.Data),
+		Data:    encodeMap(a.Data),
 	}
 }
 
@@ -946,7 +972,7 @@ func toSqlRepository(r *model.Repository) *sqlRepository {
 		Name:    r.Name,
 		RootDir: r.RootDir,
 		VCS:     r.VCS,
-		Data:    cloneMap(r.Data),
+		Data:    encodeMap(r.Data),
 	}
 }
 
@@ -1008,14 +1034,6 @@ func prepareChange[K comparable, V any](byID *map[K]V, id K, n V) bool {
 		(*byID)[id] = n
 		return true
 	}
-}
-
-func cloneMap[K comparable, V any](m map[K]V) map[K]V {
-	result := make(map[K]V, len(m))
-	for k, v := range m {
-		result[k] = v
-	}
-	return result
 }
 
 func changed(changes archer.StorageChanges, desired ...archer.StorageChanges) bool {

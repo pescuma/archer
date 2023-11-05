@@ -2,6 +2,8 @@ package model
 
 import (
 	"fmt"
+
+	"github.com/hashicorp/go-set/v2"
 )
 
 type ProjectDependency struct {
@@ -9,15 +11,17 @@ type ProjectDependency struct {
 	Target *Project
 	ID     UUID
 
-	Data map[string]string
+	Versions *set.Set[string]
+	Data     map[string]string
 }
 
 func NewDependency(source *Project, target *Project) *ProjectDependency {
 	return &ProjectDependency{
-		Source: source,
-		Target: target,
-		ID:     NewUUID("q"),
-		Data:   map[string]string{},
+		Source:   source,
+		Target:   target,
+		ID:       NewUUID("q"),
+		Versions: set.New[string](10),
+		Data:     map[string]string{},
 	}
 }
 
