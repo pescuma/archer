@@ -3,6 +3,7 @@ package utils
 import (
 	"bufio"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,7 +117,9 @@ func in[T comparable](el T, options ...T) bool {
 	return false
 }
 
-func PathAbs(path string) (string, error) {
+func PathAbs(paths ...string) (string, error) {
+	path := filepath.Join(paths...)
+
 	if strings.HasPrefix(filepath.ToSlash(path), "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -181,6 +184,35 @@ func FileExists(path string) (bool, error) {
 	} else {
 		return false, err
 	}
+}
+
+func ListFilesRecursive(rootDir string, matcher func(name string) bool) ([]string, error) {
+	result := make([]string, 0, 100)
+
+	err := filepath.WalkDir(rootDir, func(path string, entry fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
+			return nil
+
+		case entry.IsDir() && strings.HasPrefix(entry.Name(), "."):
+			return filepath.SkipDir
+
+		case !entry.IsDir() && matcher(entry.Name()):
+			path, err = PathAbs(path)
+			if err != nil {
+				return err
+			}
+
+			result = append(result, path)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 func FindGitIgnore(path string) (func(string) bool, error) {

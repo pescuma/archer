@@ -7,8 +7,8 @@ import (
 )
 
 type Files struct {
-	filesByName        map[string]*File
-	filesByID          map[UUID]*File
+	filesByName map[string]*File
+	filesByID   map[UUID]*File
 }
 
 func NewFiles() *Files {
@@ -81,4 +81,3 @@ func sortFiles(result []*File) {
 		return result[i].Path < result[j].Path
 	})
 }
-

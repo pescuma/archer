@@ -20,6 +20,7 @@ var cli struct {
 	Import struct {
 		Gradle    ImportGradleCmd    `cmd:"" help:"Import information from gradle project."`
 		Gomod     ImportGomodCmd     `cmd:"" help:"Import information from go.mod files."`
+		Csproj    ImportCsprojCmd    `cmd:"" help:"Import information from csproj files."`
 		Hibernate ImportHibernateCmd `cmd:"" help:"Import information from hibernate annotation in classes."`
 		Mysql     ImportMySqlCmd     `cmd:"" help:"Import information from MySQL schema."`
 		LOC       ImportLOCCmd       `cmd:"" help:"Import counts of lines of code to existing projects."`

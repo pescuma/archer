@@ -3,6 +3,7 @@ package main
 import (
 	"time"
 
+	"github.com/pescuma/archer/lib/archer/importers/csproj"
 	"github.com/pescuma/archer/lib/archer/importers/git"
 	"github.com/pescuma/archer/lib/archer/importers/gomod"
 	"github.com/pescuma/archer/lib/archer/importers/gradle"
@@ -31,6 +32,20 @@ type ImportGomodCmd struct {
 
 func (c *ImportGomodCmd) Run(ctx *context) error {
 	g := gomod.NewImporter(c.Path, c.Root, gomod.Options{
+		RespectGitignore: c.Gitignore,
+	})
+
+	return ctx.ws.Import(g)
+}
+
+type ImportCsprojCmd struct {
+	Path      string `arg:"" help:"Path to recursively search for csproj files." type:"existingpath"`
+	Root      string `default:"cs" help:"Root name for the projects."`
+	Gitignore bool   `default:"true" help:"Respect .gitignore file when importing files."`
+}
+
+func (c *ImportCsprojCmd) Run(ctx *context) error {
+	g := csproj.NewImporter(c.Path, c.Root, csproj.Options{
 		RespectGitignore: c.Gitignore,
 	})
 
