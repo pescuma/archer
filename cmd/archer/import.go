@@ -24,12 +24,15 @@ func (c *ImportGradleCmd) Run(ctx *context) error {
 }
 
 type ImportGomodCmd struct {
-	Path string `arg:"" help:"Path to recursively search for go.mod files." type:"existingpath"`
-	Root string `default:"go" help:"Root name for the projects."`
+	Path      string `arg:"" help:"Path to recursively search for go.mod files." type:"existingpath"`
+	Root      string `default:"go" help:"Root name for the projects."`
+	Gitignore bool   `default:"true" help:"Respect .gitignore file when importing files."`
 }
 
 func (c *ImportGomodCmd) Run(ctx *context) error {
-	g := gomod.NewImporter(c.Path, c.Root)
+	g := gomod.NewImporter(c.Path, c.Root, gomod.Options{
+		RespectGitignore: c.Gitignore,
+	})
 
 	return ctx.ws.Import(g)
 }

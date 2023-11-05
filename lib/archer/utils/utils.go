@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/pkg/errors"
+	ignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/exp/constraints"
 )
 
@@ -130,6 +131,13 @@ func PathAbs(path string) (string, error) {
 		return "", err
 	}
 
+	if filepath.Separator == '\\' {
+		pos := strings.Index(path, ":\\")
+		if pos != -1 {
+			path = strings.ToUpper(path[:pos]) + path[pos:]
+		}
+	}
+
 	return path, nil
 }
 
@@ -172,5 +180,33 @@ func FileExists(path string) (bool, error) {
 
 	} else {
 		return false, err
+	}
+}
+
+func FindGitIgnore(path string) (func(string) bool, error) {
+	for {
+		file := filepath.Join(path, ".gitignore")
+
+		exists, err := FileExists(file)
+		if err != nil {
+			return nil, err
+		}
+
+		if !exists {
+			parent := filepath.Dir(path)
+			if parent == "." || parent == string(filepath.Separator) || parent == path {
+				return nil, nil
+			}
+
+			path = parent
+			continue
+		}
+
+		gi, err := ignore.CompileIgnoreFile(file)
+		if err != nil {
+			return nil, err
+		}
+
+		return gi.MatchesPath, nil
 	}
 }

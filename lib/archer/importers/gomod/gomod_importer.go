@@ -17,12 +17,18 @@ import (
 type gomodImporter struct {
 	rootDir  string
 	rootName string
+	options  Options
 }
 
-func NewImporter(rootDir string, rootName string) archer.Importer {
+type Options struct {
+	RespectGitignore bool
+}
+
+func NewImporter(rootDir string, rootName string, options Options) archer.Importer {
 	return &gomodImporter{
 		rootDir:  rootDir,
 		rootName: rootName,
+		options:  options,
 	}
 }
 
@@ -135,24 +141,47 @@ func (i *gomodImporter) process(projsDB *model.Projects, filesDB *model.Files, p
 	dir := proj.GetDirectory(".")
 	dir.Type = model.SourceDir
 
+	filter, _ := i.createFileFilter(proj.RootDir)
+
+	// Check deleted files and clean existing ones
+	rootDir := proj.RootDir + string(filepath.Separator)
+	for _, file := range filesDB.ListFiles() {
+		if !strings.HasPrefix(file.Path, rootDir) {
+			continue
+		}
+		if file.ProjectID != nil && *file.ProjectID != proj.ID {
+			continue
+		}
+
+		file.ProjectID = nil
+		file.ProjectDirectoryID = nil
+
+		exists, err := utils.FileExists(file.Path)
+		if err != nil {
+			return err
+		}
+		if !exists && filter(file.Path, false) {
+			file.ProjectID = &proj.ID
+			file.ProjectDirectoryID = &dir.ID
+			file.Exists = false
+		}
+	}
+
 	err = filepath.WalkDir(proj.RootDir, func(path string, entry fs.DirEntry, err error) error {
 		switch {
 		case err != nil:
 			return nil
 
-		case entry.IsDir() && strings.HasPrefix(entry.Name(), "."):
-			return filepath.SkipDir
-
 		case entry.IsDir():
-			return nil
+			return utils.IIf(filter(path, entry.IsDir()), nil, filepath.SkipDir)
 
 		default:
-			if entry.Name() == "go.mod" || strings.HasSuffix(entry.Name(), ".go") {
-				path, err := utils.PathAbs(path)
-				if err != nil {
-					return err
-				}
+			path, err := utils.PathAbs(path)
+			if err != nil {
+				return err
+			}
 
+			if filter(path, entry.IsDir()) {
 				file := filesDB.GetOrCreateFile(path)
 				file.ProjectID = &proj.ID
 				file.ProjectDirectoryID = &dir.ID
@@ -165,6 +194,45 @@ func (i *gomodImporter) process(projsDB *model.Projects, filesDB *model.Files, p
 	}
 
 	return nil
+}
+
+func (i *gomodImporter) createFileFilter(dir string) (func(path string, isDir bool) bool, error) {
+	result := func(path string, isDir bool) bool {
+		name := filepath.Base(path)
+
+		if strings.HasPrefix(name, ".") {
+			return false
+		}
+
+		return isDir || name == "go.mod" || strings.HasSuffix(name, ".go")
+	}
+
+	if !i.options.RespectGitignore {
+		return result, nil
+	}
+
+	matcher, err := utils.FindGitIgnore(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	if matcher != nil {
+		result = func(path string, isDir bool) bool {
+			name := filepath.Base(path)
+
+			if isDir && name == ".git" {
+				return false
+			}
+
+			if isDir {
+				path += string(filepath.Separator)
+			}
+
+			return !matcher(path)
+		}
+	}
+
+	return result, nil
 }
 
 func (i *gomodImporter) addDep(projsDB *model.Projects, proj *model.Project, mod module.Version) {
