@@ -42,20 +42,24 @@ func TestEqualsSomeFields(t *testing.T) {
 func TestEqualsSize(t *testing.T) {
 	t.Parallel()
 
+	v1 := 1
 	p1 := &sqlProject{
 		Sizes: map[string]*sqlSize{
-			"a": {Bytes: 1},
+			"a": {Bytes: &v1},
 		},
 	}
+
+	v2 := 1
 	p2 := &sqlProject{
 		Sizes: map[string]*sqlSize{
-			"a": {Bytes: 1},
+			"a": {Bytes: &v2},
 		},
 	}
 
 	assert.True(t, reflect.DeepEqual(p1, p2))
 
-	p1.Sizes["a"].Bytes = 2
+	v3 := 2
+	p1.Sizes["a"].Bytes = &v3
 	assert.False(t, reflect.DeepEqual(p1, p2))
 }
 
