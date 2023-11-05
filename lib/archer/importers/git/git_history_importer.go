@@ -75,7 +75,7 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
-	fmt.Printf("Preparing...\n")
+	fmt.Printf("Finding out which commits to import...\n")
 
 	abort := errors.New("ABORT")
 
@@ -132,7 +132,7 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 		}
 	}
 
-	fmt.Printf("Loading history...\n")
+	fmt.Printf("Importing history...\n")
 
 	bar := utils.NewProgressBar(imported)
 

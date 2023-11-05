@@ -45,7 +45,7 @@ func (i *csprojImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
-	err = common.FindAndProcessFiles("projects", i.rootDir,
+	err = common.FindAndImportFiles("projects", i.rootDir,
 		func(name string) bool {
 			return strings.HasSuffix(strings.ToLower(name), ".csproj")
 		},

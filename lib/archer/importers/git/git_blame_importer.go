@@ -61,7 +61,7 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
-	fmt.Printf("Preparing...\n")
+	fmt.Printf("Finding out which files to process...\n")
 
 	abort := errors.New("ABORT")
 

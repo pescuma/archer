@@ -10,7 +10,7 @@ import (
 	"github.com/pescuma/archer/lib/archer/utils"
 )
 
-func FindAndProcessFiles(name string, rootDir string, matcher func(string) bool, process func(string) error) error {
+func FindAndImportFiles(name string, rootDir string, matcher func(string) bool, process func(string) error) error {
 	fmt.Printf("Finding %v...\n", name)
 
 	rootDir, err := utils.PathAbs(rootDir)
@@ -23,14 +23,14 @@ func FindAndProcessFiles(name string, rootDir string, matcher func(string) bool,
 		return err
 	}
 
-	fmt.Printf("Processing %v...\n", name)
+	fmt.Printf("Importing %v...\n", name)
 
-	return ProcessFiles(rootDir, queue, func(path string) error {
+	return ImportFiles(rootDir, queue, func(path string) error {
 		return process(path)
 	})
 }
 
-func ProcessFiles(rootDir string, files []string, process func(string) error) error {
+func ImportFiles(rootDir string, files []string, process func(string) error) error {
 	bar := utils.NewProgressBar(len(files))
 	for _, file := range files {
 		relativePath, err := filepath.Rel(rootDir, file)

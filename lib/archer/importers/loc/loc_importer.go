@@ -32,6 +32,8 @@ func NewImporter(filters []string, options Options) archer.Importer {
 }
 
 func (l *locImporter) Import(storage archer.Storage) error {
+	fmt.Printf("Loading existing data...\n")
+
 	projectsDB, err := storage.LoadProjects()
 	if err != nil {
 		return err
