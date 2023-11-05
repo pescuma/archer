@@ -29,14 +29,30 @@ func (g gitPeopleImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
+	_, err = importPeople(peopleDB, g.rootDirs)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Writing results...\n")
+
+	err = storage.WritePeople(peopleDB, archer.ChangedBasicInfo)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func importPeople(peopleDB *model.People, rootDirs []string) (*nameEmailGrouper, error) {
 	fmt.Printf("Importing and grouping authors...\n")
 
 	grouper := newNameEmailGrouperFrom(peopleDB)
 
-	for _, rootDir := range g.rootDirs {
-		rootDir, err = filepath.Abs(rootDir)
+	for _, rootDir := range rootDirs {
+		rootDir, err := filepath.Abs(rootDir)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		gr, err := git.PlainOpen(rootDir)
@@ -47,7 +63,7 @@ func (g gitPeopleImporter) Import(storage archer.Storage) error {
 
 		commitsIter, err := gr.Log(&git.LogOptions{})
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		err = commitsIter.ForEach(func(gc *object.Commit) error {
@@ -56,7 +72,7 @@ func (g gitPeopleImporter) Import(storage archer.Storage) error {
 			return nil
 		})
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -88,12 +104,5 @@ func (g gitPeopleImporter) Import(storage archer.Storage) error {
 		}
 	}
 
-	fmt.Printf("Writing results...\n")
-
-	err = storage.WritePeople(peopleDB, archer.ChangedBasicInfo)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return grouper, nil
 }

@@ -26,9 +26,9 @@ var cli struct {
 		LOC       ImportLOCCmd       `cmd:"" help:"Import counts of lines of code to existing projects."`
 		Metrics   ImportMetricsCmd   `cmd:"" help:"Import code metrics to existing projects."`
 		Git       struct {
-			People  ImportGitPeopleCmd  `cmd:"" help:"Import people information from git."`
 			History ImportGitHistoryCmd `cmd:"" help:"Import history information from git."`
 			Blame   ImportGitBlameCmd   `cmd:"" help:"Import blame information from git."`
+			People  ImportGitPeopleCmd  `cmd:"" help:"Import only people information from git."`
 		} `cmd:""`
 		Owners ImportOwnersCmd `cmd:"" help:"Import file owners."`
 	} `cmd:""`

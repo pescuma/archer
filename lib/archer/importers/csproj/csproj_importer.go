@@ -33,7 +33,7 @@ func NewImporter(rootDir string, rootName string, options Options) archer.Import
 }
 
 func (i *csprojImporter) Import(storage archer.Storage) error {
-	fmt.Printf("Loading previous data...\n")
+	fmt.Printf("Loading existing data...\n")
 
 	projsDB, err := storage.LoadProjects()
 	if err != nil {

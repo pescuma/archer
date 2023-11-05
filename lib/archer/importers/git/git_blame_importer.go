@@ -61,9 +61,9 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
-	abort := errors.New("ABORT")
-
 	fmt.Printf("Preparing...\n")
+
+	abort := errors.New("ABORT")
 
 	var ws []*work
 	var repos []*model.Repository

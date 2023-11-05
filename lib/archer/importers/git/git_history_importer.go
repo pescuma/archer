@@ -70,11 +70,14 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
-	abort := errors.New("ABORT")
+	grouper, err := importPeople(peopleDB, g.rootDirs)
+	if err != nil {
+		return err
+	}
 
 	fmt.Printf("Preparing...\n")
 
-	grouper := newNameEmailGrouperFrom(peopleDB)
+	abort := errors.New("ABORT")
 
 	commitNumber := 0
 	imported := 0
@@ -372,20 +375,20 @@ func (g *gitHistoryImporter) computeChanges(commit *object.Commit, parent *objec
 						case gotextdiff.Delete:
 							del++
 						default:
-							min := utils.Min(add, del)
-							gitChange.Modified += min
-							gitChange.Added += add - min
-							gitChange.Deleted += del - min
+							m := utils.Min(add, del)
+							gitChange.Modified += m
+							gitChange.Added += add - m
+							gitChange.Deleted += del - m
 
 							add = 0
 							del = 0
 						}
 					}
 
-					min := utils.Min(add, del)
-					gitChange.Modified += min
-					gitChange.Added += add - min
-					gitChange.Deleted += del - min
+					m := utils.Min(add, del)
+					gitChange.Modified += m
+					gitChange.Added += add - m
+					gitChange.Deleted += del - m
 				}
 			}
 		}
