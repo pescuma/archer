@@ -30,9 +30,9 @@ func FindAndImportFiles(name string, rootDir string, matcher func(string) bool, 
 	})
 }
 
-func ImportFiles(rootDir string, files []string, process func(string) error) error {
-	bar := utils.NewProgressBar(len(files))
-	for _, file := range files {
+func ImportFiles(rootDir string, queue []string, process func(string) error) error {
+	bar := utils.NewProgressBar(len(queue))
+	for _, file := range queue {
 		relativePath, err := filepath.Rel(rootDir, file)
 		if err != nil {
 			return err
@@ -51,7 +51,7 @@ func ImportFiles(rootDir string, files []string, process func(string) error) err
 	return nil
 }
 
-func CreateFileFilter(dir string, gitignore bool,
+func CreateFileFilter(rootDir string, gitignore bool,
 	defaultMatcher func(path string) bool,
 	excludes func(path string) bool,
 ) (func(path string, isDir bool) bool, error) {
@@ -62,6 +62,10 @@ func CreateFileFilter(dir string, gitignore bool,
 	}
 
 	result := func(path string, isDir bool) bool {
+		if path == rootDir {
+			return true
+		}
+
 		if excludes(path) {
 			return false
 		}
@@ -79,13 +83,17 @@ func CreateFileFilter(dir string, gitignore bool,
 		return result, nil
 	}
 
-	matcher, err := utils.FindGitIgnore(dir)
+	matcher, err := utils.FindGitIgnore(rootDir)
 	if err != nil {
 		return nil, err
 	}
 
 	if matcher != nil {
 		result = func(path string, isDir bool) bool {
+			if path == rootDir {
+				return true
+			}
+
 			if excludes(path) {
 				return false
 			}

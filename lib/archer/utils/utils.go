@@ -239,6 +239,17 @@ func FindGitIgnore(path string) (func(string) bool, error) {
 			return nil, err
 		}
 
-		return gi.MatchesPath, nil
+		return func(inner string) bool {
+			rel, err := filepath.Rel(path, inner)
+			if err != nil {
+				return false
+			}
+
+			if strings.HasSuffix(inner, string(filepath.Separator)) {
+				rel += string(filepath.Separator)
+			}
+
+			return gi.MatchesPath(rel)
+		}, nil
 	}
 }
