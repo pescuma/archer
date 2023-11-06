@@ -26,6 +26,7 @@ type Storage interface {
 
 	LoadFiles() (*model.Files, error)
 	WriteFiles(files *model.Files, changes StorageChanges) error
+	WriteFile(file *model.File, changes StorageChanges) error
 
 	LoadFileContents(fileID model.UUID) (*model.FileContents, error)
 	WriteFileContents(contents *model.FileContents, changes StorageChanges) error

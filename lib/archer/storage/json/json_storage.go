@@ -375,6 +375,11 @@ func (s *jsonStorage) writeFiles(proj *model.Project) error {
 	return nil
 }
 
+func (s *jsonStorage) WriteFile(file *model.File, changes archer.StorageChanges) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (s *jsonStorage) readFiles(result *model.Projects, fileName string) error {
 	contents, err := os.ReadFile(fileName)
 	if err != nil {

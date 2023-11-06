@@ -295,15 +295,24 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 	return result, nil
 }
 
-func (s *sqliteStorage) WriteFiles(files *model.Files, changes archer.StorageChanges) error {
-	changedFiles := changed(changes, archer.ChangedBasicInfo, archer.ChangedData,
-		archer.ChangedSize, archer.ChangedChanges, archer.ChangedMetrics, archer.ChangedTeams)
-	if !changedFiles {
-		return nil
-	}
-
+func (s *sqliteStorage) WriteFiles(files *model.Files, _ archer.StorageChanges) error {
 	all := files.ListFiles()
 
+	err := s.writeFiles(all)
+	if err != nil {
+		return err
+	}
+
+	// TODO delete
+
+	return nil
+}
+
+func (s *sqliteStorage) WriteFile(file *model.File, _ archer.StorageChanges) error {
+	return s.writeFiles([]*model.File{file})
+}
+
+func (s *sqliteStorage) writeFiles(all []*model.File) error {
 	var sqlFiles []*sqlFile
 	for _, f := range all {
 		sf := toSqlFile(f)
@@ -324,8 +333,6 @@ func (s *sqliteStorage) WriteFiles(files *model.Files, changes archer.StorageCha
 	}
 
 	addList(&s.files, sqlFiles, func(s *sqlFile) model.UUID { return s.ID })
-
-	// TODO delete
 
 	return nil
 }
@@ -377,19 +384,17 @@ func (s *sqliteStorage) WriteFileContents(contents *model.FileContents, changes 
 		CreateBatchSize: 1000,
 	})
 
-	return db.Transaction(func(tx *gorm.DB) error {
-		err := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlLines).Error
-		if err != nil {
-			return err
-		}
+	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlLines).Error
+	if err != nil {
+		return err
+	}
 
-		err = tx.Where("file_id = ? and line > ?", contents.FileID, len(contents.Lines)).Delete(&sqlFileLine{}).Error
-		if err != nil {
-			return err
-		}
+	err = db.Where("file_id = ? and line > ?", contents.FileID, len(contents.Lines)).Delete(&sqlFileLine{}).Error
+	if err != nil {
+		return err
+	}
 
-		return nil
-	})
+	return nil
 }
 
 func (s *sqliteStorage) ComputeBlamePerAuthor() ([]*archer.BlamePerAuthor, error) {

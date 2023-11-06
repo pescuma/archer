@@ -138,7 +138,7 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 
 	write := func(repo *model.Repository) error {
 		_ = bar.Clear()
-		fmt.Printf("Writing results...\n")
+		fmt.Printf("Writing results for %v...\n", repo.Name)
 
 		err = storage.WriteFiles(filesDB, archer.ChangedBasicInfo)
 		if err != nil {
