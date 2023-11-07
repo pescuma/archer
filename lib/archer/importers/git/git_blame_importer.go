@@ -22,6 +22,8 @@ import (
 type gitBlameImporter struct {
 	rootDirs []string
 	options  BlameOptions
+
+	abort error
 }
 
 type BlameOptions struct {
@@ -33,13 +35,14 @@ func NewBlameImporter(rootDirs []string, options BlameOptions) archer.Importer {
 	return &gitBlameImporter{
 		rootDirs: rootDirs,
 		options:  options,
+		abort:    errors.New("ABORT"),
 	}
 }
 
 type blameWork struct {
 	repo         *model.Repository
-	gr           *git.Repository
-	commit       *object.Commit
+	gitRepo      *git.Repository
+	gitCommit    *object.Commit
 	file         *model.File
 	relativePath string
 	lastMod      string
@@ -65,96 +68,58 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Finding out which files to process...\n")
 
-	var ws []*blameWork
-	toDelete := make(map[string]*model.File)
 	var repos []*model.Repository
+
 	for _, rootDir := range g.rootDirs {
-		rootDir, err = filepath.Abs(rootDir)
+		rootDir, err := filepath.Abs(rootDir)
 		if err != nil {
 			return err
 		}
 
-		gr, err := git.PlainOpen(rootDir)
+		gitRepo, err := git.PlainOpen(rootDir)
 		if err != nil {
 			fmt.Printf("Skipping '%s': %s\n", rootDir, err)
 			continue
 		}
 
-		head, err := gr.Head()
+		gitHead, err := gitRepo.Head()
 		if err != nil {
 			return err
 		}
 
-		commit, err := gr.CommitObject(head.Hash())
+		gitCommit, err := gitRepo.CommitObject(gitHead.Hash())
 		if err != nil {
 			return err
 		}
 
-		tree, err := commit.Tree()
+		gitTree, err := gitCommit.Tree()
 		if err != nil {
 			return err
 		}
 
 		repo := reposDB.Get(rootDir)
-		if repo == nil {
-			return fmt.Errorf("repository not found: '%v'. run 'import git history' before importing blame", rootDir)
+
+		importedHistory, err := g.checkImportedHistory(repo, gitRepo)
+		if err != nil {
+			return err
+		}
+
+		if !importedHistory {
+			fmt.Printf("'%v': repository history not fully imported. run 'import git history'", rootDir)
+			continue
+		}
+
+		err = g.computeBlame(storage, filesDB, repo, gitRepo, gitTree, gitCommit)
+		if err != nil {
+			return err
+		}
+
+		err = g.deleteBlame(storage, filesDB, repo, gitTree)
+		if err != nil {
+			return err
 		}
 
 		repos = append(repos, repo)
-
-		ws, err = g.markToProcess(ws, filesDB, rootDir, gr, repo, tree, commit)
-		if err != nil {
-			return err
-		}
-
-		err = g.markToDelete(toDelete, filesDB, rootDir, repo, tree)
-		if err != nil {
-			return err
-		}
-	}
-
-	fmt.Printf("Computing blame of %v files...\n", len(ws))
-
-	bar := utils.NewProgressBar(len(ws))
-
-	sort.Slice(ws, func(i, j int) bool {
-		return ws[i].file.Path <= ws[j].file.Path
-	})
-	byRepo := lo.GroupBy(ws, func(item *blameWork) *model.Repository {
-		return item.repo
-	})
-
-	for repo, ws := range byRepo {
-		_ = bar.Clear()
-		fmt.Printf("Creating cache for %v...\n", repo.Name)
-
-		cache, err := g.createCache(filesDB, repo, ws[0].gr)
-		if err != nil {
-			return err
-		}
-
-		for _, w := range ws {
-			bar.Describe(repo.Name + " " + utils.TruncateFilename(w.relativePath))
-
-			err = g.computeBlame(storage, w, cache)
-			if err != nil {
-				return err
-			}
-
-			_ = bar.Add(1)
-		}
-	}
-
-	fmt.Printf("Cleaning %v deleted files...\n", len(toDelete))
-
-	bar = utils.NewProgressBar(len(toDelete))
-	for _, file := range toDelete {
-		err = g.deleteBlame(storage, file)
-		if err != nil {
-			return err
-		}
-
-		_ = bar.Add(1)
 	}
 
 	fmt.Printf("Propagating changes to parents...\n")
@@ -166,7 +131,7 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Writing results...\n")
 
-	err = storage.WriteFiles(filesDB, archer.ChangedData|archer.ChangedChanges)
+	err = storage.WriteFiles(filesDB, archer.ChangedData)
 	if err != nil {
 		return err
 	}
@@ -177,7 +142,7 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 	}
 
 	for _, repo := range repos {
-		err = storage.WriteRepository(repo, archer.ChangedHistory)
+		err = storage.WriteRepository(repo, archer.ChangedChanges)
 		if err != nil {
 			return err
 		}
@@ -186,13 +151,126 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 	return nil
 }
 
-func (g *gitBlameImporter) createCache(filesDB *model.Files, repo *model.Repository, gr *git.Repository) (*BlameCache, error) {
+func (g *gitBlameImporter) deleteBlame(storage archer.Storage, filesDB *model.Files, repo *model.Repository,
+	gitTree *object.Tree,
+) error {
+	toDelete, err := g.listToDelete(filesDB, repo, gitTree)
+	if err != nil {
+		return err
+	}
+
+	if len(toDelete) == 0 {
+		return nil
+	}
+
+	fmt.Printf("%v: Cleaning %v deleted files...\n", repo.Name, len(toDelete))
+
+	bar := utils.NewProgressBar(len(toDelete))
+	for _, file := range toDelete {
+		err = g.deleteFileBlame(storage, file)
+		if err != nil {
+			return err
+		}
+
+		_ = bar.Add(1)
+	}
+
+	return nil
+}
+
+func (g *gitBlameImporter) listToDelete(filesDB *model.Files, repo *model.Repository, gitTree *object.Tree) (map[string]*model.File, error) {
+	existing := set.New[string](1000)
+
+	err := gitTree.Files().ForEach(func(file *object.File) error {
+		path, err := utils.PathAbs(filepath.Join(repo.RootDir, file.Name))
+		if err != nil {
+			return err
+		}
+
+		existing.Insert(path)
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]*model.File)
+
+	for _, file := range filesDB.ListFiles() {
+		if file.RepositoryID == nil || *file.RepositoryID != repo.ID {
+			continue
+		}
+
+		if !existing.Contains(file.Path) {
+			result[file.Path] = file
+		}
+	}
+
+	return result, nil
+}
+
+func (g *gitBlameImporter) deleteFileBlame(storage archer.Storage, file *model.File) error {
+	contents, err := storage.LoadFileContents(file.ID)
+	if err != nil {
+		return err
+	}
+
+	if len(contents.Lines) == 0 {
+		return nil
+	}
+
+	contents.Lines = nil
+
+	err = storage.WriteFileContents(contents, archer.ChangedBasicInfo|archer.ChangedChanges)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (g *gitBlameImporter) computeBlame(storage archer.Storage, filesDB *model.Files, repo *model.Repository,
+	gitRepo *git.Repository, gitTree *object.Tree, gitCommit *object.Commit,
+) error {
+	toProcess, err := g.listToCompute(filesDB, repo, gitRepo, gitTree, gitCommit)
+	if err != nil {
+		return err
+	}
+
+	if len(toProcess) == 0 {
+		return nil
+	}
+
+	fmt.Printf("%v: Computing blame of %v files...\n", repo.Name, len(toProcess))
+
+	cache, err := g.createCache(filesDB, repo, gitRepo)
+	if err != nil {
+		return err
+	}
+
+	bar := utils.NewProgressBar(len(toProcess))
+	for _, w := range toProcess {
+		bar.Describe(utils.TruncateFilename(w.relativePath))
+
+		err = g.computeFileBlame(storage, w, cache)
+		if err != nil {
+			return err
+		}
+
+		_ = bar.Add(1)
+	}
+
+	return nil
+}
+
+func (g *gitBlameImporter) createCache(filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository) (*BlameCache, error) {
 	cache := &BlameCache{
 		Commits: make(map[plumbing.Hash]*BlameCommitCache),
 	}
 
 	for _, repoCommit := range repo.ListCommits() {
-		gitCommit, err := gr.CommitObject(plumbing.NewHash(repoCommit.Hash))
+		gitCommit, err := gitRepo.CommitObject(plumbing.NewHash(repoCommit.Hash))
 		if err != nil {
 			return nil, err
 		}
@@ -206,7 +284,7 @@ func (g *gitBlameImporter) createCache(filesDB *model.Files, repo *model.Reposit
 		for _, repoParentID := range repoCommit.Parents {
 			repoParent := repo.GetCommitByID(repoParentID)
 
-			gitParent, err := gr.CommitObject(plumbing.NewHash(repoParent.Hash))
+			gitParent, err := gitRepo.CommitObject(plumbing.NewHash(repoParent.Hash))
 			if err != nil {
 				return nil, err
 			}
@@ -252,42 +330,22 @@ func (g *gitBlameImporter) createCache(filesDB *model.Files, repo *model.Reposit
 
 	return cache, nil
 }
+func (g *gitBlameImporter) listToCompute(filesDB *model.Files, repo *model.Repository,
+	gitRepo *git.Repository, gitTree *object.Tree, gitCommit *object.Commit,
+) ([]*blameWork, error) {
+	var result []*blameWork
 
-func (g *gitBlameImporter) deleteBlame(storage archer.Storage, file *model.File) error {
-	contents, err := storage.LoadFileContents(file.ID)
-	if err != nil {
-		return err
-	}
-
-	if len(contents.Lines) == 0 {
-		return nil
-	}
-
-	contents.Lines = nil
-
-	err = storage.WriteFileContents(contents, archer.ChangedBasicInfo|archer.ChangedChanges)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (g *gitBlameImporter) markToProcess(ws []*blameWork, filesDB *model.Files, rootDir string, gr *git.Repository, repo *model.Repository, tree *object.Tree, commit *object.Commit) ([]*blameWork, error) {
-	abort := errors.New("ABORT")
-
-	err := tree.Files().ForEach(func(gitFile *object.File) error {
-		if !g.options.ShouldContinue(len(ws)) {
-			return abort
+	err := gitTree.Files().ForEach(func(gitFile *object.File) error {
+		if !g.options.ShouldContinue(len(result)) {
+			return g.abort
 		}
 
-		path, err := utils.PathAbs(filepath.Join(rootDir, gitFile.Name))
+		path, err := utils.PathAbs(filepath.Join(repo.RootDir, gitFile.Name))
 		if err != nil {
 			return err
 		}
 
-		file := filesDB.GetOrCreateFile(path)
-		file.RepositoryID = &repo.ID
+		file := filesDB.GetFile(path)
 
 		lastMod := ""
 		stat, err := os.Stat(path)
@@ -307,10 +365,10 @@ func (g *gitBlameImporter) markToProcess(ws []*blameWork, filesDB *model.Files, 
 			return nil
 		}
 
-		ws = append(ws, &blameWork{
+		result = append(result, &blameWork{
 			repo:         repo,
-			gr:           gr,
-			commit:       commit,
+			gitRepo:      gitRepo,
+			gitCommit:    gitCommit,
 			file:         file,
 			lastMod:      lastMod,
 			relativePath: gitFile.Name,
@@ -318,38 +376,18 @@ func (g *gitBlameImporter) markToProcess(ws []*blameWork, filesDB *model.Files, 
 
 		return nil
 	})
-	if err == abort {
-		err = nil
+	if err != nil && err == g.abort {
+		return nil, err
 	}
 
-	return ws, err
-}
-
-func (g *gitBlameImporter) markToDelete(toDelete map[string]*model.File, filesDB *model.Files, rootDir string, repo *model.Repository, tree *object.Tree) error {
-	for _, file := range filesDB.ListFiles() {
-		if file.RepositoryID == nil || *file.RepositoryID != repo.ID {
-			continue
-		}
-
-		toDelete[file.Path] = file
-	}
-
-	err := tree.Files().ForEach(func(file *object.File) error {
-		path, err := utils.PathAbs(filepath.Join(rootDir, file.Name))
-		if err != nil {
-			return err
-		}
-
-		delete(toDelete, path)
-
-		return nil
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].file.Path <= result[j].file.Path
 	})
 
-	return err
+	return result, nil
 }
-
-func (g *gitBlameImporter) computeBlame(storage archer.Storage, w *blameWork, cache *BlameCache) error {
-	blame, err := Blame(w.commit, w.relativePath, cache)
+func (g *gitBlameImporter) computeFileBlame(storage archer.Storage, w *blameWork, cache *BlameCache) error {
+	blame, err := Blame(w.gitCommit, w.relativePath, cache)
 	if err != nil {
 		return err
 	}
@@ -525,6 +563,31 @@ func (g *gitBlameImporter) propagateChangesToParents(storage archer.Storage, peo
 	}
 
 	return nil
+}
+
+func (g *gitBlameImporter) checkImportedHistory(repo *model.Repository, gitRepo *git.Repository) (bool, error) {
+	if repo == nil {
+		return false, nil
+	}
+
+	commitsIter, err := gitRepo.Log(&git.LogOptions{})
+	if err != nil {
+		return false, err
+	}
+
+	err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
+		repoCommit := repo.GetCommit(gitCommit.Hash.String())
+		if repoCommit == nil || repoCommit.ModifiedLines == -1 {
+			return g.abort
+		}
+
+		return nil
+	})
+	if err != nil && err != g.abort {
+		return false, err
+	}
+
+	return err == nil, nil
 }
 
 func (l *BlameOptions) ShouldContinue(imported int) bool {

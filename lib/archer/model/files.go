@@ -7,13 +7,13 @@ import (
 )
 
 type Files struct {
-	filesByName map[string]*File
+	filesByPath map[string]*File
 	filesByID   map[UUID]*File
 }
 
 func NewFiles() *Files {
 	return &Files{
-		filesByName: map[string]*File{},
+		filesByPath: map[string]*File{},
 		filesByID:   map[UUID]*File{},
 	}
 }
@@ -27,15 +27,19 @@ func (fs *Files) GetOrCreateFileEx(path string, id *UUID) *File {
 		panic("empty path not supported")
 	}
 
-	result, ok := fs.filesByName[path]
+	result, ok := fs.filesByPath[path]
 
 	if !ok {
 		result = NewFile(path, id)
-		fs.filesByName[path] = result
+		fs.filesByPath[path] = result
 		fs.filesByID[result.ID] = result
 	}
 
 	return result
+}
+
+func (fs *Files) GetFile(path string) *File {
+	return fs.filesByPath[path]
 }
 
 func (fs *Files) GetFileByID(id UUID) *File {
@@ -43,7 +47,7 @@ func (fs *Files) GetFileByID(id UUID) *File {
 }
 
 func (fs *Files) ListFiles() []*File {
-	result := lo.Values(fs.filesByName)
+	result := lo.Values(fs.filesByPath)
 
 	sortFiles(result)
 
@@ -60,7 +64,7 @@ func (fs *Files) ListFilesByProjects(ps []*Project) []*File {
 		consider[p.ID] = true
 	}
 
-	result := lo.Filter(lo.Values(fs.filesByName), func(f *File, _ int) bool {
+	result := lo.Filter(lo.Values(fs.filesByPath), func(f *File, _ int) bool {
 		return f.ProjectID != nil && consider[*f.ProjectID]
 	})
 

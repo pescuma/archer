@@ -44,6 +44,7 @@ func NewHistoryImporter(rootDirs []string, options HistoryOptions) archer.Import
 	return &gitHistoryImporter{
 		rootDirs: rootDirs,
 		options:  options,
+		abort:    errors.New("ABORT"),
 	}
 }
 
@@ -75,8 +76,6 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
-	g.abort = errors.New("ABORT")
-
 	for _, rootDir := range g.rootDirs {
 		rootDir, err := filepath.Abs(rootDir)
 		if err != nil {
@@ -96,6 +95,13 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 		err = g.importCommits(peopleDB, repo, gitRepo)
 		if err != nil {
 			return err
+		}
+
+		if g.options.SaveEvery != nil {
+			err = g.writeResults(storage, filesDB, repo)
+			if err != nil {
+				return err
+			}
 		}
 
 		err = g.importChanges(storage, filesDB, repo, gitRepo)
@@ -140,8 +146,8 @@ func (g *gitHistoryImporter) countCommitsToImport(repo *model.Repository, gitRep
 	}
 
 	imported := 0
-	err = commitsIter.ForEach(func(gc *object.Commit) error {
-		if g.options.Incremental && repo.ContainsCommit(gc.Hash.String()) {
+	err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
+		if g.options.Incremental && repo.ContainsCommit(gitCommit.Hash.String()) {
 			return nil
 		}
 
@@ -318,6 +324,37 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage, filesDB *mode
 		})
 		if err != nil {
 			return err
+		}
+
+		if len(commit.Parents) == 0 {
+			gitTree, err := gitCommit.Tree()
+			if err != nil {
+				return err
+			}
+
+			err = gitTree.Files().ForEach(func(gitFile *object.File) error {
+				filePath := filepath.Join(repo.RootDir, gitFile.Name)
+
+				file := filesDB.GetOrCreateFile(filePath)
+				file.RepositoryID = &repo.ID
+
+				gitLines, err := gitFile.Lines()
+				if err != nil {
+					return err
+				}
+
+				cf := commit.GetOrCreateFile(file.ID)
+				cf.ModifiedLines = 0
+				cf.AddedLines = len(gitLines)
+				cf.DeletedLines = 0
+
+				commit.AddedLines += cf.AddedLines
+
+				return nil
+			})
+			if err != nil {
+				return err
+			}
 		}
 
 		if g.options.SaveEvery != nil && imported%*g.options.SaveEvery == 0 {

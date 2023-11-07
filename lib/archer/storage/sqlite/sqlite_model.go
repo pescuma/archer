@@ -94,12 +94,12 @@ type sqlFile struct {
 }
 
 type sqlFileLine struct {
-	FileID model.UUID `gorm:"primaryKey"`
+	FileID model.UUID `gorm:"primaryKey;index:idx_blame"`
 	Line   int        `gorm:"primaryKey"`
 
-	AuthorID *model.UUID `gorm:"index"`
-	CommitID *model.UUID `gorm:"index"`
-	Type     model.FileLineType
+	AuthorID *model.UUID        `gorm:"index;index:idx_blame"`
+	CommitID *model.UUID        `gorm:"index;index:idx_blame"`
+	Type     model.FileLineType `gorm:"index:idx_blame"`
 	Text     string
 
 	CreatedAt time.Time
