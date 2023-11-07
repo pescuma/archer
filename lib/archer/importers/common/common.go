@@ -47,7 +47,6 @@ func ImportFiles(rootDir string, queue []string, process func(string) error) err
 
 		_ = bar.Add(1)
 	}
-	_ = bar.Clear()
 	return nil
 }
 

@@ -7,7 +7,7 @@ import (
 type RepositoryCommit struct {
 	Hash    string
 	Message string
-	Parents []string
+	Parents []UUID
 	ID      UUID
 
 	Date         time.Time
@@ -23,10 +23,17 @@ type RepositoryCommit struct {
 	Files map[UUID]*RepositoryCommitFile
 }
 
-func NewRepositoryCommit(hash string) *RepositoryCommit {
+func NewRepositoryCommit(hash string, id *UUID) *RepositoryCommit {
+	var uuid UUID
+	if id == nil {
+		uuid = NewUUID("c")
+	} else {
+		uuid = *id
+	}
+
 	result := &RepositoryCommit{
 		Hash:          hash,
-		ID:            NewUUID("c"),
+		ID:            uuid,
 		ModifiedLines: -1,
 		AddedLines:    -1,
 		DeletedLines:  -1,
@@ -37,10 +44,13 @@ func NewRepositoryCommit(hash string) *RepositoryCommit {
 	return result
 }
 
-func (c *RepositoryCommit) AddFile(fileID UUID) *RepositoryCommitFile {
-	file := NewRepositoryCommitFile(fileID)
+func (c *RepositoryCommit) GetOrCreateFile(fileID UUID) *RepositoryCommitFile {
+	file, ok := c.Files[fileID]
 
-	c.Files[fileID] = file
+	if !ok {
+		file = NewRepositoryCommitFile(fileID)
+		c.Files[fileID] = file
+	}
 
 	return file
 }

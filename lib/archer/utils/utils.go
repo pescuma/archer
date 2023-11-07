@@ -256,5 +256,5 @@ func FindGitIgnore(path string) (func(string) bool, error) {
 }
 
 func TruncateFilename(name string) string {
-	return truncate.Truncate(name, 20, "…", truncate.PositionMiddle)
+	return truncate.Truncate(name, 30, "...", truncate.PositionMiddle)
 }

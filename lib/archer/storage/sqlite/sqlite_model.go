@@ -158,14 +158,14 @@ type sqlRepositoryCommit struct {
 	RepositoryID  model.UUID `gorm:"index"`
 	Name          string
 	Message       string
-	Parents       []string   `gorm:"serializer:json"`
-	Date          time.Time  `gorm:"index"`
-	CommitterID   model.UUID `gorm:"index"`
+	Parents       []model.UUID `gorm:"serializer:json"`
+	Date          time.Time    `gorm:"index"`
+	CommitterID   model.UUID   `gorm:"index"`
 	DateAuthored  time.Time
 	AuthorID      model.UUID
-	AddedLines    int
-	ModifiedLines int
-	DeletedLines  int
+	AddedLines    *int
+	ModifiedLines *int
+	DeletedLines  *int
 	SurvivedLines *int
 
 	CreatedAt time.Time

@@ -144,7 +144,6 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 			_ = bar.Add(1)
 		}
 	}
-	_ = bar.Clear()
 
 	fmt.Printf("Cleaning %v deleted files...\n", len(toDelete))
 
@@ -157,7 +156,6 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 
 		_ = bar.Add(1)
 	}
-	_ = bar.Clear()
 
 	fmt.Printf("Propagating changes to parents...\n")
 
@@ -205,8 +203,10 @@ func (g *gitBlameImporter) createCache(filesDB *model.Files, repo *model.Reposit
 		}
 		cache.Commits[gitCommit.Hash] = commitCache
 
-		for _, repoParent := range repoCommit.Parents {
-			gitParent, err := gr.CommitObject(plumbing.NewHash(repoParent))
+		for _, repoParentID := range repoCommit.Parents {
+			repoParent := repo.GetCommitByID(repoParentID)
+
+			gitParent, err := gr.CommitObject(plumbing.NewHash(repoParent.Hash))
 			if err != nil {
 				return nil, err
 			}
@@ -236,13 +236,15 @@ func (g *gitBlameImporter) createCache(filesDB *model.Files, repo *model.Reposit
 			}
 			commitCache.Touched.Insert(filename)
 
-			for parentHash, oldFileID := range commitFile.OldFileIDs {
+			for repoParentID, oldFileID := range commitFile.OldFileIDs {
 				oldFilename, err := getFilename(oldFileID)
 				if err != nil {
 					return nil, err
 				}
 
-				parentCache := commitCache.Parents[plumbing.NewHash(parentHash)]
+				repoParent := repo.GetCommitByID(repoParentID)
+
+				parentCache := commitCache.Parents[plumbing.NewHash(repoParent.Hash)]
 				parentCache.Renames[filename] = oldFilename
 			}
 		}

@@ -591,17 +591,16 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 	for _, sc := range commits {
 		repo := result.GetByID(sc.RepositoryID)
 
-		c := repo.GetCommit(sc.Name)
-		c.ID = sc.ID
+		c := repo.GetOrCreateCommitEx(sc.Name, &sc.ID)
 		c.Message = sc.Message
 		c.Parents = sc.Parents
 		c.Date = sc.Date
 		c.CommitterID = sc.CommitterID
 		c.DateAuthored = sc.DateAuthored
 		c.AuthorID = sc.AuthorID
-		c.ModifiedLines = sc.ModifiedLines
-		c.AddedLines = sc.AddedLines
-		c.DeletedLines = sc.DeletedLines
+		c.ModifiedLines = decodeMetric(sc.ModifiedLines)
+		c.AddedLines = decodeMetric(sc.AddedLines)
+		c.DeletedLines = decodeMetric(sc.DeletedLines)
 		c.SurvivedLines = decodeMetric(sc.SurvivedLines)
 
 		commitsById[c.ID] = c
@@ -610,7 +609,7 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 	for _, sf := range commitFiles {
 		commit := commitsById[sf.CommitID]
 
-		file := commit.AddFile(sf.FileID)
+		file := commit.GetOrCreateFile(sf.FileID)
 		file.OldFileIDs = decodeOldFileIDs(sf.OldFileIDs)
 		file.ModifiedLines = sf.ModifiedLines
 		file.AddedLines = sf.AddedLines
@@ -996,9 +995,9 @@ func toSqlRepositoryCommit(r *model.Repository, c *model.RepositoryCommit) *sqlR
 		CommitterID:   c.CommitterID,
 		DateAuthored:  c.DateAuthored,
 		AuthorID:      c.AuthorID,
-		ModifiedLines: c.ModifiedLines,
-		AddedLines:    c.AddedLines,
-		DeletedLines:  c.DeletedLines,
+		ModifiedLines: encodeMetric(c.ModifiedLines),
+		AddedLines:    encodeMetric(c.AddedLines),
+		DeletedLines:  encodeMetric(c.DeletedLines),
 		SurvivedLines: encodeMetric(c.SurvivedLines),
 	}
 }
@@ -1016,29 +1015,29 @@ func toSqlRepositoryCommitFile(r *model.Repository, c *model.RepositoryCommit, f
 	}
 }
 
-func encodeOldFileIDs(v map[string]model.UUID) string {
+func encodeOldFileIDs(v map[model.UUID]model.UUID) string {
 	var sb strings.Builder
 
 	for k, v := range v {
 		if sb.Len() > 0 {
 			sb.WriteString("\n")
 		}
-		sb.WriteString(k)
+		sb.WriteString(string(k))
 		sb.WriteString(":")
 		sb.WriteString(string(v))
 	}
 
 	return sb.String()
 }
-func decodeOldFileIDs(v string) map[string]model.UUID {
-	result := make(map[string]model.UUID)
+func decodeOldFileIDs(v string) map[model.UUID]model.UUID {
+	result := make(map[model.UUID]model.UUID)
 	if v == "" {
 		return result
 	}
 
 	for _, line := range strings.Split(v, "\n") {
 		cols := strings.Split(line, ":")
-		result[cols[0]] = model.UUID(cols[1])
+		result[model.UUID(cols[0])] = model.UUID(cols[1])
 	}
 
 	return result

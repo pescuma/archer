@@ -2,7 +2,7 @@ package model
 
 type RepositoryCommitFile struct {
 	FileID     UUID
-	OldFileIDs map[string]UUID
+	OldFileIDs map[UUID]UUID
 
 	ModifiedLines int
 	AddedLines    int
@@ -13,7 +13,7 @@ type RepositoryCommitFile struct {
 func NewRepositoryCommitFile(fileID UUID) *RepositoryCommitFile {
 	return &RepositoryCommitFile{
 		FileID:        fileID,
-		OldFileIDs:    make(map[string]UUID),
+		OldFileIDs:    make(map[UUID]UUID),
 		ModifiedLines: -1,
 		AddedLines:    -1,
 		DeletedLines:  -1,

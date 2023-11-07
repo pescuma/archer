@@ -24,6 +24,11 @@ import (
 type gitHistoryImporter struct {
 	rootDirs []string
 	options  HistoryOptions
+
+	grouper         *nameEmailGrouper
+	commitsTotal    int
+	commitsImported int
+	abort           error
 }
 
 type HistoryOptions struct {
@@ -43,11 +48,6 @@ func NewHistoryImporter(rootDirs []string, options HistoryOptions) archer.Import
 }
 
 func (g *gitHistoryImporter) Import(storage archer.Storage) error {
-	type work struct {
-		rootDir string
-		repo    *model.Repository
-	}
-
 	fmt.Printf("Loading existing data...\n")
 
 	projectsDB, err := storage.LoadProjects()
@@ -70,210 +70,44 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
-	grouper, err := importPeople(peopleDB, g.rootDirs)
+	g.grouper, err = importPeople(peopleDB, g.rootDirs)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Finding out which commits to import...\n")
+	g.abort = errors.New("ABORT")
 
-	abort := errors.New("ABORT")
-
-	commitNumber := 0
-	imported := 0
-	ws := make([]*work, 0, len(g.rootDirs))
 	for _, rootDir := range g.rootDirs {
-		rootDir, err = filepath.Abs(rootDir)
+		rootDir, err := filepath.Abs(rootDir)
 		if err != nil {
 			return err
 		}
 
-		gr, err := git.PlainOpen(rootDir)
+		gitRepo, err := git.PlainOpen(rootDir)
 		if err != nil {
 			fmt.Printf("Skipping '%s': %s\n", rootDir, err)
 			continue
-		}
-
-		commitsIter, err := gr.Log(&git.LogOptions{})
-		if err != nil {
-			return err
 		}
 
 		repo := reposDB.GetOrCreate(rootDir)
 		repo.Name = filepath.Base(rootDir)
 		repo.VCS = "git"
 
-		importedFromRepo := 0
-
-		err = commitsIter.ForEach(func(gc *object.Commit) error {
-			if !g.options.ShouldContinue(commitNumber, imported, gc.Committer.When) {
-				return abort
-			}
-
-			commitNumber++
-
-			if g.options.Incremental && repo.ContainsCommit(gc.Hash.String()) {
-				return nil
-			}
-
-			imported++
-			importedFromRepo++
-			return nil
-		})
-		if err != nil && err != abort {
+		err = g.importCommits(peopleDB, repo, gitRepo)
+		if err != nil {
 			return err
 		}
 
-		if importedFromRepo > 0 {
-			ws = append(ws, &work{
-				rootDir: rootDir,
-				repo:    repo,
-			})
+		err = g.importChanges(storage, filesDB, repo, gitRepo)
+		if err != nil {
+			return err
+		}
+
+		err = g.writeResults(storage, filesDB, repo)
+		if err != nil {
+			return err
 		}
 	}
-
-	fmt.Printf("Importing history...\n")
-
-	bar := utils.NewProgressBar(imported)
-
-	write := func(repo *model.Repository) error {
-		_ = bar.Clear()
-		fmt.Printf("Writing results for %v...\n", repo.Name)
-
-		err = storage.WriteFiles(filesDB, archer.ChangedBasicInfo)
-		if err != nil {
-			return err
-		}
-
-		err = storage.WriteRepository(repo, archer.ChangedBasicInfo|archer.ChangedHistory)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}
-
-	commitNumber = 0
-	imported = 0
-	for i, w := range ws {
-		gr, err := git.PlainOpen(w.rootDir)
-		if err != nil {
-			return err
-		}
-
-		commitsIter, err := gr.Log(&git.LogOptions{})
-		if err != nil {
-			return err
-		}
-
-		touchedFiles := map[model.UUID]*model.File{}
-		err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
-			if !g.options.ShouldContinue(commitNumber, imported, gitCommit.Committer.When) {
-				return abort
-			}
-
-			commitNumber++
-
-			if g.options.Incremental && w.repo.ContainsCommit(gitCommit.Hash.String()) {
-				return nil
-			}
-
-			imported++
-
-			bar.Describe(w.repo.Name + " " + gitCommit.Committer.When.Format("2006-01-02 15"))
-			_ = bar.Add(1)
-
-			author := peopleDB.GetOrCreatePerson(grouper.getName(gitCommit.Author.Email, gitCommit.Author.Name))
-			author.AddName(gitCommit.Author.Name)
-			author.AddEmail(gitCommit.Author.Email)
-
-			committer := peopleDB.GetOrCreatePerson(grouper.getName(gitCommit.Committer.Email, gitCommit.Committer.Name))
-			committer.AddName(gitCommit.Committer.Name)
-			committer.AddEmail(gitCommit.Committer.Email)
-
-			commit := w.repo.GetCommit(gitCommit.Hash.String())
-			commit.Message = strings.TrimSpace(gitCommit.Message)
-			commit.Date = gitCommit.Committer.When
-			commit.CommitterID = committer.ID
-			commit.DateAuthored = gitCommit.Author.When
-			commit.AuthorID = author.ID
-
-			var parents []*object.Commit
-			err := gitCommit.Parents().ForEach(func(p *object.Commit) error {
-				parents = append(parents, p)
-				commit.Parents = append(commit.Parents, p.Hash.String())
-				return nil
-			})
-			if err != nil {
-				return err
-			}
-
-			commit.ModifiedLines = 0
-			commit.AddedLines = 0
-			commit.DeletedLines = 0
-
-			for _, parent := range parents {
-				gitChanges, err := g.computeChanges(gitCommit, parent)
-				if err != nil {
-					return err
-				}
-
-				modifiedLines := 0
-				addedLines := 0
-				deletedLines := 0
-
-				for _, gitFile := range gitChanges {
-					filePath := filepath.Join(w.rootDir, gitFile.Name)
-					oldFilePath := filepath.Join(w.rootDir, gitFile.OldName)
-
-					file := filesDB.GetOrCreateFile(filePath)
-					file.RepositoryID = &w.repo.ID
-
-					oldFile := filesDB.GetOrCreateFile(oldFilePath)
-					oldFile.RepositoryID = &w.repo.ID
-
-					cf := commit.AddFile(file.ID)
-					if file != oldFile {
-						cf.OldFileIDs[parent.Hash.String()] = oldFile.ID
-					}
-					cf.ModifiedLines = utils.Max(cf.ModifiedLines, gitFile.Modified)
-					cf.AddedLines = utils.Max(cf.AddedLines, gitFile.Added)
-					cf.DeletedLines = utils.Max(cf.DeletedLines, gitFile.Deleted)
-
-					modifiedLines += gitFile.Modified
-					addedLines += gitFile.Added
-					deletedLines += gitFile.Deleted
-
-					touchedFiles[file.ID] = file
-				}
-
-				commit.ModifiedLines = utils.Max(commit.ModifiedLines, modifiedLines)
-				commit.AddedLines = utils.Max(commit.AddedLines, addedLines)
-				commit.DeletedLines = utils.Max(commit.DeletedLines, deletedLines)
-			}
-
-			if g.options.SaveEvery != nil && imported%*g.options.SaveEvery == 0 {
-				err = write(w.repo)
-				if err != nil {
-					return err
-				}
-			}
-
-			return nil
-		})
-		if err != nil && err != abort {
-			return err
-		}
-
-		err = write(w.repo)
-		if err != nil {
-			return err
-		}
-
-		// Free memory
-		ws[i] = nil
-	}
-	_ = bar.Clear()
 
 	fmt.Printf("Propagating changes to parents...\n")
 
@@ -292,6 +126,228 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 	}
 
 	err = storage.WritePeople(peopleDB, archer.ChangedBasicInfo|archer.ChangedChanges)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (g *gitHistoryImporter) countCommitsToImport(repo *model.Repository, gitRepo *git.Repository) (int, error) {
+	commitsIter, err := gitRepo.Log(&git.LogOptions{})
+	if err != nil {
+		return 0, err
+	}
+
+	imported := 0
+	err = commitsIter.ForEach(func(gc *object.Commit) error {
+		if g.options.Incremental && repo.ContainsCommit(gc.Hash.String()) {
+			return nil
+		}
+
+		imported++
+
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return imported, nil
+}
+
+func (g *gitHistoryImporter) importCommits(peopleDB *model.People, repo *model.Repository, gitRepo *git.Repository) error {
+	imported, err := g.countCommitsToImport(repo, gitRepo)
+	if err != nil {
+		return err
+	}
+
+	if imported == 0 {
+		return nil
+	}
+
+	fmt.Printf("%v: Importing commits...\n", repo.Name)
+
+	commitsIter, err := gitRepo.Log(&git.LogOptions{})
+	if err != nil {
+		return err
+	}
+
+	bar := utils.NewProgressBar(imported)
+	err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
+		if g.options.Incremental && repo.ContainsCommit(gitCommit.Hash.String()) {
+			return nil
+		}
+
+		bar.Describe(gitCommit.Committer.When.Format("2006-01-02 15"))
+		_ = bar.Add(1)
+
+		author := peopleDB.GetOrCreatePerson(g.grouper.getName(gitCommit.Author.Email, gitCommit.Author.Name))
+		committer := peopleDB.GetOrCreatePerson(g.grouper.getName(gitCommit.Committer.Email, gitCommit.Committer.Name))
+
+		commit := repo.GetOrCreateCommit(gitCommit.Hash.String())
+		commit.Message = strings.TrimSpace(gitCommit.Message)
+		commit.Date = gitCommit.Committer.When
+		commit.CommitterID = committer.ID
+		commit.DateAuthored = gitCommit.Author.When
+		commit.AuthorID = author.ID
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (g *gitHistoryImporter) countChangesToImport(repo *model.Repository, gitRepo *git.Repository) (int, error) {
+	commitsIter, err := gitRepo.Log(&git.LogOptions{})
+	if err != nil {
+		return 0, err
+	}
+
+	imported := 0
+	total := 0
+	err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
+		if !g.options.ShouldContinue(g.commitsTotal+total, g.commitsImported+imported, gitCommit.Committer.When) {
+			return g.abort
+		}
+		total++
+
+		commit := repo.GetCommit(gitCommit.Hash.String())
+
+		if g.options.Incremental && commit.ModifiedLines != -1 {
+			return nil
+		}
+		imported++
+
+		return nil
+	})
+	if err != nil && err != g.abort {
+		return 0, err
+	}
+
+	return imported, nil
+}
+
+func (g *gitHistoryImporter) importChanges(storage archer.Storage, filesDB *model.Files,
+	repo *model.Repository, gitRepo *git.Repository,
+) error {
+	imported, err := g.countChangesToImport(repo, gitRepo)
+	if err != nil {
+		return err
+	}
+
+	if imported == 0 {
+		return nil
+	}
+
+	fmt.Printf("%v: Importing changes...\n", repo.Name)
+
+	commitsIter, err := gitRepo.Log(&git.LogOptions{})
+	if err != nil {
+		return err
+	}
+
+	bar := utils.NewProgressBar(imported)
+	imported = 0
+	err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
+		if !g.options.ShouldContinue(g.commitsTotal, g.commitsImported, gitCommit.Committer.When) {
+			return g.abort
+		}
+		g.commitsTotal++
+
+		commit := repo.GetCommit(gitCommit.Hash.String())
+
+		if g.options.Incremental && commit.ModifiedLines != -1 {
+			return nil
+		}
+		g.commitsImported++
+		imported++
+
+		bar.Describe(gitCommit.Committer.When.Format("2006-01-02 15"))
+
+		commit.ModifiedLines = 0
+		commit.AddedLines = 0
+		commit.DeletedLines = 0
+
+		err = gitCommit.Parents().ForEach(func(gitParent *object.Commit) error {
+			repoParent := repo.GetCommit(gitParent.Hash.String())
+			commit.Parents = append(commit.Parents, repoParent.ID)
+
+			gitChanges, err := g.computeChanges(gitCommit, gitParent)
+			if err != nil {
+				return err
+			}
+
+			modifiedLines := 0
+			addedLines := 0
+			deletedLines := 0
+
+			for _, gitFile := range gitChanges {
+				filePath := filepath.Join(repo.RootDir, gitFile.Name)
+
+				file := filesDB.GetOrCreateFile(filePath)
+				file.RepositoryID = &repo.ID
+
+				cf := commit.GetOrCreateFile(file.ID)
+				cf.ModifiedLines = utils.Max(cf.ModifiedLines, gitFile.Modified)
+				cf.AddedLines = utils.Max(cf.AddedLines, gitFile.Added)
+				cf.DeletedLines = utils.Max(cf.DeletedLines, gitFile.Deleted)
+
+				if gitFile.Name != gitFile.OldName {
+					oldFilePath := filepath.Join(repo.RootDir, gitFile.OldName)
+
+					oldFile := filesDB.GetOrCreateFile(oldFilePath)
+					oldFile.RepositoryID = &repo.ID
+
+					cf.OldFileIDs[repoParent.ID] = oldFile.ID
+				}
+
+				modifiedLines += gitFile.Modified
+				addedLines += gitFile.Added
+				deletedLines += gitFile.Deleted
+			}
+
+			commit.ModifiedLines = utils.Max(commit.ModifiedLines, modifiedLines)
+			commit.AddedLines = utils.Max(commit.AddedLines, addedLines)
+			commit.DeletedLines = utils.Max(commit.DeletedLines, deletedLines)
+
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		if g.options.SaveEvery != nil && imported%*g.options.SaveEvery == 0 {
+			_ = bar.Clear()
+			err = g.writeResults(storage, filesDB, repo)
+			if err != nil {
+				return err
+			}
+		}
+
+		_ = bar.Add(1)
+
+		return nil
+	})
+	if err != nil && err != g.abort {
+		return err
+	}
+
+	return nil
+}
+
+func (g *gitHistoryImporter) writeResults(storage archer.Storage, filesDB *model.Files, repo *model.Repository) error {
+	fmt.Printf("%v: Writing results...\n", repo.Name)
+
+	err := storage.WriteFiles(filesDB, archer.ChangedBasicInfo)
+	if err != nil {
+		return nil
+	}
+
+	err = storage.WriteRepository(repo, archer.ChangedBasicInfo|archer.ChangedHistory)
 	if err != nil {
 		return err
 	}
