@@ -55,7 +55,7 @@ func NewSqliteStorage(file string) (archer.Storage, error) {
 	return newFrom(file + "?_pragma=journal_mode(WAL)")
 }
 
-func NewSqliteMemoryStorage(file string) (archer.Storage, error) {
+func NewSqliteMemoryStorage(_ string) (archer.Storage, error) {
 	return newFrom(":memory:")
 }
 
@@ -610,7 +610,11 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 	for _, sf := range commitFiles {
 		commit := commitsById[sf.CommitID]
 
-		file := commit.AddFile(sf.FileID, sf.OldFileID, sf.ModifiedLines, sf.AddedLines, sf.DeletedLines)
+		file := commit.AddFile(sf.FileID)
+		file.OldFileIDs = decodeOldFileIDs(sf.OldFileIDs)
+		file.ModifiedLines = sf.ModifiedLines
+		file.AddedLines = sf.AddedLines
+		file.DeletedLines = sf.DeletedLines
 		file.SurvivedLines = decodeMetric(sf.SurvivedLines)
 	}
 
@@ -1003,13 +1007,41 @@ func toSqlRepositoryCommitFile(r *model.Repository, c *model.RepositoryCommit, f
 	return &sqlRepositoryCommitFile{
 		CommitID:      c.ID,
 		FileID:        f.FileID,
-		OldFileID:     f.OldFileID,
+		OldFileIDs:    encodeOldFileIDs(f.OldFileIDs),
 		RepositoryID:  r.ID,
 		ModifiedLines: f.ModifiedLines,
 		AddedLines:    f.AddedLines,
 		DeletedLines:  f.DeletedLines,
 		SurvivedLines: encodeMetric(f.SurvivedLines),
 	}
+}
+
+func encodeOldFileIDs(v map[string]model.UUID) string {
+	var sb strings.Builder
+
+	for k, v := range v {
+		if sb.Len() > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(k)
+		sb.WriteString(":")
+		sb.WriteString(string(v))
+	}
+
+	return sb.String()
+}
+func decodeOldFileIDs(v string) map[string]model.UUID {
+	result := make(map[string]model.UUID)
+	if v == "" {
+		return result
+	}
+
+	for _, line := range strings.Split(v, "\n") {
+		cols := strings.Split(line, ":")
+		result[cols[0]] = model.UUID(cols[1])
+	}
+
+	return result
 }
 
 func addMap[K comparable, V any](target *map[K]V, toAdd map[K]V) {

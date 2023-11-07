@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/aquilax/truncate"
 	"github.com/pkg/errors"
 	ignore "github.com/sabhiram/go-gitignore"
 	"golang.org/x/exp/constraints"
@@ -252,4 +253,8 @@ func FindGitIgnore(path string) (func(string) bool, error) {
 			return gi.MatchesPath(rel)
 		}, nil
 	}
+}
+
+func TruncateFilename(name string) string {
+	return truncate.Truncate(name, 20, "…", truncate.PositionMiddle)
 }

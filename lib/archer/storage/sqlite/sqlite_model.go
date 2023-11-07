@@ -89,9 +89,8 @@ type sqlFile struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	CommitFiles    []sqlRepositoryCommitFile `gorm:"foreignKey:FileID"`
-	CommitOldFiles []sqlRepositoryCommitFile `gorm:"foreignKey:OldFileID"`
-	Lines          []sqlFileLine             `gorm:"foreignKey:FileID"`
+	CommitFiles []sqlRepositoryCommitFile `gorm:"foreignKey:FileID"`
+	Lines       []sqlFileLine             `gorm:"foreignKey:FileID"`
 }
 
 type sqlFileLine struct {
@@ -179,7 +178,7 @@ type sqlRepositoryCommit struct {
 type sqlRepositoryCommitFile struct {
 	CommitID      model.UUID `gorm:"primaryKey"`
 	FileID        model.UUID `gorm:"primaryKey"`
-	OldFileID     *model.UUID
+	OldFileIDs    string
 	RepositoryID  model.UUID `gorm:"index"`
 	AddedLines    int        // TODO *
 	ModifiedLines int

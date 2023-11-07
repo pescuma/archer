@@ -37,12 +37,8 @@ func NewRepositoryCommit(hash string) *RepositoryCommit {
 	return result
 }
 
-func (c *RepositoryCommit) AddFile(fileID UUID, oldFileID *UUID, modifiedLines, addedLines, deletedLines int) *RepositoryCommitFile {
+func (c *RepositoryCommit) AddFile(fileID UUID) *RepositoryCommitFile {
 	file := NewRepositoryCommitFile(fileID)
-	file.OldFileID = oldFileID
-	file.ModifiedLines = modifiedLines
-	file.AddedLines = addedLines
-	file.DeletedLines = deletedLines
 
 	c.Files[fileID] = file
 

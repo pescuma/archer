@@ -156,10 +156,6 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 	commitNumber = 0
 	imported = 0
 	for i, w := range ws {
-		if w == nil {
-			continue
-		}
-
 		gr, err := git.PlainOpen(w.rootDir)
 		if err != nil {
 			return err
@@ -202,19 +198,12 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 			commit.DateAuthored = gitCommit.Author.When
 			commit.AuthorID = author.ID
 
-			var firstParent *object.Commit
+			var parents []*object.Commit
 			err := gitCommit.Parents().ForEach(func(p *object.Commit) error {
-				if firstParent == nil {
-					firstParent = p
-				}
+				parents = append(parents, p)
 				commit.Parents = append(commit.Parents, p.Hash.String())
 				return nil
 			})
-			if err != nil {
-				return err
-			}
-
-			gitChanges, err := g.computeChanges(gitCommit, firstParent)
 			if err != nil {
 				return err
 			}
@@ -223,23 +212,44 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 			commit.AddedLines = 0
 			commit.DeletedLines = 0
 
-			for _, gitFile := range gitChanges {
-				filePath := filepath.Join(w.rootDir, gitFile.Name)
-				oldFilePath := filepath.Join(w.rootDir, gitFile.OldName)
+			for _, parent := range parents {
+				gitChanges, err := g.computeChanges(gitCommit, parent)
+				if err != nil {
+					return err
+				}
 
-				file := filesDB.GetOrCreateFile(filePath)
-				file.RepositoryID = &w.repo.ID
+				modifiedLines := 0
+				addedLines := 0
+				deletedLines := 0
 
-				oldFile := filesDB.GetOrCreateFile(oldFilePath)
-				oldFile.RepositoryID = &w.repo.ID
+				for _, gitFile := range gitChanges {
+					filePath := filepath.Join(w.rootDir, gitFile.Name)
+					oldFilePath := filepath.Join(w.rootDir, gitFile.OldName)
 
-				commit.AddFile(file.ID, utils.IIf(file != oldFile, &oldFile.ID, nil), gitFile.Modified, gitFile.Added, gitFile.Deleted)
+					file := filesDB.GetOrCreateFile(filePath)
+					file.RepositoryID = &w.repo.ID
 
-				commit.ModifiedLines += gitFile.Modified
-				commit.AddedLines += gitFile.Added
-				commit.DeletedLines += gitFile.Deleted
+					oldFile := filesDB.GetOrCreateFile(oldFilePath)
+					oldFile.RepositoryID = &w.repo.ID
 
-				touchedFiles[file.ID] = file
+					cf := commit.AddFile(file.ID)
+					if file != oldFile {
+						cf.OldFileIDs[parent.Hash.String()] = oldFile.ID
+					}
+					cf.ModifiedLines = utils.Max(cf.ModifiedLines, gitFile.Modified)
+					cf.AddedLines = utils.Max(cf.AddedLines, gitFile.Added)
+					cf.DeletedLines = utils.Max(cf.DeletedLines, gitFile.Deleted)
+
+					modifiedLines += gitFile.Modified
+					addedLines += gitFile.Added
+					deletedLines += gitFile.Deleted
+
+					touchedFiles[file.ID] = file
+				}
+
+				commit.ModifiedLines = utils.Max(commit.ModifiedLines, modifiedLines)
+				commit.AddedLines = utils.Max(commit.AddedLines, addedLines)
+				commit.DeletedLines = utils.Max(commit.DeletedLines, deletedLines)
 			}
 
 			if g.options.SaveEvery != nil && imported%*g.options.SaveEvery == 0 {
