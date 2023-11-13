@@ -110,6 +110,8 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 			continue
 		}
 
+		repo.SeenAt(time.Now())
+
 		err = g.computeBlame(storage, filesDB, repo, gitRepo, gitTree, gitCommit)
 		if err != nil {
 			return err

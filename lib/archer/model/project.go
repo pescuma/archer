@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/pescuma/archer/lib/archer/utils"
 )
@@ -24,6 +25,8 @@ type Project struct {
 	Changes      *Changes
 	Metrics      *Metrics
 	Data         map[string]string
+	FirstSeen    time.Time
+	LastSeen     time.Time
 }
 
 func NewProject(root, name string, id *UUID) *Project {
@@ -218,4 +221,17 @@ func (p *Project) SetData(name string, value string) bool {
 func (p *Project) GetData(name string) string {
 	v, _ := p.Data[name]
 	return v
+}
+
+func (p *Project) SeenAt(ts ...time.Time) {
+	empty := time.Time{}
+
+	for _, t := range ts {
+		if p.FirstSeen == empty || t.Before(p.FirstSeen) {
+			p.FirstSeen = t
+		}
+		if p.LastSeen == empty || t.After(p.LastSeen) {
+			p.LastSeen = t
+		}
+	}
 }

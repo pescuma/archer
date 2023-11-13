@@ -32,12 +32,12 @@ func (s *server) getFile(c *gin.Context) {
 }
 
 func (s *server) getFilesMonthlyStats(c *gin.Context) {
-	s1 := lo.GroupBy(s.files.ListFiles(), func(item *model.File) string {
-		y, m, _ := item.FirstSeen.Date()
+	s1 := lo.GroupBy(s.files.ListFiles(), func(file *model.File) string {
+		y, m, _ := file.FirstSeen.Date()
 		return fmt.Sprintf("%04d-%02d", y, m)
 	})
-	s2 := lo.MapValues(s1, func(value []*model.File, _ string) int {
-		return len(value)
+	s2 := lo.MapValues(s1, func(files []*model.File, _ string) int {
+		return len(files)
 	})
 
 	c.JSON(http.StatusOK, s2)

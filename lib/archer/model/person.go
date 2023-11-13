@@ -2,6 +2,7 @@ package model
 
 import (
 	"sort"
+	"time"
 
 	"github.com/samber/lo"
 )
@@ -10,11 +11,13 @@ type Person struct {
 	Name string
 	ID   UUID
 
-	names   map[string]bool
-	emails  map[string]bool
-	Blame   *Size
-	Changes *Changes
-	Data    map[string]string
+	names     map[string]bool
+	emails    map[string]bool
+	Blame     *Size
+	Changes   *Changes
+	Data      map[string]string
+	FirstSeen time.Time
+	LastSeen  time.Time
 }
 
 func NewPerson(name string, id *UUID) *Person {
@@ -58,4 +61,17 @@ func (p *Person) ListEmails() []string {
 		return result[i] < result[j]
 	})
 	return result
+}
+
+func (p *Person) SeenAt(ts ...time.Time) {
+	empty := time.Time{}
+
+	for _, t := range ts {
+		if p.FirstSeen == empty || t.Before(p.FirstSeen) {
+			p.FirstSeen = t
+		}
+		if p.LastSeen == empty || t.After(p.LastSeen) {
+			p.LastSeen = t
+		}
+	}
 }

@@ -184,6 +184,9 @@ func updateParents(projectsDB *model.Projects, filesDB *model.Files, peopleDB *m
 					continue
 				}
 
+				proj.SeenAt(file.FirstSeen, file.LastSeen)
+				dir.SeenAt(file.FirstSeen, file.LastSeen)
+
 				dir.Size.Add(file.Size)
 
 				if file.ProductAreaID != nil {

@@ -198,6 +198,10 @@ func (g *gitHistoryImporter) importCommits(peopleDB *model.People, repo *model.R
 		commit.DateAuthored = gitCommit.Author.When
 		commit.AuthorID = author.ID
 
+		repo.SeenAt(commit.Date, commit.DateAuthored)
+		author.SeenAt(commit.Date, commit.DateAuthored)
+		committer.SeenAt(commit.Date, commit.DateAuthored)
+
 		return nil
 	})
 	if err != nil {

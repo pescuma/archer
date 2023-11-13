@@ -25,11 +25,13 @@ type sqlProject struct {
 	RootDir     string
 	ProjectFile string
 
-	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
-	Sizes   map[string]*sqlSize  `gorm:"serializer:json"`
-	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
-	Metrics *sqlMetricsAggregate `gorm:"embedded"`
-	Data    map[string]string    `gorm:"serializer:json"`
+	Size      *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
+	Sizes     map[string]*sqlSize  `gorm:"serializer:json"`
+	Changes   *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
+	Metrics   *sqlMetricsAggregate `gorm:"embedded"`
+	Data      map[string]string    `gorm:"serializer:json"`
+	FirstSeen time.Time
+	LastSeen  time.Time
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -59,10 +61,12 @@ type sqlProjectDirectory struct {
 	Name      string
 	Type      model.ProjectDirectoryType
 
-	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
-	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
-	Metrics *sqlMetricsAggregate `gorm:"embedded"`
-	Data    map[string]string    `gorm:"serializer:json"`
+	Size      *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
+	Changes   *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
+	Metrics   *sqlMetricsAggregate `gorm:"embedded"`
+	Data      map[string]string    `gorm:"serializer:json"`
+	FirstSeen time.Time
+	LastSeen  time.Time
 
 	Files []sqlFile `gorm:"foreignKey:ProjectDirectoryID"`
 
@@ -86,6 +90,7 @@ type sqlFile struct {
 	Metrics   *sqlMetrics       `gorm:"embedded"`
 	Data      map[string]string `gorm:"serializer:json"`
 	FirstSeen time.Time
+	LastSeen  time.Time
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -111,11 +116,13 @@ type sqlPerson struct {
 	ID   model.UUID
 	Name string
 
-	Names   []string          `gorm:"serializer:json"`
-	Emails  []string          `gorm:"serializer:json"`
-	Blame   *sqlSize          `gorm:"embedded;embeddedPrefix:blame_"`
-	Changes *sqlChanges       `gorm:"embedded;embeddedPrefix:changes_"`
-	Data    map[string]string `gorm:"serializer:json"`
+	Names     []string          `gorm:"serializer:json"`
+	Emails    []string          `gorm:"serializer:json"`
+	Blame     *sqlSize          `gorm:"embedded;embeddedPrefix:blame_"`
+	Changes   *sqlChanges       `gorm:"embedded;embeddedPrefix:changes_"`
+	Data      map[string]string `gorm:"serializer:json"`
+	FirstSeen time.Time
+	LastSeen  time.Time
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -144,7 +151,9 @@ type sqlRepository struct {
 	RootDir string `gorm:"uniqueIndex"`
 	VCS     string
 
-	Data map[string]string `gorm:"serializer:json"`
+	Data      map[string]string `gorm:"serializer:json"`
+	FirstSeen time.Time
+	LastSeen  time.Time
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

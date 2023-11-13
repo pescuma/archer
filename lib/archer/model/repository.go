@@ -1,6 +1,8 @@
 package model
 
 import (
+	"time"
+
 	"github.com/samber/lo"
 )
 
@@ -10,7 +12,9 @@ type Repository struct {
 	VCS     string
 	ID      UUID
 
-	Data map[string]string
+	Data      map[string]string
+	FirstSeen time.Time
+	LastSeen  time.Time
 
 	commitsByHash map[string]*RepositoryCommit
 	commitsByID   map[UUID]*RepositoryCommit
@@ -64,4 +68,17 @@ func (r *Repository) ContainsCommit(hash string) bool {
 
 func (r *Repository) ListCommits() []*RepositoryCommit {
 	return lo.Values(r.commitsByHash)
+}
+
+func (r *Repository) SeenAt(ts ...time.Time) {
+	empty := time.Time{}
+
+	for _, t := range ts {
+		if r.FirstSeen == empty || t.Before(r.FirstSeen) {
+			r.FirstSeen = t
+		}
+		if r.LastSeen == empty || t.After(r.LastSeen) {
+			r.LastSeen = t
+		}
+	}
 }

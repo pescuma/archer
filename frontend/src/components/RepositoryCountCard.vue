@@ -7,7 +7,7 @@ function onReceived(response, props) {
 </script>
 
 <template>
-  <CountCard url="/api/stats/count/repositories" @received="onReceived" color="lime" icon="database" />
+  <CountCard url="/api/stats/count/repos" @received="onReceived" color="lime" icon="database" />
 </template>
 
 <style scoped></style>

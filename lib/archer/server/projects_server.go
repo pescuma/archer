@@ -32,12 +32,12 @@ func (s *server) getProject(c *gin.Context) {
 }
 
 func (s *server) getProjectsMonthlyStats(c *gin.Context) {
-	s1 := lo.GroupBy(s.files.ListFiles(), func(item *model.File) string {
-		y, m, _ := item.FirstSeen.Date()
+	s1 := lo.GroupBy(s.projects.ListProjects(model.FilterExcludeExternal), func(proj *model.Project) string {
+		y, m, _ := proj.FirstSeen.Date()
 		return fmt.Sprintf("%04d-%02d", y, m)
 	})
-	s2 := lo.MapValues(s1, func(value []*model.File, _ string) int {
-		return len(value)
+	s2 := lo.MapValues(s1, func(projs []*model.Project, _ string) int {
+		return len(projs)
 	})
 
 	c.JSON(http.StatusOK, s2)

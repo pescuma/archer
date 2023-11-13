@@ -76,6 +76,8 @@ func (s *server) run() error {
 
 	s.initFiles(r)
 	s.initProjects(r)
+	s.initRepos(r)
+	s.initPeople(r)
 
 	return r.Run(fmt.Sprintf(":%v", s.opts.Port))
 }

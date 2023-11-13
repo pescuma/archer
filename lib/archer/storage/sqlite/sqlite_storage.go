@@ -150,6 +150,8 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 		p.Changes = toModelChanges(sp.Changes)
 		p.Metrics = toModelMetricsAggregate(sp.Metrics)
 		p.Data = decodeMap(sp.Data)
+		p.FirstSeen = sp.FirstSeen
+		p.LastSeen = sp.LastSeen
 	}
 
 	for _, sd := range deps {
@@ -172,6 +174,8 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 		d.Changes = toModelChanges(sd.Changes)
 		d.Metrics = toModelMetricsAggregate(sd.Metrics)
 		d.Data = decodeMap(sd.Data)
+		d.FirstSeen = sd.FirstSeen
+		d.LastSeen = sd.LastSeen
 	}
 
 	return result, nil
@@ -291,6 +295,7 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 		f.Metrics = toModelMetrics(sf.Metrics)
 		f.Data = decodeMap(sf.Data)
 		f.FirstSeen = sf.FirstSeen
+		f.LastSeen = sf.LastSeen
 	}
 
 	return result, nil
@@ -447,6 +452,8 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 		p.Blame = toModelSize(sp.Blame)
 		p.Changes = toModelChanges(sp.Changes)
 		p.Data = decodeMap(sp.Data)
+		p.FirstSeen = sp.FirstSeen
+		p.LastSeen = sp.LastSeen
 	}
 
 	for _, sa := range areas {
@@ -586,6 +593,8 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 		r.Name = sr.Name
 		r.VCS = sr.VCS
 		r.Data = decodeMap(sr.Data)
+		r.FirstSeen = sr.FirstSeen
+		r.LastSeen = sr.LastSeen
 	}
 
 	commitsById := map[model.UUID]*model.RepositoryCommit{}
@@ -886,6 +895,8 @@ func toSqlProject(p *model.Project) *sqlProject {
 		Changes:     toSqlChanges(p.Changes),
 		Metrics:     toSqlMetricsAggregate(p.Metrics, size),
 		Data:        encodeMap(p.Data),
+		FirstSeen:   p.FirstSeen,
+		LastSeen:    p.LastSeen,
 	}
 
 	for k, v := range p.Sizes {
@@ -920,6 +931,8 @@ func toSqlProjectDirectory(d *model.ProjectDirectory, p *model.Project) *sqlProj
 		Changes:   toSqlChanges(d.Changes),
 		Metrics:   toSqlMetricsAggregate(d.Metrics, d.Size),
 		Data:      encodeMap(d.Data),
+		FirstSeen: d.FirstSeen,
+		LastSeen:  d.LastSeen,
 	}
 }
 
@@ -937,6 +950,7 @@ func toSqlFile(f *model.File) *sqlFile {
 		Metrics:            toSqlMetrics(f.Metrics),
 		Data:               encodeMap(f.Data),
 		FirstSeen:          f.FirstSeen,
+		LastSeen:           f.LastSeen,
 	}
 }
 
@@ -953,13 +967,15 @@ func toSqlFileLine(fileID model.UUID, f *model.FileLine) *sqlFileLine {
 
 func toSqlPerson(p *model.Person) *sqlPerson {
 	result := &sqlPerson{
-		ID:      p.ID,
-		Name:    p.Name,
-		Names:   p.ListNames(),
-		Emails:  p.ListEmails(),
-		Blame:   toSqlSize(p.Blame),
-		Changes: toSqlChanges(p.Changes),
-		Data:    encodeMap(p.Data),
+		ID:        p.ID,
+		Name:      p.Name,
+		Names:     p.ListNames(),
+		Emails:    p.ListEmails(),
+		Blame:     toSqlSize(p.Blame),
+		Changes:   toSqlChanges(p.Changes),
+		Data:      encodeMap(p.Data),
+		FirstSeen: p.FirstSeen,
+		LastSeen:  p.LastSeen,
 	}
 
 	return result
@@ -978,11 +994,13 @@ func toSqlProductArea(a *model.ProductArea) *sqlProductArea {
 
 func toSqlRepository(r *model.Repository) *sqlRepository {
 	return &sqlRepository{
-		ID:      r.ID,
-		Name:    r.Name,
-		RootDir: r.RootDir,
-		VCS:     r.VCS,
-		Data:    encodeMap(r.Data),
+		ID:        r.ID,
+		Name:      r.Name,
+		RootDir:   r.RootDir,
+		VCS:       r.VCS,
+		Data:      encodeMap(r.Data),
+		FirstSeen: r.FirstSeen,
+		LastSeen:  r.LastSeen,
 	}
 }
 
