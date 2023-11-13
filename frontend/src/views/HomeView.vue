@@ -3,6 +3,7 @@ import FileCountCard from '@/components/FileCountCard.vue'
 import ProjectCountCard from '@/components/ProjectCountCard.vue'
 import RepositoryCountCard from '@/components/RepositoryCountCard.vue'
 import PersonCountCard from '@/components/PersonCountCard.vue'
+import ChurnLinesCard from '@/components/ChurnLinesCard.vue'
 </script>
 
 <template>
@@ -23,12 +24,7 @@ import PersonCountCard from '@/components/PersonCountCard.vue'
         </div>
 
         <div class="col-lg-6">
-          <div class="card">
-            <div class="card-body">
-              <h3 class="card-title">Churn</h3>
-              <div id="chart-mentions" class="chart-lg"></div>
-            </div>
-          </div>
+          <ChurnLinesCard />
         </div>
 
         <div class="col-lg-6">

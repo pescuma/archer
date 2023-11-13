@@ -13,7 +13,7 @@ func (s *server) initPeople(r *gin.Engine) {
 	r.GET("/api/people", s.listPeople)
 	r.GET("/api/people/:id", s.getPerson)
 	r.GET("/api/stats/count/people", s.countPeople)
-	r.GET("/api/stats/monthly/people", s.getPeopleMonthlyStats)
+	r.GET("/api/stats/seen/people", s.getPeopleSeenStats)
 }
 
 func (s *server) listPeople(c *gin.Context) {
@@ -30,7 +30,7 @@ func (s *server) countPeople(c *gin.Context) {
 func (s *server) getPerson(c *gin.Context) {
 }
 
-func (s *server) getPeopleMonthlyStats(c *gin.Context) {
+func (s *server) getPeopleSeenStats(c *gin.Context) {
 	s1 := lo.GroupBy(s.people.ListPeople(), func(person *model.Person) string {
 		y, m, _ := person.FirstSeen.Date()
 		return fmt.Sprintf("%04d-%02d", y, m)

@@ -13,7 +13,7 @@ func (s *server) initFiles(r *gin.Engine) {
 	r.GET("/api/files", s.listFiles)
 	r.GET("/api/files/:id", s.getFile)
 	r.GET("/api/stats/count/files", s.countFiles)
-	r.GET("/api/stats/monthly/files", s.getFilesMonthlyStats)
+	r.GET("/api/stats/seen/files", s.getFilesSeenStats)
 }
 
 func (s *server) listFiles(c *gin.Context) {
@@ -31,7 +31,7 @@ func (s *server) countFiles(c *gin.Context) {
 func (s *server) getFile(c *gin.Context) {
 }
 
-func (s *server) getFilesMonthlyStats(c *gin.Context) {
+func (s *server) getFilesSeenStats(c *gin.Context) {
 	s1 := lo.GroupBy(s.files.ListFiles(), func(file *model.File) string {
 		y, m, _ := file.FirstSeen.Date()
 		return fmt.Sprintf("%04d-%02d", y, m)

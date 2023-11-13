@@ -13,7 +13,7 @@ func (s *server) initProjects(r *gin.Engine) {
 	r.GET("/api/projects", s.listProjects)
 	r.GET("/api/projects/:id", s.getProject)
 	r.GET("/api/stats/count/projects", s.countProjects)
-	r.GET("/api/stats/monthly/projects", s.getProjectsMonthlyStats)
+	r.GET("/api/stats/seen/projects", s.getProjectsSeenStats)
 }
 
 func (s *server) listProjects(c *gin.Context) {
@@ -31,7 +31,7 @@ func (s *server) countProjects(c *gin.Context) {
 func (s *server) getProject(c *gin.Context) {
 }
 
-func (s *server) getProjectsMonthlyStats(c *gin.Context) {
+func (s *server) getProjectsSeenStats(c *gin.Context) {
 	s1 := lo.GroupBy(s.projects.ListProjects(model.FilterExcludeExternal), func(proj *model.Project) string {
 		y, m, _ := proj.FirstSeen.Date()
 		return fmt.Sprintf("%04d-%02d", y, m)
