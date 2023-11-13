@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -350,6 +351,8 @@ func (g *gitBlameImporter) listToCompute(filesDB *model.Files, repo *model.Repos
 		lastMod := ""
 		stat, err := os.Stat(path)
 		if err == nil {
+			file.SeenAt(time.Now(), stat.ModTime())
+
 			lastMod = stat.ModTime().String()
 			if g.options.Incremental && lastMod == file.Data["blame:last_modified"] {
 				return nil

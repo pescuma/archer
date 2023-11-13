@@ -296,6 +296,7 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage, filesDB *mode
 
 				file := filesDB.GetOrCreateFile(filePath)
 				file.RepositoryID = &repo.ID
+				file.SeenAt(commit.Date, commit.DateAuthored)
 
 				cf := commit.GetOrCreateFile(file.ID)
 				cf.ModifiedLines = utils.Max(cf.ModifiedLines, gitFile.Modified)
@@ -307,6 +308,7 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage, filesDB *mode
 
 					oldFile := filesDB.GetOrCreateFile(oldFilePath)
 					oldFile.RepositoryID = &repo.ID
+					oldFile.SeenAt(commit.Date, commit.DateAuthored)
 
 					cf.OldFileIDs[repoParent.ID] = oldFile.ID
 				}

@@ -290,6 +290,7 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 		f.Changes = toModelChanges(sf.Changes)
 		f.Metrics = toModelMetrics(sf.Metrics)
 		f.Data = decodeMap(sf.Data)
+		f.FirstSeen = sf.FirstSeen
 	}
 
 	return result, nil
@@ -935,6 +936,7 @@ func toSqlFile(f *model.File) *sqlFile {
 		Changes:            toSqlChanges(f.Changes),
 		Metrics:            toSqlMetrics(f.Metrics),
 		Data:               encodeMap(f.Data),
+		FirstSeen:          f.FirstSeen,
 	}
 }
 

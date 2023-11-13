@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/hhatto/gocloc"
 	"github.com/pkg/errors"
@@ -72,6 +73,7 @@ func (l *locImporter) Import(storage archer.Storage) error {
 		stat, err := os.Stat(file.Path)
 		if err == nil && !stat.IsDir() {
 			file.Exists = true
+			file.SeenAt(time.Now(), stat.ModTime())
 
 			modTime := stat.ModTime().String()
 

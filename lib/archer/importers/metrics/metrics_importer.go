@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
@@ -94,6 +95,8 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 		if err != nil {
 			file.Exists = false
 			continue
+		} else {
+			file.SeenAt(time.Now(), stat.ModTime())
 		}
 
 		modTime := stat.ModTime().String()

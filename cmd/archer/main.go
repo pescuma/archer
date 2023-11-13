@@ -32,6 +32,8 @@ var cli struct {
 		} `cmd:""`
 		Owners ImportOwnersCmd `cmd:"" help:"Import file owners."`
 	} `cmd:""`
+
+	Server ServerCmd `cmd:"" help:"Start webserver."`
 }
 
 type context struct {

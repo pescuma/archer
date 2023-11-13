@@ -47,8 +47,12 @@ func (w *Workspace) LoadProjects() (*model.Projects, error) {
 	return w.storage.LoadProjects()
 }
 
+func (w *Workspace) Execute(f func(Storage) error) error {
+	return f(w.storage)
+}
+
 func (w *Workspace) Import(importer Importer) error {
-	return importer.Import(w.storage)
+	return w.Execute(importer.Import)
 }
 
 func (w *Workspace) SetGlobalConfig(config string, value string) (bool, error) {
