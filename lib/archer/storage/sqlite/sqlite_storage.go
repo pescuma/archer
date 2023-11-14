@@ -418,6 +418,24 @@ func (s *sqliteStorage) ComputeBlamePerAuthor() ([]*archer.BlamePerAuthor, error
 	return result, nil
 }
 
+func (s *sqliteStorage) ComputeSurvivedLines() ([]*archer.SurvivedLineCount, error) {
+	var result []*archer.SurvivedLineCount
+
+	err := s.db.Raw(`
+		select strftime('%Y-%m', c.date) month, l.type line_type, count(*) lines
+		from file_lines l
+				 join repository_commits c
+					  on l.commit_id = c.id
+		where c.ignore = 0
+		group by 1, 2
+		`).Scan(&result).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
 func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 	result := model.NewPeople()
 
@@ -612,6 +630,7 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 		c.AddedLines = decodeMetric(sc.AddedLines)
 		c.DeletedLines = decodeMetric(sc.DeletedLines)
 		c.SurvivedLines = decodeMetric(sc.SurvivedLines)
+		c.Ignore = sc.Ignore
 
 		commitsById[c.ID] = c
 	}
@@ -1019,6 +1038,7 @@ func toSqlRepositoryCommit(r *model.Repository, c *model.RepositoryCommit) *sqlR
 		AddedLines:    encodeMetric(c.AddedLines),
 		DeletedLines:  encodeMetric(c.DeletedLines),
 		SurvivedLines: encodeMetric(c.SurvivedLines),
+		Ignore:        c.Ignore,
 	}
 }
 

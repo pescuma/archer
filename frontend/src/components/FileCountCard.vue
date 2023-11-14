@@ -1,14 +1,37 @@
 <script setup>
-import CountCard from '@/components/CountCard.vue'
+import { onMounted, reactive, ref } from 'vue'
+import { IconFiles } from '@tabler/icons-vue'
+import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
 
-function onReceived(response, props) {
-  props.text = response.total.toLocaleString() + ' Files'
-  props.details = response.deleted.toLocaleString() + ' deleted'
-}
+const card = ref(null)
+
+const data = reactive({
+  text: '',
+  details: '',
+})
+
+onMounted(function () {
+  card.value.request('/api/stats/count/files', function (response) {
+    data.text = response.total.toLocaleString() + ' Files'
+    data.details = response.deleted.toLocaleString() + ' deleted'
+  })
+})
 </script>
 
 <template>
-  <CountCard url="/api/stats/count/files" @received="onReceived" color="blue" icon="files" />
+  <CardWithPlaceholder ref="card" type="count">
+    <div class="row align-items-center">
+      <div class="col-auto">
+        <span class="bg-blue text-white avatar">
+          <IconFiles />
+        </span>
+      </div>
+      <div class="col">
+        <div class="font-weight-medium">{{ data.text }}</div>
+        <div class="text-muted">{{ data.details }}</div>
+      </div>
+    </div>
+  </CardWithPlaceholder>
 </template>
 
 <style scoped></style>

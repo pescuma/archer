@@ -109,13 +109,11 @@ func (l *locImporter) Import(storage archer.Storage) error {
 
 		} else if isText, err := utils.IsTextFile(file.Path); err == nil && isText {
 			text, blanks, err := countLines(file.Path)
-			if err != nil {
-				return err
+			if err == nil {
+				file.Size.Lines = text + blanks
+				file.Size.Other["Code"] = text
+				file.Size.Other["Blanks"] = blanks
 			}
-
-			file.Size.Lines = text + blanks
-			file.Size.Other["Code"] = text
-			file.Size.Other["Blanks"] = blanks
 		}
 	}
 

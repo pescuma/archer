@@ -466,6 +466,11 @@ func (s *jsonStorage) ComputeBlamePerAuthor() ([]*archer.BlamePerAuthor, error) 
 	panic("implement me")
 }
 
+func (s *jsonStorage) ComputeSurvivedLines() ([]*archer.SurvivedLineCount, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (s *jsonStorage) LoadPeople() (*model.People, error) {
 	// TODO implement me
 	panic("implement me")

@@ -31,6 +31,7 @@ type Storage interface {
 	LoadFileContents(fileID model.UUID) (*model.FileContents, error)
 	WriteFileContents(contents *model.FileContents, changes StorageChanges) error
 	ComputeBlamePerAuthor() ([]*BlamePerAuthor, error)
+	ComputeSurvivedLines() ([]*SurvivedLineCount, error)
 
 	LoadPeople() (*model.People, error)
 	WritePeople(people *model.People, changes StorageChanges) error
@@ -49,6 +50,12 @@ type BlamePerAuthor struct {
 	AuthorID model.UUID
 	CommitID model.UUID
 	FileID   model.UUID
+	LineType model.FileLineType
+	Lines    int
+}
+
+type SurvivedLineCount struct {
+	Month    string
 	LineType model.FileLineType
 	Lines    int
 }

@@ -26,6 +26,7 @@ func Run(storage archer.Storage, opts *Options) error {
 type server struct {
 	opts *Options
 
+	storage  archer.Storage
 	files    *model.Files
 	projects *model.Projects
 	repos    *model.Repositories
@@ -47,6 +48,8 @@ func newServer(opts *Options) *server {
 
 func (s *server) load(storage archer.Storage) error {
 	var err error
+
+	s.storage = storage
 
 	s.files, err = storage.LoadFiles()
 	if err != nil {

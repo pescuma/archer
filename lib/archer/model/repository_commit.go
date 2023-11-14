@@ -20,6 +20,8 @@ type RepositoryCommit struct {
 	DeletedLines  int
 	SurvivedLines int
 
+	Ignore bool
+
 	Files map[UUID]*RepositoryCommitFile
 }
 

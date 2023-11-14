@@ -177,6 +177,7 @@ type sqlRepositoryCommit struct {
 	ModifiedLines *int
 	DeletedLines  *int
 	SurvivedLines *int
+	Ignore        bool
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
