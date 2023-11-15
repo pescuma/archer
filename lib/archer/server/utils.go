@@ -9,6 +9,38 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func getP[P any](f func(*P) (any, error)) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		var params P
+
+		err := c.BindQuery(&params)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		result, err := f(&params)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, result)
+	}
+}
+
+func get(f func() (any, error)) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		result, err := f()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, result)
+	}
+}
+
 func bind[T any](c *gin.Context) (T, error) {
 	var result T
 

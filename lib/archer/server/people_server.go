@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pescuma/archer/lib/archer/model"
@@ -10,27 +9,29 @@ import (
 )
 
 func (s *server) initPeople(r *gin.Engine) {
-	r.GET("/api/people", s.listPeople)
-	r.GET("/api/people/:id", s.getPerson)
-	r.GET("/api/stats/count/people", s.countPeople)
-	r.GET("/api/stats/seen/people", s.getPeopleSeenStats)
+	r.GET("/api/people", get(s.listPeople))
+	r.GET("/api/people/:id", get(s.getPerson))
+	r.GET("/api/stats/count/people", get(s.countPeople))
+	r.GET("/api/stats/seen/people", get(s.getPeopleSeenStats))
 }
 
-func (s *server) listPeople(c *gin.Context) {
+func (s *server) listPeople() (any, error) {
+	return nil, nil
 }
 
-func (s *server) countPeople(c *gin.Context) {
+func (s *server) countPeople() (any, error) {
 	people := s.people.ListPeople()
 
-	c.JSON(http.StatusOK, gin.H{
+	return gin.H{
 		"total": len(people),
-	})
+	}, nil
 }
 
-func (s *server) getPerson(c *gin.Context) {
+func (s *server) getPerson() (any, error) {
+	return nil, nil
 }
 
-func (s *server) getPeopleSeenStats(c *gin.Context) {
+func (s *server) getPeopleSeenStats() (any, error) {
 	s1 := lo.GroupBy(s.people.ListPeople(), func(person *model.Person) string {
 		y, m, _ := person.FirstSeen.Date()
 		return fmt.Sprintf("%04d-%02d", y, m)
@@ -39,5 +40,5 @@ func (s *server) getPeopleSeenStats(c *gin.Context) {
 		return len(people)
 	})
 
-	c.JSON(http.StatusOK, s2)
+	return s2, nil
 }

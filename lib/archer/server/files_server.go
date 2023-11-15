@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pescuma/archer/lib/archer/model"
@@ -10,28 +9,30 @@ import (
 )
 
 func (s *server) initFiles(r *gin.Engine) {
-	r.GET("/api/files", s.listFiles)
-	r.GET("/api/files/:id", s.getFile)
-	r.GET("/api/stats/count/files", s.countFiles)
-	r.GET("/api/stats/seen/files", s.getFilesSeenStats)
+	r.GET("/api/files", get(s.listFiles))
+	r.GET("/api/files/:id", get(s.getFile))
+	r.GET("/api/stats/count/files", get(s.countFiles))
+	r.GET("/api/stats/seen/files", get(s.getFilesSeenStats))
 }
 
-func (s *server) listFiles(c *gin.Context) {
+func (s *server) listFiles() (any, error) {
+	return nil, nil
 }
 
-func (s *server) countFiles(c *gin.Context) {
+func (s *server) countFiles() (any, error) {
 	files := s.files.ListFiles()
 
-	c.JSON(http.StatusOK, gin.H{
+	return gin.H{
 		"total":   len(files),
 		"deleted": lo.CountBy(files, func(file *model.File) bool { return !file.Exists }),
-	})
+	}, nil
 }
 
-func (s *server) getFile(c *gin.Context) {
+func (s *server) getFile() (any, error) {
+	return nil, nil
 }
 
-func (s *server) getFilesSeenStats(c *gin.Context) {
+func (s *server) getFilesSeenStats() (any, error) {
 	s1 := lo.GroupBy(s.files.ListFiles(), func(file *model.File) string {
 		y, m, _ := file.FirstSeen.Date()
 		return fmt.Sprintf("%04d-%02d", y, m)
@@ -40,5 +41,5 @@ func (s *server) getFilesSeenStats(c *gin.Context) {
 		return len(files)
 	})
 
-	c.JSON(http.StatusOK, s2)
+	return s2, nil
 }

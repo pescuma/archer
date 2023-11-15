@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"net/http"
 	"sort"
 
 	"github.com/gin-gonic/gin"
@@ -12,38 +11,39 @@ import (
 	"github.com/samber/lo"
 )
 
-func (s *server) initRepos(r *gin.Engine) {
-	r.GET("/api/repos", s.listRepos)
-	r.GET("/api/repos/:id", s.getRepo)
-	r.GET("/api/commits", s.listCommits)
-	r.GET("/api/stats/count/repos", s.countRepos)
-	r.GET("/api/stats/seen/repos", s.getReposSeenStats)
-	r.GET("/api/stats/seen/commits", s.getCommitsSeenStats)
-	r.GET("/api/stats/changed/lines", s.getChangedLines)
-	r.GET("/api/stats/survived/lines", s.getSurvivedLines)
+type GridParams struct {
+	Sort   string `form:"sort"`
+	Asc    bool   `form:"asc"`
+	Offset *int   `form:"offset"`
+	Limit  *int   `form:"limit"`
+}
+type ListRepoParams struct {
+	GridParams
+}
+type ListCommitParams struct {
+	GridParams
 }
 
-func (s *server) countRepos(c *gin.Context) {
+func (s *server) initRepos(r *gin.Engine) {
+	r.GET("/api/repos", getP[ListRepoParams](s.listRepos))
+	r.GET("/api/repos/:id", get(s.getRepo))
+	r.GET("/api/commits", getP[ListCommitParams](s.listCommits))
+	r.GET("/api/stats/count/repos", get(s.countRepos))
+	r.GET("/api/stats/seen/repos", get(s.getReposSeenStats))
+	r.GET("/api/stats/seen/commits", get(s.getCommitsSeenStats))
+	r.GET("/api/stats/changed/lines", get(s.getChangedLines))
+	r.GET("/api/stats/survived/lines", get(s.getSurvivedLines))
+}
+
+func (s *server) countRepos() (any, error) {
 	repos := s.repos.List()
 
-	c.JSON(http.StatusOK, gin.H{
+	return gin.H{
 		"total": len(repos),
-	})
+	}, nil
 }
 
-func (s *server) listRepos(c *gin.Context) {
-	type Params struct {
-		Sort   string `form:"sort"`
-		Asc    bool   `form:"asc"`
-		Offset *int   `form:"offset"`
-		Limit  *int   `form:"limit"`
-	}
-
-	params, err := bind[Params](c)
-	if err != nil {
-		return
-	}
-
+func (s *server) listRepos(params *ListRepoParams) (any, error) {
 	rs := s.repos.List()
 
 	var result []gin.H
@@ -55,23 +55,14 @@ func (s *server) listRepos(c *gin.Context) {
 
 	result = paginate(result, params.Offset, params.Limit)
 
-	c.JSON(http.StatusOK, result)
+	return result, nil
 }
 
-func (s *server) getRepo(c *gin.Context) {
+func (s *server) getRepo() (any, error) {
+	return nil, nil
 }
 
-func (s *server) listCommits(c *gin.Context) {
-	type Params struct {
-		Offset *int `form:"offset"`
-		Limit  *int `form:"limit"`
-	}
-
-	params, err := bind[Params](c)
-	if err != nil {
-		return
-	}
-
+func (s *server) listCommits(params *ListCommitParams) (any, error) {
 	type RC struct {
 		Repo   *model.Repository
 		Commit *model.RepositoryCommit
@@ -103,7 +94,7 @@ func (s *server) listCommits(c *gin.Context) {
 		result = append(result, s.toCommit(rc.Commit, rc.Repo))
 	}
 
-	c.JSON(http.StatusOK, result)
+	return result, nil
 }
 
 func (s *server) toRepo(repo *model.Repository) gin.H {
@@ -159,7 +150,7 @@ func encodeMetric(v int) *int {
 	return utils.IIf(v == -1, nil, &v)
 }
 
-func (s *server) getReposSeenStats(c *gin.Context) {
+func (s *server) getReposSeenStats() (any, error) {
 	s1 := lo.GroupBy(s.repos.List(), func(i *model.Repository) string {
 		y, m, _ := i.FirstSeen.Date()
 		return fmt.Sprintf("%04d-%02d", y, m)
@@ -168,10 +159,10 @@ func (s *server) getReposSeenStats(c *gin.Context) {
 		return len(is)
 	})
 
-	c.JSON(http.StatusOK, s2)
+	return s2, nil
 }
 
-func (s *server) getCommitsSeenStats(c *gin.Context) {
+func (s *server) getCommitsSeenStats() (any, error) {
 	s1 := lo.FlatMap(s.repos.List(), func(i *model.Repository, index int) []*model.RepositoryCommit {
 		return i.ListCommits()
 	})
@@ -186,10 +177,10 @@ func (s *server) getCommitsSeenStats(c *gin.Context) {
 		return len(is)
 	})
 
-	c.JSON(http.StatusOK, s4)
+	return s4, nil
 }
 
-func (s *server) getChangedLines(c *gin.Context) {
+func (s *server) getChangedLines() (any, error) {
 	s1 := lo.FlatMap(s.repos.List(), func(i *model.Repository, index int) []*model.RepositoryCommit {
 		return i.ListCommits()
 	})
@@ -208,14 +199,13 @@ func (s *server) getChangedLines(c *gin.Context) {
 		}
 	})
 
-	c.JSON(http.StatusOK, s4)
+	return s4, nil
 }
 
-func (s *server) getSurvivedLines(c *gin.Context) {
+func (s *server) getSurvivedLines() (any, error) {
 	s1, err := s.storage.ComputeSurvivedLines()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		return nil, err
 	}
 
 	s2 := lo.GroupBy(s1, func(i *archer.SurvivedLineCount) string {
@@ -243,5 +233,5 @@ func (s *server) getSurvivedLines(c *gin.Context) {
 		}
 	})
 
-	c.JSON(http.StatusOK, s3)
+	return s3, nil
 }

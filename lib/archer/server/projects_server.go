@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pescuma/archer/lib/archer/model"
@@ -10,28 +9,30 @@ import (
 )
 
 func (s *server) initProjects(r *gin.Engine) {
-	r.GET("/api/projects", s.listProjects)
-	r.GET("/api/projects/:id", s.getProject)
-	r.GET("/api/stats/count/projects", s.countProjects)
-	r.GET("/api/stats/seen/projects", s.getProjectsSeenStats)
+	r.GET("/api/projects", get(s.listProjects))
+	r.GET("/api/projects/:id", get(s.getProject))
+	r.GET("/api/stats/count/projects", get(s.countProjects))
+	r.GET("/api/stats/seen/projects", get(s.getProjectsSeenStats))
 }
 
-func (s *server) listProjects(c *gin.Context) {
+func (s *server) listProjects() (any, error) {
+	return nil, nil
 }
 
-func (s *server) countProjects(c *gin.Context) {
+func (s *server) countProjects() (any, error) {
 	all := s.projects.ListProjects(model.FilterAll)
 
-	c.JSON(http.StatusOK, gin.H{
+	return gin.H{
 		"total":    len(all),
 		"external": lo.CountBy(all, func(p *model.Project) bool { return p.IsExternalDependency() }),
-	})
+	}, nil
 }
 
-func (s *server) getProject(c *gin.Context) {
+func (s *server) getProject() (any, error) {
+	return nil, nil
 }
 
-func (s *server) getProjectsSeenStats(c *gin.Context) {
+func (s *server) getProjectsSeenStats() (any, error) {
 	s1 := lo.GroupBy(s.projects.ListProjects(model.FilterExcludeExternal), func(proj *model.Project) string {
 		y, m, _ := proj.FirstSeen.Date()
 		return fmt.Sprintf("%04d-%02d", y, m)
@@ -40,5 +41,5 @@ func (s *server) getProjectsSeenStats(c *gin.Context) {
 		return len(projs)
 	})
 
-	c.JSON(http.StatusOK, s2)
+	return s2, nil
 }
