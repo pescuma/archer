@@ -613,6 +613,8 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 		r.Data = decodeMap(sr.Data)
 		r.FirstSeen = sr.FirstSeen
 		r.LastSeen = sr.LastSeen
+		r.FilesTotal = sr.FilesTotal
+		r.FilesHead = sr.FilesHead
 	}
 
 	commitsById := map[model.UUID]*model.RepositoryCommit{}
@@ -1013,13 +1015,16 @@ func toSqlProductArea(a *model.ProductArea) *sqlProductArea {
 
 func toSqlRepository(r *model.Repository) *sqlRepository {
 	return &sqlRepository{
-		ID:        r.ID,
-		Name:      r.Name,
-		RootDir:   r.RootDir,
-		VCS:       r.VCS,
-		Data:      encodeMap(r.Data),
-		FirstSeen: r.FirstSeen,
-		LastSeen:  r.LastSeen,
+		ID:           r.ID,
+		Name:         r.Name,
+		RootDir:      r.RootDir,
+		VCS:          r.VCS,
+		Data:         encodeMap(r.Data),
+		FirstSeen:    r.FirstSeen,
+		LastSeen:     r.LastSeen,
+		CommitsTotal: r.CountCommits(),
+		FilesTotal:   r.FilesTotal,
+		FilesHead:    r.FilesHead,
 	}
 }
 

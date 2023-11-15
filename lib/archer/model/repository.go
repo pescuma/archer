@@ -16,6 +16,9 @@ type Repository struct {
 	FirstSeen time.Time
 	LastSeen  time.Time
 
+	FilesTotal int
+	FilesHead  int
+
 	commitsByHash map[string]*RepositoryCommit
 	commitsByID   map[UUID]*RepositoryCommit
 }
@@ -68,6 +71,10 @@ func (r *Repository) ContainsCommit(hash string) bool {
 
 func (r *Repository) ListCommits() []*RepositoryCommit {
 	return lo.Values(r.commitsByHash)
+}
+
+func (r *Repository) CountCommits() int {
+	return len(r.commitsByHash)
 }
 
 func (r *Repository) SeenAt(ts ...time.Time) {

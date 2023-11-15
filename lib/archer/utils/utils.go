@@ -258,3 +258,11 @@ func FindGitIgnore(path string) (func(string) bool, error) {
 func TruncateFilename(name string) string {
 	return truncate.Truncate(name, 30, "...", truncate.PositionMiddle)
 }
+
+func FirstUpper(str string) string {
+	if str == "" {
+		return ""
+	}
+
+	return strings.ToUpper(str[0:1]) + str[1:]
+}

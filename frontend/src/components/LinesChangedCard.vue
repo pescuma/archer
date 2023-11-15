@@ -131,9 +131,14 @@ onMounted(function () {
 
 <template>
   <CardWithPlaceholder ref="card" type="chart">
-    <h3 class="card-title">Lines changed</h3>
-    <div class="chart-lg">
-      <apexchart type="bar" height="240" :options="data.opts" :series="data.series" />
+    <div class="card-header">
+      <h3 class="card-title">Lines changed</h3>
+    </div>
+
+    <div class="card-body">
+      <div class="chart-lg">
+        <apexchart type="bar" height="240" :options="data.opts" :series="data.series" />
+      </div>
     </div>
   </CardWithPlaceholder>
 </template>

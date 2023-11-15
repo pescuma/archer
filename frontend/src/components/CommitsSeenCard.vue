@@ -3,16 +3,20 @@ import _ from 'lodash'
 import moment from 'moment/moment'
 import { onMounted, reactive, ref } from 'vue'
 import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
+import gravatarUrl from 'gravatar-url'
 
 const card = ref(null)
 
 const data = reactive({
   opts: {},
   series: [],
+  commits: [],
 })
 
 onMounted(function () {
-  card.value.request(['/api/stats/seen/repos', '/api/stats/seen/commits'], function (response) {
+  card.value.request(['/api/stats/seen/repos', '/api/stats/seen/commits', '/api/commits?limit=5'], function (response) {
+    data.commits = response[2]
+
     const labels = []
     const repos = []
     const commits = []
@@ -21,6 +25,7 @@ onMounted(function () {
 
     let format = 'YYYY-MM'
     let months = _.chain(response)
+      .take(2)
       .flatMap(function (i) {
         return _.keys(i)
       })
@@ -132,14 +137,39 @@ onMounted(function () {
     ]
   })
 })
+
+function createInitials(commit) {
+  let initials = commit.committer.name.split(' ').map(function (i) {
+    return i[0]
+  })
+
+  if (initials.length > 2) initials = [initials[0], initials[initials.length - 1]]
+
+  return initials.join('').toUpperCase()
+}
+
+function getGravatarStyle(commit) {
+  let candidates = commit.committer.emails.find(function (i) {
+    return !i.match(/@users.noreply.github.com$/)
+  })
+  if (!candidates) {
+    return ''
+  }
+
+  return 'background-image: url(' + gravatarUrl(candidates[0], { default: 'blank' }) + ')'
+}
 </script>
 
 <template>
   <CardWithPlaceholder ref="card" type="chart">
-    <h3 class="card-title">Commits</h3>
+    <div class="card-header">
+      <h3 class="card-title">Commits</h3>
+    </div>
 
-    <div class="chart-lg card-title">
-      <apexchart type="line" height="240" :options="data.opts" :series="data.series" />
+    <div class="card-body">
+      <div class="chart-lg">
+        <apexchart type="line" height="240" :options="data.opts" :series="data.series" />
+      </div>
     </div>
 
     <div class="card-table border-top table-responsive">
@@ -147,59 +177,29 @@ onMounted(function () {
         <thead>
           <tr>
             <th>User</th>
+            <th>Repo</th>
             <th>Commit</th>
             <th>Date</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
+          <tr v-for="c in data.commits" :key="c.id">
             <td class="w-1">
-              <span class="avatar avatar-sm" style="background-image: url(./static/avatars/000m.jpg)"></span>
+              <span class="avatar avatar-sm" :style="getGravatarStyle(c)">{{ createInitials(c) }}</span>
+            </td>
+            <td class="w-2">
+              <div class="text-truncate">{{ c.repo.name }}</div>
             </td>
             <td class="td-truncate">
-              <div class="text-truncate">Fix dart Sass compatibility (#29755)</div>
+              <div class="text-truncate">{{ c.message }}</div>
             </td>
-            <td class="text-nowrap text-muted">28 Nov 2019</td>
-          </tr>
-          <tr>
-            <td class="w-1">
-              <span class="avatar avatar-sm">JL</span>
-            </td>
-            <td class="td-truncate">
-              <div class="text-truncate">Change deprecated html tags to text decoration classes (#29604)</div>
-            </td>
-            <td class="text-nowrap text-muted">27 Nov 2019</td>
-          </tr>
-          <tr>
-            <td class="w-1">
-              <span class="avatar avatar-sm" style="background-image: url(./static/avatars/002m.jpg)"></span>
-            </td>
-            <td class="td-truncate">
-              <div class="text-truncate">justify-content:between ⇒ justify-content:space-between (#29734)</div>
-            </td>
-            <td class="text-nowrap text-muted">26 Nov 2019</td>
-          </tr>
-          <tr>
-            <td class="w-1">
-              <span class="avatar avatar-sm" style="background-image: url(./static/avatars/003m.jpg)"></span>
-            </td>
-            <td class="td-truncate">
-              <div class="text-truncate">Update change-version.js (#29736)</div>
-            </td>
-            <td class="text-nowrap text-muted">26 Nov 2019</td>
-          </tr>
-          <tr>
-            <td class="w-1">
-              <span class="avatar avatar-sm" style="background-image: url(./static/avatars/000f.jpg)"></span>
-            </td>
-            <td class="td-truncate">
-              <div class="text-truncate">Regenerate package-lock.json (#29730)</div>
-            </td>
-            <td class="text-nowrap text-muted">25 Nov 2019</td>
+            <td class="text-nowrap text-muted">{{ moment(c.date).format('YYYY-MM-DD') }}</td>
           </tr>
         </tbody>
       </table>
     </div>
+
+    <div class="card-footer"></div>
   </CardWithPlaceholder>
 </template>
 

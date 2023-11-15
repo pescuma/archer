@@ -151,6 +151,10 @@ type sqlRepository struct {
 	RootDir string `gorm:"uniqueIndex"`
 	VCS     string
 
+	CommitsTotal int
+	FilesTotal   int
+	FilesHead    int
+
 	Data      map[string]string `gorm:"serializer:json"`
 	FirstSeen time.Time
 	LastSeen  time.Time

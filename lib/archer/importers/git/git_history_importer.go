@@ -10,6 +10,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/utils/diff"
+	"github.com/hashicorp/go-set/v2"
 	"github.com/hexops/gotextdiff"
 	"github.com/hexops/gotextdiff/myers"
 	"github.com/pkg/errors"
@@ -97,6 +98,11 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 			return err
 		}
 
+		repo.FilesHead, err = g.countFilesAtHEAD(gitRepo)
+		if err != nil {
+			return err
+		}
+
 		if g.options.SaveEvery != nil {
 			err = g.writeResults(storage, filesDB, repo)
 			if err != nil {
@@ -137,6 +143,34 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 	}
 
 	return nil
+}
+
+func (g *gitHistoryImporter) countFilesAtHEAD(gitRepo *git.Repository) (int, error) {
+	gitHead, err := gitRepo.Head()
+	if err != nil {
+		return 0, err
+	}
+
+	gitCommit, err := gitRepo.CommitObject(gitHead.Hash())
+	if err != nil {
+		return 0, err
+	}
+
+	gitTree, err := gitCommit.Tree()
+	if err != nil {
+		return 0, err
+	}
+
+	result := 0
+	err = gitTree.Files().ForEach(func(gitFile *object.File) error {
+		result++
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return result, nil
 }
 
 func (g *gitHistoryImporter) countCommitsToImport(repo *model.Repository, gitRepo *git.Repository) (int, error) {
@@ -570,6 +604,8 @@ func (g *gitHistoryImporter) propagateChangesToParents(reposDB *model.Repositori
 	now := time.Now()
 
 	for _, repo := range reposDB.List() {
+		files := set.New[*model.File](1000)
+
 		for _, c := range repo.ListCommits() {
 			inLast6Months := now.Sub(c.Date) < 6*30*24*time.Hour
 			addChanges := func(c *model.Changes) {
@@ -591,6 +627,8 @@ func (g *gitHistoryImporter) propagateChangesToParents(reposDB *model.Repositori
 				}
 
 				file := filesDB.GetFileByID(cf.FileID)
+				files.Insert(file)
+
 				addChanges(file.Changes)
 				addLines(file.Changes)
 
@@ -625,6 +663,8 @@ func (g *gitHistoryImporter) propagateChangesToParents(reposDB *model.Repositori
 				addChanges(a.Changes)
 			}
 		}
+
+		repo.FilesTotal = files.Size()
 	}
 }
 

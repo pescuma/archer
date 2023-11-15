@@ -19,15 +19,17 @@ onMounted(function () {
 
 <template>
   <CardWithPlaceholder ref="card" type="count">
-    <div class="row align-items-center">
-      <div class="col-auto">
-        <span class="bg-lime text-white avatar">
-          <IconDatabase />
-        </span>
-      </div>
-      <div class="col">
-        <div class="font-weight-medium">{{ data.text }}</div>
-        <div class="text-muted">{{ data.details }}</div>
+    <div class="card-body">
+      <div class="row align-items-center">
+        <div class="col-auto">
+          <span class="bg-lime text-white avatar">
+            <IconDatabase />
+          </span>
+        </div>
+        <div class="col">
+          <div class="font-weight-medium">{{ data.text }}</div>
+          <div class="text-muted">{{ data.details }}</div>
+        </div>
       </div>
     </div>
   </CardWithPlaceholder>
