@@ -1,5 +1,4 @@
 <script setup>
-import axios from 'axios'
 import DataGrid from '@/components/DataGrid.vue'
 
 const columns = [
@@ -31,13 +30,12 @@ const columns = [
 ]
 
 async function loadRowCount() {
-  let result = await axios.get('/api/stats/count/repos')
-  return result.data.total
+  let result = await window.api.get('/api/stats/count/repos')
+  return result.total
 }
 
 async function loadPage(page, pageSize, sort, asc) {
-  let result = await axios.get(`/api/repos?sort=${sort}&asc=${asc}&offset=${(page - 1) * pageSize}&limit=${pageSize}`)
-  return result.data
+  return await window.api.get(`/api/repos?sort=${sort}&asc=${asc}&offset=${(page - 1) * pageSize}&limit=${pageSize}`)
 }
 </script>
 

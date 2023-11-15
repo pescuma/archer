@@ -34,12 +34,12 @@ function loadPage(p) {
 </script>
 
 <template>
-  <div class="card-footer d-flex align-items-center">
+  <div class="card-footer d-flex align-items-center" v-if="pagination.pageCount > 1">
     <p class="m-0 text-muted">
       Showing <span>{{ pagination.start.toLocaleString() }}</span> to <span>{{ pagination.end.toLocaleString() }}</span> of
       <span>{{ data.count.toLocaleString() }}</span> entries
     </p>
-    <ul class="pagination m-0 ms-auto" v-if="pagination.pageCount > 1">
+    <ul class="pagination m-0 ms-auto">
       <li :class="'page-item' + (pagination.hasPrev ? '' : ' disabled')">
         <a class="page-link" @click.prevent="loadPage(data.page - 1)" :aria-disabled="pagination.hasPrev">
           <IconChevronLeft class="icon" />

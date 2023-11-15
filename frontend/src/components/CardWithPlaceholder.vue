@@ -56,40 +56,12 @@ function request(urls, cb) {
     explode = true
   }
 
-  let responses = {}
-  let toFetch = []
-  for (let url of urls) {
-    let cached = cache.get(url)
-    if (cached) {
-      responses[url] = cached
-    } else {
-      toFetch.push(url)
-    }
-  }
-
-  Promise.all(
-    toFetch.map(function (url) {
-      return axios.get(url)
-    })
-  )
-    .then((response) => {
+  Promise.all(urls.map(window.api.get))
+    .then((responses) => {
       try {
-        for (let i = 0; i < toFetch.length; i++) {
-          let url = toFetch[i]
-          let data = response[i].data
-          cache.set(url, data)
-          responses[url] = data
-        }
+        if (explode) responses = responses[0]
 
-        let ds = []
-        for (let i = 0; i < urls.length; i++) {
-          let url = urls[i]
-          ds.push(responses[url])
-        }
-
-        if (explode) ds = ds[0]
-
-        cb(ds)
+        cb(responses)
         stopLoading()
       } catch (e) {
         stopLoading('Error parsing result', e)
