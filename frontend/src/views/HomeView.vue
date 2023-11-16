@@ -9,10 +9,6 @@ import LinesSurvivedCard from '@/components/LinesSurvivedCard.vue'
 import FilesSeenCard from '@/components/FilesSeenCard.vue'
 import PeopleSeenCard from '@/components/PeopleSeenCard.vue'
 import { onMounted } from 'vue'
-
-onMounted(function () {
-  console.log('on mounted home view')
-})
 </script>
 
 <template>

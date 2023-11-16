@@ -652,9 +652,9 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 }
 
 func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.StorageChanges) error {
-	changedRepos := changed(changes, archer.ChangedBasicInfo)
-	changedCommits := changed(changes, archer.ChangedHistory)
-	changedFiles := changed(changes, archer.ChangedHistory)
+	changedRepos := changed(changes, archer.ChangedBasicInfo|archer.ChangedHistory)
+	changedCommits := changed(changes, archer.ChangedHistory|archer.ChangedChanges)
+	changedFiles := changed(changes, archer.ChangedHistory|archer.ChangedChanges)
 
 	var sqlRepos []*sqlRepository
 	if changedRepos {

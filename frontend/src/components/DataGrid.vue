@@ -1,9 +1,9 @@
 <script setup>
 import _ from 'lodash'
 import moment from 'moment/moment'
-import { computed, onMounted, reactive, ref } from 'vue'
-import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { IconChevronDown, IconChevronUp } from '@tabler/icons-vue'
+import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
 import PaginationCardFooter from '@/components/PaginationCardFooter.vue'
 
 const card = ref(null)
@@ -27,55 +27,81 @@ const columns = computed(() => {
   let result = []
 
   for (let c of props.columns) {
-    let r = {
+    let rc = {
       name: c.name,
-      field: c.field,
+      sort: c.field,
       size: c.size,
       th_class: '',
       td_class: '',
       style: '',
       defaultAsc: true,
+      format: function (r) {
+        if (c.format) return c.format(r)
+        else return _.get(r, c.field)
+      },
+      tooltip: function (r) {
+        if (c.tooltip) return c.tooltip(r)
+        else return undefined
+      },
     }
 
     switch (c.type) {
       case 'text': {
-        r.format = function (v) {
-          return v
+        let fullFormat = rc.format
+        rc.format = function (r) {
+          let v = fullFormat(r)
+          return _.chain(v.split('\n'))
+            .map((s) => _.trim(s))
+            .filter((s) => s.length > 0)
+            .first()
+            .value()
+        }
+        rc.tooltip = function (r) {
+          if (c.tooltip) return c.tooltip(r)
+
+          let v = fullFormat(r)
+          if (rc.format(r) !== v) return v
+          else return undefined
         }
         break
       }
       case 'int': {
-        r.th_class = 'w-1 text-end'
-        r.td_class = 'text-end'
-        r.defaultAsc = false
-        r.format = function (v) {
-          return Math.round(v).toLocaleString()
+        rc.th_class = 'w-1 text-end'
+        rc.td_class = 'text-end'
+        rc.defaultAsc = false
+        rc.format = function (r) {
+          if (c.format) return c.format(r)
+          else return Math.round(_.get(r, c.field)).toLocaleString()
         }
         break
       }
       case 'float': {
-        r.th_class = 'w-1 text-end'
-        r.td_class = 'text-end'
-        r.defaultAsc = false
-        r.format = function (v) {
-          return Math.round(Math.round(v * 100) / 100).toLocaleString()
+        rc.th_class = 'w-1 text-end'
+        rc.td_class = 'text-end'
+        rc.defaultAsc = false
+        rc.format = function (r) {
+          if (c.format) return c.format(r)
+          return Math.round(Math.round(_.get(r, c.field) * 100) / 100).toLocaleString()
         }
         break
       }
       case 'date': {
-        r.th_class = 'w-1 text-end'
-        r.td_class = 'text-end'
-        r.defaultAsc = false
-        r.format = function (v) {
-          return moment(v).toDate().toLocaleDateString()
+        rc.th_class = 'w-1 text-end'
+        rc.td_class = 'text-end'
+        rc.defaultAsc = false
+        rc.format = function (r) {
+          if (c.format) return c.format(r)
+          else return moment(_.get(r, c.field)).toDate().toLocaleDateString()
         }
         break
       }
       case 'datetime': {
-        r.th_class = 'w-1'
-        r.defaultAsc = false
-        r.format = function (v) {
-          return moment(v).toDate().toLocaleString()
+        rc.size = 'l'
+        rc.th_class = 'w-1'
+        rc.defaultAsc = false
+        rc.format = function (r) {
+          if (c.format) return c.format(r)
+          else return moment(_.get(r, c.field)).toDate().toLocaleString()
         }
         break
       }
@@ -84,22 +110,25 @@ const columns = computed(() => {
       }
     }
 
-    r.td_class += ' text-truncate'
+    rc.td_class += ' text-truncate'
 
-    switch (c.size) {
+    switch (rc.size) {
       case 's':
-        r.th_class += ' w-1'
-        r.style = 'max-width: 100px'
+        rc.th_class += ' w-1'
+        rc.style = 'max-width: 50px'
         break
       case 'l':
-        r.style = 'max-width: 400px'
+        rc.style = 'max-width: 200px'
+        break
+      case 'xl':
+        rc.style = 'max-width: 400px'
         break
       default:
-        r.style = 'max-width: 200px'
+        rc.style = 'max-width: 100px'
         break
     }
 
-    result.push(r)
+    result.push(rc)
   }
 
   return result
@@ -117,6 +146,14 @@ async function loadPage(page, sort, asc) {
   data.page = page
   data.sort = sort
   data.asc = asc
+
+  await nextTick()
+
+  document.querySelectorAll('.text-truncate').forEach(function (e) {
+    if (!e.title && e.offsetWidth < e.scrollWidth) {
+      e.title = e.textContent
+    }
+  })
 }
 
 function page(p) {
@@ -128,16 +165,16 @@ function sort(field) {
     loadPage(data.page, data.sort, !data.asc)
   } else {
     let c = _.chain(columns.value)
-      .filter((c) => c.field === field)
+      .filter((c) => c.sort === field)
       .first()
       .value()
-    loadPage(data.page, c.field, c.defaultAsc)
+    loadPage(data.page, c.sort, c.defaultAsc)
   }
 }
 
 onMounted(async function () {
   let c = columns.value[0]
-  loadPage(1, c.field, c.defaultAsc)
+  await loadPage(1, c.sort, c.defaultAsc)
 })
 </script>
 
@@ -148,20 +185,20 @@ onMounted(async function () {
     </div>
 
     <div class="table-responsive border-bottom-0">
-      <table class="card-table table table-vcenter text-nowrap text-truncate">
+      <table class="card-table table table-vcenter text-nowrap">
         <thead>
           <tr>
-            <th v-for="c in columns" :class="c.th_class" @click.prevent="sort(c.field)">
+            <th v-for="c in columns" :class="c.th_class" @click.prevent="sort(c.sort)">
               {{ c.name }}
-              <IconChevronUp class="icon icon-sm icon-thick" v-if="c.field === data.sort && data.asc" />
-              <IconChevronDown class="icon icon-sm icon-thick" v-if="c.field === data.sort && !data.asc" />
+              <IconChevronUp class="icon icon-sm icon-thick" v-if="c.sort === data.sort && data.asc" />
+              <IconChevronDown class="icon icon-sm icon-thick" v-if="c.sort === data.sort && !data.asc" />
             </th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="r in data.pageRows">
-            <td v-for="c in columns" :class="c.td_class" :style="c.style" :title="c.size === 'l' ? c.format(_.get(r, c.field)) : undefined">
-              {{ c.format(_.get(r, c.field)) }}
+            <td v-for="c in columns" :class="c.td_class" :style="c.style" :title="c.tooltip(r)">
+              {{ c.format(r) }}
             </td>
           </tr>
         </tbody>

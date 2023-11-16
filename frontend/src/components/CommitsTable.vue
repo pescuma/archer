@@ -14,6 +14,13 @@ const columns = [
     size: 's',
   },
   {
+    name: 'Hash',
+    field: 'hash',
+    type: 'text',
+    format: (v) => v.hash.slice(0, 7),
+    tooltip: (v) => v.hash,
+  },
+  {
     name: 'Message',
     field: 'message',
     type: 'text',

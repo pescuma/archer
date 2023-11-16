@@ -76,6 +76,8 @@ func (s *server) sortCommits(col []RepoAndCommit, field string, asc *bool) error
 	switch field {
 	case "repo.name":
 		return sortBy(col, func(r RepoAndCommit) string { return r.Repo.Name }, *asc)
+	case "hash":
+		return sortBy(col, func(r RepoAndCommit) string { return r.Commit.Hash }, *asc)
 	case "message":
 		return sortBy(col, func(r RepoAndCommit) string { return r.Commit.Message }, *asc)
 	case "date":
@@ -106,6 +108,7 @@ func (s *server) toCommit(commit *model.RepositoryCommit, repo *model.Repository
 	return gin.H{
 		"repo":          s.toRepoReference(repo),
 		"id":            commit.ID,
+		"hash":          commit.Hash,
 		"message":       commit.Message,
 		"date":          commit.Date,
 		"parents":       commit.Parents,

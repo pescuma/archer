@@ -4,10 +4,6 @@ import LinesSurvivedCard from '@/components/LinesSurvivedCard.vue'
 import LinesChangedCard from '@/components/LinesChangedCard.vue'
 import { onMounted } from 'vue'
 import CommitsTable from '@/components/CommitsTable.vue'
-
-onMounted(function () {
-  console.log('on mounted repositories view')
-})
 </script>
 
 <template>

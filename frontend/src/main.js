@@ -26,7 +26,6 @@ api.get = async function (url) {
   api.cache.set(url, response.data)
   return response.data
 }
-
 window.api = api
 
 const app = createApp(App)

@@ -105,7 +105,7 @@ onMounted(function () {
         },
       },
       labels: labels,
-      colors: [tabler.getColor('azure'), tabler.getColor('orange'), tabler.getColor('gray-100')],
+      colors: [tabler.getColor('blue'), '#1ab7ea', tabler.getColor('gray-300')],
       legend: {
         show: false,
       },
