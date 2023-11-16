@@ -81,6 +81,8 @@ func (r *Repository) SeenAt(ts ...time.Time) {
 	empty := time.Time{}
 
 	for _, t := range ts {
+		t = t.UTC().Round(time.Second)
+
 		if r.FirstSeen == empty || t.Before(r.FirstSeen) {
 			r.FirstSeen = t
 		}

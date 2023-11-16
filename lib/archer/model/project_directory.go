@@ -30,6 +30,8 @@ func (d *ProjectDirectory) SeenAt(ts ...time.Time) {
 	empty := time.Time{}
 
 	for _, t := range ts {
+		t = t.UTC().Round(time.Second)
+
 		if d.FirstSeen == empty || t.Before(d.FirstSeen) {
 			d.FirstSeen = t
 		}

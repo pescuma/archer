@@ -67,6 +67,8 @@ func (p *Person) SeenAt(ts ...time.Time) {
 	empty := time.Time{}
 
 	for _, t := range ts {
+		t = t.UTC().Round(time.Second)
+
 		if p.FirstSeen == empty || t.Before(p.FirstSeen) {
 			p.FirstSeen = t
 		}

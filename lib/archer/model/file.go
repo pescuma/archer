@@ -81,6 +81,8 @@ func (f *File) SeenAt(ts ...time.Time) {
 	empty := time.Time{}
 
 	for _, t := range ts {
+		t = t.UTC().Round(time.Second)
+
 		if f.FirstSeen == empty || t.Before(f.FirstSeen) {
 			f.FirstSeen = t
 		}
