@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"sort"
 
@@ -9,23 +10,18 @@ import (
 	"golang.org/x/exp/constraints"
 )
 
-func getP[P any](f func(*P) (any, error)) func(c *gin.Context) {
-	return func(c *gin.Context) {
-		var params P
+var errorNotFound error
 
-		err := c.BindQuery(&params)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
+func init() {
+	errorNotFound = fmt.Errorf("not found")
+}
 
-		result, err := f(&params)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.JSON(http.StatusOK, result)
+func sendError(c *gin.Context, err error) {
+	switch err {
+	case errorNotFound:
+		c.String(http.StatusNotFound, "")
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
 }
 
@@ -33,7 +29,53 @@ func get(f func() (any, error)) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		result, err := f()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			sendError(c, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, result)
+	}
+}
+
+func getP[P any](f func(*P) (any, error)) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		var params P
+
+		err := c.ShouldBindQuery(&params)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		result, err := f(&params)
+		if err != nil {
+			sendError(c, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, result)
+	}
+}
+
+func patchP[P any](f func(*P) (any, error)) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		var params P
+
+		err := c.ShouldBindUri(&params)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		err = c.ShouldBindJSON(&params)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		result, err := f(&params)
+		if err != nil {
+			sendError(c, err)
 			return
 		}
 

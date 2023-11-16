@@ -2,10 +2,26 @@ package server
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pescuma/archer/lib/archer/model"
+	"github.com/samber/lo"
 )
+
+func (s *server) filterRepos(col []*model.Repository, name string) []*model.Repository {
+	if name != "" {
+		name = strings.ToLower(name)
+	}
+
+	return lo.Filter(col, func(i *model.Repository, index int) bool {
+		if name != "" && !strings.Contains(strings.ToLower(i.Name), name) {
+			return false
+		}
+
+		return true
+	})
+}
 
 func (s *server) sortRepos(col []*model.Repository, field string, asc *bool) error {
 	if field == "" {
@@ -62,6 +78,24 @@ func (s *server) toRepoReference(repo *model.Repository) gin.H {
 type RepoAndCommit struct {
 	Repo   *model.Repository
 	Commit *model.RepositoryCommit
+}
+
+func (s *server) filterCommits(col []RepoAndCommit, repoName string) []RepoAndCommit {
+	if repoName != "" {
+		repoName = strings.ToLower(repoName)
+	}
+
+	return lo.Filter(col, func(i RepoAndCommit, index int) bool {
+		if i.Commit.Ignore {
+			return false
+		}
+
+		if repoName != "" && !strings.Contains(strings.ToLower(i.Repo.Name), repoName) {
+			return false
+		}
+
+		return true
+	})
 }
 
 func (s *server) sortCommits(col []RepoAndCommit, field string, asc *bool) error {

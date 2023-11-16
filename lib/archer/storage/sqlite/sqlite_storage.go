@@ -418,17 +418,19 @@ func (s *sqliteStorage) ComputeBlamePerAuthor() ([]*archer.BlamePerAuthor, error
 	return result, nil
 }
 
-func (s *sqliteStorage) ComputeSurvivedLines() ([]*archer.SurvivedLineCount, error) {
+func (s *sqliteStorage) ComputeSurvivedLines(repoName string) ([]*archer.SurvivedLineCount, error) {
 	var result []*archer.SurvivedLineCount
 
 	err := s.db.Raw(`
 		select strftime('%Y-%m', c.date) month, l.type line_type, count(*) lines
 		from file_lines l
 				 join repository_commits c
-					  on l.commit_id = c.id
-		where c.ignore = 0
+					  on c.id = l.commit_id
+				 join repositories r
+					  on r.id = c.repository_id
+		where c.ignore = 0 and r.name like ?
 		group by 1, 2
-		`).Scan(&result).Error
+		`, "%"+repoName+"%").Scan(&result).Error
 	if err != nil {
 		return nil, err
 	}
@@ -718,6 +720,49 @@ func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.S
 
 		addList(&s.repoCommitFiles, sqlCommitFiles, func(s *sqlRepositoryCommitFile) model.UUID { return s.CommitID + "\n" + s.FileID })
 	}
+
+	// TODO delete
+
+	return nil
+}
+
+func (s *sqliteStorage) WriteCommit(repo *model.Repository, commit *model.RepositoryCommit, info archer.StorageChanges) error {
+	var sqlCommits []*sqlRepositoryCommit
+
+	sc := toSqlRepositoryCommit(repo, commit)
+	if prepareChange(&s.repoCommits, sc.ID, sc) {
+		sqlCommits = append(sqlCommits, sc)
+	}
+
+	var sqlCommitFiles []*sqlRepositoryCommitFile
+	for _, c := range repo.ListCommits() {
+		for _, f := range c.Files {
+			sf := toSqlRepositoryCommitFile(repo, c, f)
+			if prepareChange(&s.repoCommitFiles, sf.CommitID+"\n"+sf.FileID, sf) {
+				sqlCommitFiles = append(sqlCommitFiles, sf)
+			}
+		}
+	}
+
+	now := time.Now().Local()
+	db := s.db.Session(&gorm.Session{
+		NowFunc:         func() time.Time { return now },
+		CreateBatchSize: 1000,
+	})
+
+	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommits).Error
+	if err != nil {
+		return err
+	}
+
+	addList(&s.repoCommits, sqlCommits, func(s *sqlRepositoryCommit) model.UUID { return s.ID })
+
+	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommitFiles).Error
+	if err != nil {
+		return err
+	}
+
+	addList(&s.repoCommitFiles, sqlCommitFiles, func(s *sqlRepositoryCommitFile) model.UUID { return s.CommitID + "\n" + s.FileID })
 
 	// TODO delete
 

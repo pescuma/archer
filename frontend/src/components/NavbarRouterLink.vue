@@ -13,7 +13,7 @@ const props = defineProps({
     <li :class="isActive ? 'nav-item active' : 'nav-item'">
       <a class="nav-link" :href="href" @click="navigate">
         <span class="nav-link-icon d-md-none d-lg-inline-block">
-          <i :class="'icon ti ti-' + props.icon"></i>
+          <component :is="'icon-' + props.icon" class="icon" />
         </span>
         <span class="nav-link-title">{{ props.text }}</span>
       </a>

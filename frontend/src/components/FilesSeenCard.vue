@@ -3,6 +3,7 @@ import _ from 'lodash'
 import moment from 'moment/moment'
 import { onMounted, reactive, ref } from 'vue'
 import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
+import { filters } from '@/utils/filters'
 
 const card = ref(null)
 
@@ -12,7 +13,9 @@ const data = reactive({
 })
 
 onMounted(function () {
-  card.value.request(['/api/stats/seen/files', '/api/stats/seen/projects'], function (response) {
+  let f = filters.toQueryString({ repo_name: 'repo.name' })
+
+  card.value.request([`/api/stats/seen/files?${f}`, `/api/stats/seen/projects?${f}`], function (response) {
     const labels = []
     const files = []
     const projs = []

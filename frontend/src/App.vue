@@ -1,39 +1,34 @@
 <script setup>
-import { reactive } from 'vue'
+import _ from 'lodash'
 import { RouterView } from 'vue-router'
-import { IconMoon, IconSun } from '@tabler/icons-vue'
 import NavbarRouterLink from '@/components/NavbarRouterLink.vue'
+import { api } from '@/utils/api'
+import { filters } from '@/utils/filters'
+import { theme } from '@/utils/theme'
+import { computed, reactive } from 'vue'
 
-const THEME_STORAGE_KEY = 'theme'
-const LIGHT = 'light'
-const DARK = 'dark'
+window.api = api
 
-const data = reactive({
-  theme: localStorage.getItem(THEME_STORAGE_KEY) || LIGHT,
+theme.init()
+
+const fui = reactive({
+  filters: filters.data,
+  patch: filters.patch,
+  clear: filters.clear,
+  visible: false,
 })
 
-setTheme()
-
-function setTheme() {
-  if (data.theme === DARK) {
-    document.body.setAttribute('data-bs-theme', DARK)
-  } else {
-    document.body.removeAttribute('data-bs-theme')
+fui.count = computed(() => {
+  let result = 0
+  for (let f in filters.data) {
+    if (filters.data[f]) result++
   }
-}
-
-function toggleTheme() {
-  if (data.theme === LIGHT) data.theme = DARK
-  else data.theme = LIGHT
-
-  localStorage.setItem(THEME_STORAGE_KEY, data.theme)
-
-  setTheme()
-}
+  return result
+})
 </script>
 
 <template>
-  <div class="page">
+  <div :class="'page ' + (api.loading ? 'cursor-loading' : '')">
     <!-- Navbar -->
     <div class="sticky-top">
       <header class="navbar navbar-expand-md d-print-none">
@@ -45,13 +40,13 @@ function toggleTheme() {
               <a
                 href="#"
                 class="nav-link px-0"
-                :title="data.theme === LIGHT ? 'Enable dark mode' : 'Enable light mode'"
+                :title="theme.isDark() ? 'Enable dark mode' : 'Enable light mode'"
                 data-bs-toggle="tooltip"
                 data-bs-placement="bottom"
-                @click.prevent="toggleTheme"
+                @click.prevent="theme.toggle"
               >
-                <IconMoon class="icon" v-if="data.theme === LIGHT" />
-                <IconSun class="icon" v-else />
+                <icon-sun class="icon" v-if="theme.isDark()" />
+                <icon-moon class="icon" v-else />
               </a>
             </div>
           </div>
@@ -67,12 +62,71 @@ function toggleTheme() {
               </ul>
             </div>
           </div>
+
+          <div v-if="api.loading" style="float: right; position: absolute; right: 10px">
+            <div class="spinner-border text-blue" role="status"></div>
+          </div>
+          <div v-if="!api.loading && api.errors" style="float: right; position: absolute; right: 10px" class="text-red" :title="api.errors">
+            <icon-alert-triangle class="icon" />
+          </div>
         </div>
       </header>
     </div>
 
     <div class="page-wrapper">
-      <RouterView />
+      <div class="page-body">
+        <div class="container-xl">
+          <div class="row row-deck row-cards">
+            <div class="col-12">
+              <form class="card">
+                <div class="card-header">
+                  <h3 class="card-title">
+                    Filters
+                    <span class="badge ms-1" v-if="fui.count > 0">{{ fui.count }}</span>
+                  </h3>
+                  <div class="card-actions btn-actions">
+                    <a href="#" class="btn-action" v-if="fui.count > 0" @click.prevent="fui.clear()">
+                      <icon-trash class="icon" />
+                    </a>
+                    <a href="#" class="btn-action" @click.prevent="fui.visible = !fui.visible">
+                      <icon-chevron-up class="icon" v-if="fui.visible" />
+                      <icon-chevron-down class="icon" v-else />
+                    </a>
+                  </div>
+                </div>
+                <div class="card-body" v-if="fui.visible">
+                  <div class="row">
+                    <div class="col-4">
+                      <div class="mb-3">
+                        <label class="form-label">Repository name</label>
+                        <div class="input-group mb-2">
+                          <input
+                            type="text"
+                            class="form-control"
+                            :value="fui.filters.repo_name"
+                            @input="
+                              (event) => {
+                                _.debounce(() => {
+                                  fui.filters.repo_name = event.target.value
+                                }, 1000)()
+                              }
+                            "
+                          />
+                          <a href="#" class="btn btn-icon text-muted" @click.prevent="fui.filters.repo_name = ''">
+                            <icon-trash class="icon" />
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <RouterView />
+          </div>
+        </div>
+      </div>
 
       <footer class="footer footer-transparent d-print-none">
         <div class="container-xl">

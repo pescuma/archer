@@ -2,7 +2,6 @@
 import _ from 'lodash'
 import moment from 'moment/moment'
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
-import { IconChevronDown, IconChevronUp } from '@tabler/icons-vue'
 import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
 import PaginationCardFooter from '@/components/PaginationCardFooter.vue'
 
@@ -11,6 +10,7 @@ const card = ref(null)
 const props = defineProps({
   title: String,
   columns: Array,
+  actions: Array,
   loadPage: Function,
 })
 
@@ -31,6 +31,7 @@ const columns = computed(() => {
       name: c.name,
       sort: c.field,
       size: c.size,
+      actions: c.actions,
       th_class: '',
       td_class: '',
       style: '',
@@ -110,21 +111,19 @@ const columns = computed(() => {
       }
     }
 
-    rc.td_class += ' text-truncate'
-
     switch (rc.size) {
       case 's':
         rc.th_class += ' w-1'
-        rc.style = 'max-width: 50px'
+        rc.style = 'max-width: 60px'
         break
       case 'l':
-        rc.style = 'max-width: 200px'
+        rc.style = 'max-width: 240px'
         break
       case 'xl':
-        rc.style = 'max-width: 400px'
+        rc.style = 'max-width: 360px'
         break
       default:
-        rc.style = 'max-width: 100px'
+        rc.style = 'max-width: 120px'
         break
     }
 
@@ -135,8 +134,6 @@ const columns = computed(() => {
 })
 
 async function loadPage(page, sort, asc) {
-  if (page === data.page && sort === data.sort && asc === data.asc) return
-
   let result = await card.value.loading(async function () {
     return await props.loadPage(page, data.pageSize, sort, asc)
   })
@@ -172,10 +169,20 @@ function sort(field) {
   }
 }
 
+function click(r, a) {
+  a.onClick(r)
+}
+
+function refresh() {
+  loadPage(data.page, data.sort, data.asc)
+}
+
 onMounted(async function () {
   let c = columns.value[0]
   await loadPage(1, c.sort, c.defaultAsc)
 })
+
+defineExpose({ refresh })
 </script>
 
 <template>
@@ -190,15 +197,35 @@ onMounted(async function () {
           <tr>
             <th v-for="c in columns" :class="c.th_class" @click.prevent="sort(c.sort)">
               {{ c.name }}
-              <IconChevronUp class="icon icon-sm icon-thick" v-if="c.sort === data.sort && data.asc" />
-              <IconChevronDown class="icon icon-sm icon-thick" v-if="c.sort === data.sort && !data.asc" />
+              <icon-chevron-up class="icon icon-sm icon-thick" v-if="c.sort === data.sort && data.asc" />
+              <icon-chevron-down class="icon icon-sm icon-thick" v-if="c.sort === data.sort && !data.asc" />
             </th>
+            <th v-if="actions" class="w-1"></th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="r in data.pageRows">
             <td v-for="c in columns" :class="c.td_class" :style="c.style" :title="c.tooltip(r)">
-              {{ c.format(r) }}
+              <div class="row">
+                <div class="col-auto text-truncate text-nowrap">
+                  <a
+                    v-for="a in c.actions"
+                    href="#"
+                    class="text-decoration-none float-end ms-1"
+                    :title="a.name"
+                    @click.prevent="click(r, a)"
+                  >
+                    <component :is="'icon-' + a.icon" class="icon icon-sm align-text-bottom" />
+                  </a>
+
+                  {{ c.format(r) }}
+                </div>
+              </div>
+            </td>
+            <td v-if="actions">
+              <a v-for="a in actions" href="#" class="text-decoration-none" :title="a.name" @click.prevent="click(r, a)">
+                <component :is="'icon-' + a.icon" class="icon" />
+              </a>
             </td>
           </tr>
         </tbody>

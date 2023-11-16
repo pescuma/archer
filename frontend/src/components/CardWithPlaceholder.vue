@@ -1,6 +1,4 @@
 <script setup>
-import { LRUCache } from 'lru-cache'
-import axios from 'axios'
 import { reactive } from 'vue'
 import { IconAlertTriangle } from '@tabler/icons-vue'
 
@@ -16,8 +14,6 @@ const data = reactive({
   state: LOADING,
   error: '',
 })
-
-const cache = new LRUCache({ max: 5 })
 
 function startLoading() {
   data.state = LOADING
@@ -68,7 +64,7 @@ function request(urls, cb) {
       }
     })
     .catch((error) => {
-      stopLoading(error.message, error)
+      stopLoading(error)
     })
 }
 
@@ -112,7 +108,10 @@ defineExpose({ startLoading, stopLoading, loading, request })
     </div>
     <div v-if="props.type === 'chart' && data.state === ERROR">
       <div class="card-header">
-        <h3 class="card-title text-red"><IconAlertTriangle class="icon" /> {{ data.error }}</h3>
+        <h3 class="card-title text-red">
+          <IconAlertTriangle class="icon" />
+          {{ data.error }}
+        </h3>
       </div>
       <div class="card-body">
         <div class="chart-lg"></div>
@@ -129,7 +128,10 @@ defineExpose({ startLoading, stopLoading, loading, request })
     </div>
     <div v-if="props.type === 'table' && data.state === ERROR">
       <div class="card-header">
-        <h3 class="card-title text-red"><IconAlertTriangle class="icon" /> {{ data.error }}</h3>
+        <h3 class="card-title text-red">
+          <IconAlertTriangle class="icon" />
+          {{ data.error }}
+        </h3>
       </div>
       <div class="card-body">
         <div style="height: 650px"></div>

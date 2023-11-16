@@ -1,11 +1,25 @@
 <script setup>
 import DataGrid from '@/components/DataGrid.vue'
+import { ref, watch } from 'vue'
+import { sortParams } from '@/components/utils'
+import { filters } from '@/utils/filters'
+
+const grid = ref(null)
 
 const columns = [
   {
     name: 'Name',
     field: 'name',
     type: 'text',
+    actions: [
+      {
+        name: 'Filter',
+        icon: 'filter',
+        onClick: function (v) {
+          filters.data.repo_name = v.name
+        },
+      },
+    ],
   },
   {
     name: 'VCS',
@@ -30,12 +44,21 @@ const columns = [
 ]
 
 async function loadPage(page, pageSize, sort, asc) {
-  return await window.api.get(`/api/repos?sort=${sort}&asc=${asc}&offset=${(page - 1) * pageSize}&limit=${pageSize}`)
+  let s = sortParams(page, pageSize, sort, asc)
+  let f = filters.toQueryString({ repo_name: 'name' })
+
+  return await window.api.get(`/api/repos?${f}&${s}`)
 }
+
+watch(
+  () => filters.data,
+  () => grid.value.refresh(),
+  { deep: true }
+)
 </script>
 
 <template>
-  <DataGrid title="Repositories" :columns="columns" :loadPage="loadPage" />
+  <DataGrid ref="grid" title="Repositories" :columns="columns" :loadPage="loadPage" />
 </template>
 
 <style scoped></style>

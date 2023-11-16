@@ -12,43 +12,37 @@ import { onMounted } from 'vue'
 </script>
 
 <template>
-  <div class="page-body">
-    <div class="container-xl">
-      <div class="row row-deck row-cards">
-        <div class="col-sm-3 col-lg-3">
-          <FileCountCard />
-        </div>
-        <div class="col-sm-3 col-lg-3">
-          <ProjectCountCard />
-        </div>
-        <div class="col-sm-3 col-lg-3">
-          <RepositoryCountCard />
-        </div>
-        <div class="col-sm-3 col-lg-3">
-          <PersonCountCard />
-        </div>
+  <div class="col-sm-3 col-lg-3">
+    <FileCountCard />
+  </div>
+  <div class="col-sm-3 col-lg-3">
+    <ProjectCountCard />
+  </div>
+  <div class="col-sm-3 col-lg-3">
+    <RepositoryCountCard />
+  </div>
+  <div class="col-sm-3 col-lg-3">
+    <PersonCountCard />
+  </div>
 
-        <div class="col-lg-6">
-          <div class="row row-cards">
-            <div class="col-12">
-              <LinesChangedCard />
-            </div>
-            <div class="col-12">
-              <LinesSurvivedCard />
-            </div>
-          </div>
-        </div>
-        <div class="col-lg-6">
-          <CommitsSeenCard />
-        </div>
-
-        <div class="col-lg-6">
-          <FilesSeenCard />
-        </div>
-        <div class="col-lg-6">
-          <PeopleSeenCard />
-        </div>
+  <div class="col-lg-6">
+    <div class="row row-cards">
+      <div class="col-12">
+        <LinesChangedCard />
+      </div>
+      <div class="col-12">
+        <LinesSurvivedCard />
       </div>
     </div>
+  </div>
+  <div class="col-lg-6">
+    <CommitsSeenCard />
+  </div>
+
+  <div class="col-lg-6">
+    <FilesSeenCard />
+  </div>
+  <div class="col-lg-6">
+    <PeopleSeenCard />
   </div>
 </template>

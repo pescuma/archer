@@ -1,5 +1,10 @@
 <script setup>
+import { ref, watch } from 'vue'
 import DataGrid from '@/components/DataGrid.vue'
+import { sortParams } from './utils'
+import { filters } from '@/utils/filters'
+
+const grid = ref(null)
 
 const columns = [
   {
@@ -11,7 +16,15 @@ const columns = [
     name: 'Repository',
     field: 'repo.name',
     type: 'text',
-    size: 's',
+    actions: [
+      {
+        name: 'Filter',
+        icon: 'filter',
+        onClick: function (v) {
+          filters.data.repo_name = v.repo.name
+        },
+      },
+    ],
   },
   {
     name: 'Hash',
@@ -53,13 +66,32 @@ const columns = [
   },
 ]
 
+const actions = [
+  {
+    name: 'Ignore',
+    icon: 'circle-minus',
+    onClick: async function (commit) {
+      await window.api.patch(`/api/repos/${commit.repo.id}/commits/${commit.id}`, { ignore: true })
+    },
+  },
+]
+
 async function loadPage(page, pageSize, sort, asc) {
-  return await window.api.get(`/api/commits?sort=${sort}&asc=${asc}&offset=${(page - 1) * pageSize}&limit=${pageSize}`)
+  let s = sortParams(page, pageSize, sort, asc)
+  let f = filters.toQueryString({ repo_name: 'repo.name' })
+
+  return await window.api.get(`/api/commits?${f}&${s}`)
 }
+
+watch(
+  () => filters.data,
+  () => grid.value.refresh(),
+  { deep: true }
+)
 </script>
 
 <template>
-  <DataGrid title="Commits" :columns="columns" :loadPage="loadPage" />
+  <DataGrid ref="grid" title="Commits" :columns="columns" :actions="actions" :loadPage="loadPage" />
 </template>
 
 <style scoped></style>

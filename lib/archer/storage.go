@@ -31,7 +31,7 @@ type Storage interface {
 	LoadFileContents(fileID model.UUID) (*model.FileContents, error)
 	WriteFileContents(contents *model.FileContents, changes StorageChanges) error
 	ComputeBlamePerAuthor() ([]*BlamePerAuthor, error)
-	ComputeSurvivedLines() ([]*SurvivedLineCount, error)
+	ComputeSurvivedLines(repoName string) ([]*SurvivedLineCount, error)
 
 	LoadPeople() (*model.People, error)
 	WritePeople(people *model.People, changes StorageChanges) error
@@ -39,6 +39,7 @@ type Storage interface {
 	LoadRepositories() (repos *model.Repositories, err error)
 	LoadRepository(rootDir string) (*model.Repository, error)
 	WriteRepository(repo *model.Repository, changes StorageChanges) error
+	WriteCommit(repo *model.Repository, commit *model.RepositoryCommit, info StorageChanges) error
 
 	LoadConfig() (*map[string]string, error)
 	WriteConfig(*map[string]string) error

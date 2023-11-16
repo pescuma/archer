@@ -1,6 +1,5 @@
 <script setup>
 import { computed } from 'vue'
-import { IconChevronLeft, IconChevronRight } from '@tabler/icons-vue'
 
 const emit = defineEmits(['pageChange'])
 
@@ -29,7 +28,7 @@ const pagination = computed(() => {
 })
 
 function loadPage(p) {
-  emit('pageChange', p)
+  if (p !== data.page) emit('pageChange', p)
 }
 </script>
 
@@ -41,14 +40,14 @@ function loadPage(p) {
     </p>
     <ul class="pagination m-0 ms-auto">
       <li :class="'page-item' + (pagination.hasFirst ? '' : ' disabled')">
-        <a class="page-link" @click.prevent="loadPage(1)" :aria-disabled="pagination.hasFirst"> <IconChevronLeft class="icon" />first </a>
+        <a class="page-link" @click.prevent="loadPage(1)" :aria-disabled="pagination.hasFirst"> <icon-chevron-left class="icon" />first </a>
       </li>
       <li v-for="p in pagination.pages" :class="'page-item' + (p === data.page ? ' active' : '')">
         <a class="page-link" @click.prevent="loadPage(p)">{{ p }}</a>
       </li>
       <li :class="'page-item' + (pagination.hasLast ? '' : ' disabled')">
         <a class="page-link" @click.prevent="loadPage(pagination.pageCount)" :aria-disabled="!pagination.hasLast">
-          last<IconChevronRight class="icon" />
+          last<icon-chevron-right class="icon" />
         </a>
       </li>
     </ul>

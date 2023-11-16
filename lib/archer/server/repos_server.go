@@ -15,22 +15,36 @@ type GridParams struct {
 	Offset *int   `form:"offset"`
 	Limit  *int   `form:"limit"`
 }
-type ListRepoParams struct {
+
+type RepoListParams struct {
 	GridParams
+	FilterName string `form:"name"`
 }
-type ListCommitParams struct {
+
+type CommitListParams struct {
 	GridParams
+	FilterRepoName string `form:"repo.name"`
+}
+type CommitPatchParams struct {
+	RepoID   model.UUID `uri:"repoID"`
+	CommitID model.UUID `uri:"commitID"`
+	Ignore   *bool      `json:"ignore"`
+}
+
+type StatsLinesParams struct {
+	FilterRepoName string `form:"repo.name"`
 }
 
 func (s *server) initRepos(r *gin.Engine) {
-	r.GET("/api/repos", getP[ListRepoParams](s.listRepos))
+	r.GET("/api/repos", getP[RepoListParams](s.listRepos))
 	r.GET("/api/repos/:id", get(s.getRepo))
-	r.GET("/api/commits", getP[ListCommitParams](s.listCommits))
+	r.GET("/api/commits", getP[CommitListParams](s.listCommits))
+	r.PATCH("/api/repos/:repoID/commits/:commitID", patchP[CommitPatchParams](s.patchCommit))
 	r.GET("/api/stats/count/repos", get(s.countRepos))
 	r.GET("/api/stats/seen/repos", get(s.getReposSeenStats))
 	r.GET("/api/stats/seen/commits", get(s.getCommitsSeenStats))
-	r.GET("/api/stats/changed/lines", get(s.getChangedLines))
-	r.GET("/api/stats/survived/lines", get(s.getSurvivedLines))
+	r.GET("/api/stats/changed/lines", getP[StatsLinesParams](s.getChangedLines))
+	r.GET("/api/stats/survived/lines", getP[StatsLinesParams](s.getSurvivedLines))
 }
 
 func (s *server) countRepos() (any, error) {
@@ -41,8 +55,10 @@ func (s *server) countRepos() (any, error) {
 	}, nil
 }
 
-func (s *server) listRepos(params *ListRepoParams) (any, error) {
+func (s *server) listRepos(params *RepoListParams) (any, error) {
 	repos := s.repos.List()
+
+	repos = s.filterRepos(repos, params.FilterName)
 
 	err := s.sortRepos(repos, params.Sort, params.Asc)
 	if err != nil {
@@ -68,7 +84,7 @@ func (s *server) getRepo() (any, error) {
 	return nil, nil
 }
 
-func (s *server) listCommits(params *ListCommitParams) (any, error) {
+func (s *server) listCommits(params *CommitListParams) (any, error) {
 	commits := lo.FlatMap(s.repos.List(), func(i *model.Repository, index int) []RepoAndCommit {
 		return lo.Map(i.ListCommits(), func(c *model.RepositoryCommit, _ int) RepoAndCommit {
 			return RepoAndCommit{
@@ -77,6 +93,8 @@ func (s *server) listCommits(params *ListCommitParams) (any, error) {
 			}
 		})
 	})
+
+	commits = s.filterCommits(commits, params.FilterRepoName)
 
 	err := s.sortCommits(commits, params.Sort, params.Asc)
 	if err != nil {
@@ -96,6 +114,34 @@ func (s *server) listCommits(params *ListCommitParams) (any, error) {
 		"data":  result,
 		"total": total,
 	}, nil
+}
+
+func (s *server) patchCommit(params *CommitPatchParams) (any, error) {
+	repo := s.repos.GetByID(params.RepoID)
+	if repo == nil {
+		return nil, errorNotFound
+	}
+
+	commit, ok := s.commits[params.CommitID]
+	if !ok {
+		return nil, errorNotFound
+	}
+
+	changed := false
+
+	if params.Ignore != nil && commit.Ignore != *params.Ignore {
+		commit.Ignore = *params.Ignore
+		changed = true
+	}
+
+	if changed {
+		err := s.storage.WriteCommit(repo, commit, archer.ChangedBasicInfo)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return commit, nil
 }
 
 func (s *server) getReposSeenStats() (any, error) {
@@ -128,30 +174,39 @@ func (s *server) getCommitsSeenStats() (any, error) {
 	return s4, nil
 }
 
-func (s *server) getChangedLines() (any, error) {
-	s1 := lo.FlatMap(s.repos.List(), func(i *model.Repository, index int) []*model.RepositoryCommit {
-		return i.ListCommits()
+func (s *server) getChangedLines(params *StatsLinesParams) (any, error) {
+	repos := s.repos.List()
+
+	repos = s.filterRepos(repos, params.FilterRepoName)
+
+	commits := lo.FlatMap(repos, func(i *model.Repository, index int) []RepoAndCommit {
+		return lo.Map(i.ListCommits(), func(c *model.RepositoryCommit, _ int) RepoAndCommit {
+			return RepoAndCommit{
+				Repo:   i,
+				Commit: c,
+			}
+		})
 	})
-	s2 := lo.Filter(s1, func(i *model.RepositoryCommit, index int) bool {
-		return !i.Ignore
-	})
-	s3 := lo.GroupBy(s2, func(i *model.RepositoryCommit) string {
-		y, m, _ := i.Date.Date()
+
+	commits = s.filterCommits(commits, "")
+
+	s1 := lo.GroupBy(commits, func(i RepoAndCommit) string {
+		y, m, _ := i.Commit.Date.Date()
 		return fmt.Sprintf("%04d-%02d", y, m)
 	})
-	s4 := lo.MapValues(s3, func(i []*model.RepositoryCommit, _ string) gin.H {
+	s2 := lo.MapValues(s1, func(i []RepoAndCommit, _ string) gin.H {
 		return gin.H{
-			"modified": lo.SumBy(i, func(commit *model.RepositoryCommit) int { return commit.ModifiedLines }),
-			"added":    lo.SumBy(i, func(commit *model.RepositoryCommit) int { return commit.AddedLines }),
-			"deleted":  lo.SumBy(i, func(commit *model.RepositoryCommit) int { return commit.DeletedLines }),
+			"modified": lo.SumBy(i, func(j RepoAndCommit) int { return j.Commit.ModifiedLines }),
+			"added":    lo.SumBy(i, func(j RepoAndCommit) int { return j.Commit.AddedLines }),
+			"deleted":  lo.SumBy(i, func(j RepoAndCommit) int { return j.Commit.DeletedLines }),
 		}
 	})
 
-	return s4, nil
+	return s2, nil
 }
 
-func (s *server) getSurvivedLines() (any, error) {
-	s1, err := s.storage.ComputeSurvivedLines()
+func (s *server) getSurvivedLines(params *StatsLinesParams) (any, error) {
+	s1, err := s.storage.ComputeSurvivedLines(params.FilterRepoName)
 	if err != nil {
 		return nil, err
 	}

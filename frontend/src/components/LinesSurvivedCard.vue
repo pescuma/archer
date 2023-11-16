@@ -1,8 +1,9 @@
 <script setup>
 import _ from 'lodash'
 import moment from 'moment/moment'
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
+import { filters } from '@/utils/filters'
 
 const card = ref(null)
 
@@ -11,8 +12,14 @@ const data = reactive({
   series: [],
 })
 
-onMounted(function () {
-  card.value.request('/api/stats/survived/lines', function (response) {
+onMounted(refresh)
+
+watch(() => filters.data, refresh, { deep: true })
+
+function refresh() {
+  let f = filters.toQueryString({ repo_name: 'repo.name' })
+
+  card.value.request(`/api/stats/survived/lines?${f}`, function (response) {
     const labels = []
     const code = []
     const comment = []
@@ -126,7 +133,7 @@ onMounted(function () {
       },
     ]
   })
-})
+}
 </script>
 
 <template>
