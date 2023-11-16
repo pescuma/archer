@@ -45,7 +45,7 @@ const columns = [
 
 async function loadPage(page, pageSize, sort, asc) {
   let s = sortParams(page, pageSize, sort, asc)
-  let f = filters.toQueryString({ repo: 'name' })
+  let f = filters.toQueryString({ repo: 'search', person: 'person' })
 
   return await window.api.get(`/api/repos?${f}&${s}`)
 }

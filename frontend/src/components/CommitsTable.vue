@@ -83,7 +83,7 @@ const actions = [
 
 async function loadPage(page, pageSize, sort, asc) {
   let s = sortParams(page, pageSize, sort, asc)
-  let f = filters.toQueryString({ repo: 'repo.name', person: 'person' })
+  let f = filters.toQueryString({ repo: 'repo', person: 'person' })
 
   return await window.api.get(`/api/commits?${f}&${s}`)
 }

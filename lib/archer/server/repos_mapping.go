@@ -9,18 +9,31 @@ import (
 	"github.com/samber/lo"
 )
 
-func (s *server) filterRepos(col []*model.Repository, name string) []*model.Repository {
-	if name != "" {
-		name = strings.ToLower(name)
-	}
+func (s *server) filterRepos(col []*model.Repository, search string, person string) []*model.Repository {
+	search = prepareToSearch(search)
+	person = prepareToSearch(person)
 
 	return lo.Filter(col, func(i *model.Repository, index int) bool {
-		if name != "" && !strings.Contains(strings.ToLower(i.Name), name) {
+		if search != "" && !strings.Contains(strings.ToLower(i.Name), search) {
+			return false
+		}
+
+		if person != "" && !s.repoHasPerson(i, person) {
 			return false
 		}
 
 		return true
 	})
+}
+
+func (s *server) repoHasPerson(i *model.Repository, person string) bool {
+	for _, c := range i.ListCommits() {
+		if s.filterCommit(RepoAndCommit{Repo: i, Commit: c}, "", person) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (s *server) sortRepos(col []*model.Repository, field string, asc *bool) error {
@@ -80,37 +93,37 @@ type RepoAndCommit struct {
 	Commit *model.RepositoryCommit
 }
 
-func (s *server) filterCommits(col []RepoAndCommit, repoName string, personSearch string) []RepoAndCommit {
-	if repoName != "" {
-		repoName = strings.ToLower(repoName)
-	}
-	if personSearch != "" {
-		personSearch = strings.ToLower(personSearch)
-	}
+func (s *server) filterCommits(col []RepoAndCommit, repo string, person string) []RepoAndCommit {
+	repo = prepareToSearch(repo)
+	person = prepareToSearch(person)
 
 	return lo.Filter(col, func(i RepoAndCommit, index int) bool {
-		if i.Commit.Ignore {
-			return false
-		}
-
-		if repoName != "" && !strings.Contains(strings.ToLower(i.Repo.Name), repoName) {
-			return false
-		}
-
-		if personSearch != "" {
-			committer := s.people.GetPersonByID(i.Commit.CommitterID)
-			hasCommitter := s.filterPerson(committer, personSearch)
-
-			author := s.people.GetPersonByID(i.Commit.AuthorID)
-			hasAuthor := s.filterPerson(author, personSearch)
-
-			if !hasCommitter && !hasAuthor {
-				return false
-			}
-		}
-
-		return true
+		return s.filterCommit(i, repo, person)
 	})
+}
+
+func (s *server) filterCommit(i RepoAndCommit, repo string, person string) bool {
+	if i.Commit.Ignore {
+		return false
+	}
+
+	if repo != "" && !strings.Contains(strings.ToLower(i.Repo.Name), repo) {
+		return false
+	}
+
+	if person != "" {
+		committer := s.people.GetPersonByID(i.Commit.CommitterID)
+		hasCommitter := s.filterPerson(committer, person)
+
+		author := s.people.GetPersonByID(i.Commit.AuthorID)
+		hasAuthor := s.filterPerson(author, person)
+
+		if !hasCommitter && !hasAuthor {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (s *server) sortCommits(col []RepoAndCommit, field string, asc *bool) error {

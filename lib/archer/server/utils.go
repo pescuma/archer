@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pescuma/archer/lib/archer/model"
@@ -118,6 +119,16 @@ func paginate[T any](col []T, offset, limit *int) []T {
 	}
 
 	return col
+}
+
+func prepareToSearch(s string) string {
+	s = strings.TrimSpace(s)
+
+	if s != "" {
+		s = strings.ToLower(s)
+	}
+
+	return s
 }
 
 func encodeMetric(v int) *int {

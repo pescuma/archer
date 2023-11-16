@@ -13,9 +13,7 @@ const data = reactive({
 })
 
 onMounted(function () {
-  let f = filters.toQueryString({ repo_name: 'repo.name' })
-
-  card.value.request([`/api/stats/seen/files?${f}`, `/api/stats/seen/projects?${f}`], function (response) {
+  card.value.request([`/api/stats/seen/files`, `/api/stats/seen/projects`], function (response) {
     const labels = []
     const files = []
     const projs = []

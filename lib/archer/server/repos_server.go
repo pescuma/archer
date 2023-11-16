@@ -11,12 +11,13 @@ import (
 
 type RepoListParams struct {
 	GridParams
-	FilterName string `form:"name"`
+	FilterRepo   string `form:"search"`
+	FilterPerson string `form:"person"`
 }
 
 type CommitFilters struct {
-	FilterRepoName     string `form:"repo.name"`
-	FilterPersonSearch string `form:"person"`
+	FilterRepo   string `form:"repo"`
+	FilterPerson string `form:"person"`
 }
 
 type CommitListParams struct {
@@ -56,7 +57,7 @@ func (s *server) countRepos() (any, error) {
 func (s *server) listRepos(params *RepoListParams) (any, error) {
 	repos := s.repos.List()
 
-	repos = s.filterRepos(repos, params.FilterName)
+	repos = s.filterRepos(repos, params.FilterRepo, params.FilterPerson)
 
 	err := s.sortRepos(repos, params.Sort, params.Asc)
 	if err != nil {
@@ -92,7 +93,7 @@ func (s *server) listCommits(params *CommitListParams) (any, error) {
 		})
 	})
 
-	commits = s.filterCommits(commits, params.FilterRepoName, params.FilterPersonSearch)
+	commits = s.filterCommits(commits, params.FilterRepo, params.FilterPerson)
 
 	err := s.sortCommits(commits, params.Sort, params.Asc)
 	if err != nil {
@@ -175,7 +176,7 @@ func (s *server) getCommitsSeenStats() (any, error) {
 func (s *server) getChangedLines(params *StatsLinesParams) (any, error) {
 	repos := s.repos.List()
 
-	repos = s.filterRepos(repos, params.FilterRepoName)
+	repos = s.filterRepos(repos, params.FilterRepo, "")
 
 	commits := lo.FlatMap(repos, func(i *model.Repository, index int) []RepoAndCommit {
 		return lo.Map(i.ListCommits(), func(c *model.RepositoryCommit, _ int) RepoAndCommit {
@@ -186,7 +187,7 @@ func (s *server) getChangedLines(params *StatsLinesParams) (any, error) {
 		})
 	})
 
-	commits = s.filterCommits(commits, params.FilterRepoName, params.FilterPersonSearch)
+	commits = s.filterCommits(commits, params.FilterRepo, params.FilterPerson)
 
 	s1 := lo.GroupBy(commits, func(i RepoAndCommit) string {
 		y, m, _ := i.Commit.Date.Date()
@@ -204,7 +205,10 @@ func (s *server) getChangedLines(params *StatsLinesParams) (any, error) {
 }
 
 func (s *server) getSurvivedLines(params *StatsLinesParams) (any, error) {
-	s1, err := s.storage.ComputeSurvivedLines(params.FilterRepoName, params.FilterPersonSearch)
+	repoName := prepareToSearch(params.FilterRepo)
+	personSearch := prepareToSearch(params.FilterPerson)
+
+	s1, err := s.storage.ComputeSurvivedLines(repoName, personSearch)
 	if err != nil {
 		return nil, err
 	}

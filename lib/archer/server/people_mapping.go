@@ -10,9 +10,7 @@ import (
 )
 
 func (s *server) filterPeople(col []*model.Person, search string) []*model.Person {
-	if search != "" {
-		search = strings.ToLower(search)
-	}
+	search = prepareToSearch(search)
 
 	return lo.Filter(col, func(p *model.Person, index int) bool {
 		if !s.filterPerson(p, search) {
