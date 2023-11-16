@@ -6,9 +6,17 @@ import (
 	"sort"
 
 	"github.com/gin-gonic/gin"
+	"github.com/pescuma/archer/lib/archer/model"
 	"github.com/pescuma/archer/lib/archer/utils"
 	"golang.org/x/exp/constraints"
 )
+
+type GridParams struct {
+	Sort   string `form:"sort"`
+	Asc    *bool  `form:"asc"`
+	Offset *int   `form:"offset"`
+	Limit  *int   `form:"limit"`
+}
 
 var errorNotFound error
 
@@ -114,4 +122,23 @@ func paginate[T any](col []T, offset, limit *int) []T {
 
 func encodeMetric(v int) *int {
 	return utils.IIf(v == -1, nil, &v)
+}
+
+func (s *server) toSize(i *model.Size) gin.H {
+	return gin.H{
+		"lines": encodeMetric(i.Lines),
+		"files": encodeMetric(i.Files),
+		"bytes": encodeMetric(i.Bytes),
+		"other": i.Other,
+	}
+}
+
+func (s *server) toChanges(i *model.Changes) gin.H {
+	return gin.H{
+		"total":         encodeMetric(i.Total),
+		"in6Months":     encodeMetric(i.In6Months),
+		"modifiedLines": encodeMetric(i.ModifiedLines),
+		"addedLines":    encodeMetric(i.AddedLines),
+		"deletedLines":  encodeMetric(i.DeletedLines),
+	}
 }

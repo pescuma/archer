@@ -17,7 +17,7 @@ onMounted(refresh)
 watch(() => filters.data, refresh, { deep: true })
 
 function refresh() {
-  let f = filters.toQueryString({ repo_name: 'repo.name' })
+  let f = filters.toQueryString({ repo: 'repo.name', person: 'person' })
 
   card.value.request(`/api/stats/survived/lines?${f}`, function (response) {
     const labels = []

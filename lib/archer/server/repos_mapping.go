@@ -80,9 +80,12 @@ type RepoAndCommit struct {
 	Commit *model.RepositoryCommit
 }
 
-func (s *server) filterCommits(col []RepoAndCommit, repoName string) []RepoAndCommit {
+func (s *server) filterCommits(col []RepoAndCommit, repoName string, personSearch string) []RepoAndCommit {
 	if repoName != "" {
 		repoName = strings.ToLower(repoName)
+	}
+	if personSearch != "" {
+		personSearch = strings.ToLower(personSearch)
 	}
 
 	return lo.Filter(col, func(i RepoAndCommit, index int) bool {
@@ -92,6 +95,18 @@ func (s *server) filterCommits(col []RepoAndCommit, repoName string) []RepoAndCo
 
 		if repoName != "" && !strings.Contains(strings.ToLower(i.Repo.Name), repoName) {
 			return false
+		}
+
+		if personSearch != "" {
+			committer := s.people.GetPersonByID(i.Commit.CommitterID)
+			hasCommitter := s.filterPerson(committer, personSearch)
+
+			author := s.people.GetPersonByID(i.Commit.AuthorID)
+			hasAuthor := s.filterPerson(author, personSearch)
+
+			if !hasCommitter && !hasAuthor {
+				return false
+			}
 		}
 
 		return true

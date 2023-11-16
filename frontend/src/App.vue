@@ -98,21 +98,44 @@ fui.count = computed(() => {
                   <div class="row">
                     <div class="col-4">
                       <div class="mb-3">
-                        <label class="form-label">Repository name</label>
+                        <label class="form-label">Repository</label>
                         <div class="input-group mb-2">
                           <input
                             type="text"
                             class="form-control"
-                            :value="fui.filters.repo_name"
+                            :value="fui.filters.repo"
                             @input="
                               (event) => {
                                 _.debounce(() => {
-                                  fui.filters.repo_name = event.target.value
+                                  fui.filters.repo = event.target.value
                                 }, 1000)()
                               }
                             "
                           />
-                          <a href="#" class="btn btn-icon text-muted" @click.prevent="fui.filters.repo_name = ''">
+                          <a href="#" class="btn btn-icon text-muted" @click.prevent="fui.filters.repo = ''">
+                            <icon-trash class="icon" />
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="col-4">
+                      <div class="mb-3">
+                        <label class="form-label">Person</label>
+                        <div class="input-group mb-2">
+                          <input
+                            type="text"
+                            class="form-control"
+                            :value="fui.filters.person"
+                            @input="
+                              (event) => {
+                                _.debounce(() => {
+                                  fui.filters.person = event.target.value
+                                }, 1000)()
+                              }
+                            "
+                          />
+                          <a href="#" class="btn btn-icon text-muted" @click.prevent="fui.filters.person = ''">
                             <icon-trash class="icon" />
                           </a>
                         </div>

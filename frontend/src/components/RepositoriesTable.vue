@@ -16,7 +16,7 @@ const columns = [
         name: 'Filter',
         icon: 'filter',
         onClick: function (v) {
-          filters.data.repo_name = v.name
+          filters.data.repo = v.name
         },
       },
     ],
@@ -45,7 +45,7 @@ const columns = [
 
 async function loadPage(page, pageSize, sort, asc) {
   let s = sortParams(page, pageSize, sort, asc)
-  let f = filters.toQueryString({ repo_name: 'name' })
+  let f = filters.toQueryString({ repo: 'name' })
 
   return await window.api.get(`/api/repos?${f}&${s}`)
 }

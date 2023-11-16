@@ -50,7 +50,7 @@ const columns = computed(() => {
       case 'text': {
         let fullFormat = rc.format
         rc.format = function (r) {
-          let v = fullFormat(r)
+          let v = '' + fullFormat(r)
           return _.chain(v.split('\n'))
             .map((s) => _.trim(s))
             .filter((s) => s.length > 0)
@@ -60,7 +60,7 @@ const columns = computed(() => {
         rc.tooltip = function (r) {
           if (c.tooltip) return c.tooltip(r)
 
-          let v = fullFormat(r)
+          let v = '' + fullFormat(r)
           if (rc.format(r) !== v) return v
           else return undefined
         }
@@ -147,7 +147,7 @@ async function loadPage(page, sort, asc) {
   await nextTick()
 
   document.querySelectorAll('.text-truncate').forEach(function (e) {
-    if (!e.title && e.offsetWidth < e.scrollWidth) {
+    if (!e.title && e.textContent && e.offsetWidth < e.scrollWidth) {
       e.title = e.textContent
     }
   })
@@ -205,9 +205,9 @@ defineExpose({ refresh })
         </thead>
         <tbody>
           <tr v-for="r in data.pageRows">
-            <td v-for="c in columns" :class="c.td_class" :style="c.style" :title="c.tooltip(r)">
+            <td v-for="c in columns" :class="c.td_class" :style="c.style">
               <div class="row">
-                <div class="col-auto text-truncate text-nowrap">
+                <div class="col-auto text-truncate text-nowrap" :title="c.tooltip(r)">
                   <a
                     v-for="a in c.actions"
                     href="#"

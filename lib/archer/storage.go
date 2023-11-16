@@ -31,7 +31,7 @@ type Storage interface {
 	LoadFileContents(fileID model.UUID) (*model.FileContents, error)
 	WriteFileContents(contents *model.FileContents, changes StorageChanges) error
 	ComputeBlamePerAuthor() ([]*BlamePerAuthor, error)
-	ComputeSurvivedLines(repoName string) ([]*SurvivedLineCount, error)
+	ComputeSurvivedLines(repoName string, personSearch string) ([]*SurvivedLineCount, error)
 
 	LoadPeople() (*model.People, error)
 	WritePeople(people *model.People, changes StorageChanges) error

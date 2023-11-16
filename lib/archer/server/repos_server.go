@@ -9,21 +9,19 @@ import (
 	"github.com/samber/lo"
 )
 
-type GridParams struct {
-	Sort   string `form:"sort"`
-	Asc    *bool  `form:"asc"`
-	Offset *int   `form:"offset"`
-	Limit  *int   `form:"limit"`
-}
-
 type RepoListParams struct {
 	GridParams
 	FilterName string `form:"name"`
 }
 
+type CommitFilters struct {
+	FilterRepoName     string `form:"repo.name"`
+	FilterPersonSearch string `form:"person"`
+}
+
 type CommitListParams struct {
 	GridParams
-	FilterRepoName string `form:"repo.name"`
+	CommitFilters
 }
 type CommitPatchParams struct {
 	RepoID   model.UUID `uri:"repoID"`
@@ -32,7 +30,7 @@ type CommitPatchParams struct {
 }
 
 type StatsLinesParams struct {
-	FilterRepoName string `form:"repo.name"`
+	CommitFilters
 }
 
 func (s *server) initRepos(r *gin.Engine) {
@@ -94,7 +92,7 @@ func (s *server) listCommits(params *CommitListParams) (any, error) {
 		})
 	})
 
-	commits = s.filterCommits(commits, params.FilterRepoName)
+	commits = s.filterCommits(commits, params.FilterRepoName, params.FilterPersonSearch)
 
 	err := s.sortCommits(commits, params.Sort, params.Asc)
 	if err != nil {
@@ -188,7 +186,7 @@ func (s *server) getChangedLines(params *StatsLinesParams) (any, error) {
 		})
 	})
 
-	commits = s.filterCommits(commits, "")
+	commits = s.filterCommits(commits, params.FilterRepoName, params.FilterPersonSearch)
 
 	s1 := lo.GroupBy(commits, func(i RepoAndCommit) string {
 		y, m, _ := i.Commit.Date.Date()
@@ -206,7 +204,7 @@ func (s *server) getChangedLines(params *StatsLinesParams) (any, error) {
 }
 
 func (s *server) getSurvivedLines(params *StatsLinesParams) (any, error) {
-	s1, err := s.storage.ComputeSurvivedLines(params.FilterRepoName)
+	s1, err := s.storage.ComputeSurvivedLines(params.FilterRepoName, params.FilterPersonSearch)
 	if err != nil {
 		return nil, err
 	}

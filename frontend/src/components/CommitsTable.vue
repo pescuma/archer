@@ -21,7 +21,7 @@ const columns = [
         name: 'Filter',
         icon: 'filter',
         onClick: function (v) {
-          filters.data.repo_name = v.repo.name
+          filters.data.repo = v.repo.name
         },
       },
     ],
@@ -42,6 +42,11 @@ const columns = [
   {
     name: 'Committer',
     field: 'committer.name',
+    type: 'text',
+  },
+  {
+    name: 'Author',
+    field: 'author.name',
     type: 'text',
   },
   {
@@ -78,7 +83,7 @@ const actions = [
 
 async function loadPage(page, pageSize, sort, asc) {
   let s = sortParams(page, pageSize, sort, asc)
-  let f = filters.toQueryString({ repo_name: 'repo.name' })
+  let f = filters.toQueryString({ repo: 'repo.name', person: 'person' })
 
   return await window.api.get(`/api/commits?${f}&${s}`)
 }

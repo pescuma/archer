@@ -418,19 +418,31 @@ func (s *sqliteStorage) ComputeBlamePerAuthor() ([]*archer.BlamePerAuthor, error
 	return result, nil
 }
 
-func (s *sqliteStorage) ComputeSurvivedLines(repoName string) ([]*archer.SurvivedLineCount, error) {
+func (s *sqliteStorage) ComputeSurvivedLines(repoName string, personSearch string) ([]*archer.SurvivedLineCount, error) {
 	var result []*archer.SurvivedLineCount
 
 	err := s.db.Raw(`
-		select strftime('%Y-%m', c.date) month, l.type line_type, count(*) lines
-		from file_lines l
-				 join repository_commits c
-					  on c.id = l.commit_id
-				 join repositories r
-					  on r.id = c.repository_id
-		where c.ignore = 0 and r.name like ?
-		group by 1, 2
-		`, "%"+repoName+"%").Scan(&result).Error
+select strftime('%Y-%m', c.date) month, l.type line_type, count(*) lines
+from file_lines l
+         join repository_commits c
+              on c.id = l.commit_id
+         join repositories r
+              on r.id = c.repository_id
+         join people pc
+              on pc.id = c.committer_id
+         join people pa
+              on pa.id = c.author_id
+where c.ignore = 0
+  and r.name like ?
+  and (pc.names like ? or pc.emails like ? or pa.names like ? or pa.emails like ?)
+group by 1, 2
+		`,
+		"%"+repoName+"%",
+		"%"+personSearch+"%",
+		"%"+personSearch+"%",
+		"%"+personSearch+"%",
+		"%"+personSearch+"%",
+	).Scan(&result).Error
 	if err != nil {
 		return nil, err
 	}

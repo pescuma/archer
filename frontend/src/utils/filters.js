@@ -2,7 +2,8 @@ import { reactive } from 'vue'
 
 export const filters = reactive({
   data: {
-    repo_name: null,
+    repo: null,
+    person: null,
   },
 })
 
@@ -18,19 +19,14 @@ filters.patch = (fs) => {
   }
 }
 
-filters.toQueryString = (filterMapping) => {
-  if (!filterMapping) filterMapping = {}
-
+filters.toQueryString = (mapping) => {
   let fs = ''
-  for (let f in filters.data) {
+  for (let f in mapping) {
     let v = filters.data[f]
     if (!v) continue
 
-    if (filterMapping[f]) f = filterMapping[f]
-
     if (fs) fs += '&'
-    fs += `${f}=${encodeURIComponent(v)}`
+    fs += `${mapping[f]}=${encodeURIComponent(v)}`
   }
-
   return fs
 }
