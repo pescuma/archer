@@ -2,11 +2,11 @@ package server
 
 import (
 	"net/http"
-	"reflect"
 	"sort"
-	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/pescuma/archer/lib/archer/utils"
+	"golang.org/x/exp/constraints"
 )
 
 func getP[P any](f func(*P) (any, error)) func(c *gin.Context) {
@@ -41,51 +41,17 @@ func get(f func() (any, error)) func(c *gin.Context) {
 	}
 }
 
-func bind[T any](c *gin.Context) (T, error) {
-	var result T
-
-	err := c.BindQuery(&result)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+func sortBy[T any, R constraints.Ordered](col []T, get func(T) R, asc bool) error {
+	if asc {
+		sort.Slice(col, func(i, j int) bool {
+			return get(col[i]) <= get(col[j])
+		})
+	} else {
+		sort.Slice(col, func(i, j int) bool {
+			return get(col[i]) >= get(col[j])
+		})
 	}
-
-	return result, err
-}
-
-func sortBy(col []gin.H, field string, asc bool) {
-	stringType := reflect.TypeOf("")
-	timeType := reflect.TypeOf(time.Time{})
-
-	sort.Slice(col, func(i, j int) bool {
-		v1 := reflect.ValueOf(col[i][field])
-		v2 := reflect.ValueOf(col[j][field])
-
-		result := false
-		if v1.CanInt() {
-			result = v1.Int() <= v2.Int()
-
-		} else if v1.CanFloat() {
-			result = v1.Float() <= v2.Float()
-
-		} else if v1.CanUint() {
-			result = v1.Uint() <= v2.Uint()
-
-		} else if v1.CanConvert(stringType) {
-			result = v1.Interface().(string) <= v2.Interface().(string)
-
-		} else if v1.CanConvert(timeType) {
-			result = v1.Interface().(time.Time).Before(v2.Interface().(time.Time))
-
-		} else {
-			panic("unknown type: " + v1.Type().String())
-		}
-
-		if !asc {
-			result = !result
-		}
-
-		return result
-	})
+	return nil
 }
 
 func paginate[T any](col []T, offset, limit *int) []T {
@@ -102,4 +68,8 @@ func paginate[T any](col []T, offset, limit *int) []T {
 	}
 
 	return col
+}
+
+func encodeMetric(v int) *int {
+	return utils.IIf(v == -1, nil, &v)
 }

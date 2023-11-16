@@ -3,7 +3,7 @@ import _ from 'lodash'
 import moment from 'moment/moment'
 import { computed, onMounted, reactive, ref } from 'vue'
 import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
-import { IconChevronUp, IconChevronDown } from '@tabler/icons-vue'
+import { IconChevronDown, IconChevronUp } from '@tabler/icons-vue'
 import PaginationCardFooter from '@/components/PaginationCardFooter.vue'
 
 const card = ref(null)
@@ -11,7 +11,6 @@ const card = ref(null)
 const props = defineProps({
   title: String,
   columns: Array,
-  loadRowCount: Function,
   loadPage: Function,
 })
 
@@ -31,8 +30,10 @@ const columns = computed(() => {
     let r = {
       name: c.name,
       field: c.field,
+      size: c.size,
       th_class: '',
       td_class: '',
+      style: '',
       defaultAsc: true,
     }
 
@@ -71,8 +72,7 @@ const columns = computed(() => {
         break
       }
       case 'datetime': {
-        r.th_class = 'w-1 text-end'
-        r.td_class = 'text-end'
+        r.th_class = 'w-1'
         r.defaultAsc = false
         r.format = function (v) {
           return moment(v).toDate().toLocaleString()
@@ -84,6 +84,21 @@ const columns = computed(() => {
       }
     }
 
+    r.td_class += ' text-truncate'
+
+    switch (c.size) {
+      case 's':
+        r.th_class += ' w-1'
+        r.style = 'max-width: 100px'
+        break
+      case 'l':
+        r.style = 'max-width: 400px'
+        break
+      default:
+        r.style = 'max-width: 200px'
+        break
+    }
+
     result.push(r)
   }
 
@@ -91,17 +106,14 @@ const columns = computed(() => {
 })
 
 async function loadPage(page, sort, asc) {
-  if (!sort) {
-    let c = columns.value[0]
-    sort = c.field
-    asc = c.defaultAsc
-  }
-
   if (page === data.page && sort === data.sort && asc === data.asc) return
 
-  data.pageRows = await card.value.loading(async function () {
+  let result = await card.value.loading(async function () {
     return await props.loadPage(page, data.pageSize, sort, asc)
   })
+
+  data.count = result.total
+  data.pageRows = result.data
   data.page = page
   data.sort = sort
   data.asc = asc
@@ -124,11 +136,8 @@ function sort(field) {
 }
 
 onMounted(async function () {
-  data.count = await card.value.loading(async function () {
-    return await props.loadRowCount()
-  })
-
-  page(1)
+  let c = columns.value[0]
+  loadPage(1, c.field, c.defaultAsc)
 })
 </script>
 
@@ -139,7 +148,7 @@ onMounted(async function () {
     </div>
 
     <div class="table-responsive border-bottom-0">
-      <table class="table card-table table-vcenter text-nowrap datatable">
+      <table class="card-table table table-vcenter text-nowrap text-truncate">
         <thead>
           <tr>
             <th v-for="c in columns" :class="c.th_class" @click.prevent="sort(c.field)">
@@ -151,7 +160,9 @@ onMounted(async function () {
         </thead>
         <tbody>
           <tr v-for="r in data.pageRows">
-            <td v-for="c in columns" :class="c.td_class">{{ c.format(r[c.field]) }}</td>
+            <td v-for="c in columns" :class="c.td_class" :style="c.style" :title="c.size === 'l' ? c.format(_.get(r, c.field)) : undefined">
+              {{ c.format(_.get(r, c.field)) }}
+            </td>
           </tr>
         </tbody>
       </table>

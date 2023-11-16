@@ -15,11 +15,11 @@ const pagination = computed(() => {
   result.start = Math.min((data.page - 1) * data.pageSize + 1, data.count)
   result.end = Math.min(data.page * data.pageSize, data.count)
   result.pageCount = Math.ceil(data.count / data.pageSize)
-  result.hasPrev = data.page > 1
-  result.hasNext = data.page < result.pageCount
+  result.hasFirst = data.page > 1
+  result.hasLast = data.page < result.pageCount
 
-  let firstPage = Math.max(data.page - 2, 1)
-  let lastPage = Math.min(firstPage + 5, result.pageCount)
+  let firstPage = Math.max(Math.min(data.page - 2, result.pageCount - 4), 1)
+  let lastPage = Math.min(firstPage + 4, result.pageCount)
   result.pages = []
   for (let i = firstPage; i <= lastPage; i++) {
     result.pages.push(i)
@@ -40,19 +40,15 @@ function loadPage(p) {
       <span>{{ data.count.toLocaleString() }}</span> entries
     </p>
     <ul class="pagination m-0 ms-auto">
-      <li :class="'page-item' + (pagination.hasPrev ? '' : ' disabled')">
-        <a class="page-link" @click.prevent="loadPage(data.page - 1)" :aria-disabled="pagination.hasPrev">
-          <IconChevronLeft class="icon" />
-          prev
-        </a>
+      <li :class="'page-item' + (pagination.hasFirst ? '' : ' disabled')">
+        <a class="page-link" @click.prevent="loadPage(1)" :aria-disabled="pagination.hasFirst"> <IconChevronLeft class="icon" />first </a>
       </li>
       <li v-for="p in pagination.pages" :class="'page-item' + (p === data.page ? ' active' : '')">
         <a class="page-link" @click.prevent="loadPage(p)">{{ p }}</a>
       </li>
-      <li :class="'page-item' + (pagination.hasNext ? '' : ' disabled')">
-        <a class="page-link" @click.prevent="loadPage(data.page + 1)" :aria-disabled="!pagination.hasNext">
-          next
-          <IconChevronRight class="icon" />
+      <li :class="'page-item' + (pagination.hasLast ? '' : ' disabled')">
+        <a class="page-link" @click.prevent="loadPage(pagination.pageCount)" :aria-disabled="!pagination.hasLast">
+          last<IconChevronRight class="icon" />
         </a>
       </li>
     </ul>

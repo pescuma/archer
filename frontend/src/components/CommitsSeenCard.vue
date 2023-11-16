@@ -15,7 +15,7 @@ const data = reactive({
 
 onMounted(function () {
   card.value.request(['/api/stats/seen/repos', '/api/stats/seen/commits', '/api/commits?limit=5'], function (response) {
-    data.commits = response[2]
+    data.commits = response[2].data
 
     const labels = []
     const repos = []

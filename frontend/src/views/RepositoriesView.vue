@@ -3,6 +3,7 @@ import RepositoriesTable from '@/components/RepositoriesTable.vue'
 import LinesSurvivedCard from '@/components/LinesSurvivedCard.vue'
 import LinesChangedCard from '@/components/LinesChangedCard.vue'
 import { onMounted } from 'vue'
+import CommitsTable from '@/components/CommitsTable.vue'
 
 onMounted(function () {
   console.log('on mounted repositories view')
@@ -19,8 +20,13 @@ onMounted(function () {
         <div class="col-12">
           <LinesSurvivedCard />
         </div>
+
         <div class="col-12">
           <RepositoriesTable />
+        </div>
+
+        <div class="col-12">
+          <CommitsTable />
         </div>
       </div>
     </div>

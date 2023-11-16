@@ -29,18 +29,13 @@ const columns = [
   },
 ]
 
-async function loadRowCount() {
-  let result = await window.api.get('/api/stats/count/repos')
-  return result.total
-}
-
 async function loadPage(page, pageSize, sort, asc) {
   return await window.api.get(`/api/repos?sort=${sort}&asc=${asc}&offset=${(page - 1) * pageSize}&limit=${pageSize}`)
 }
 </script>
 
 <template>
-  <DataGrid title="Repositories" :columns="columns" :loadRowCount="loadRowCount" :loadPage="loadPage" />
+  <DataGrid title="Repositories" :columns="columns" :loadPage="loadPage" />
 </template>
 
 <style scoped></style>
