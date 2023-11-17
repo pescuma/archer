@@ -333,6 +333,7 @@ func (g *gitBlameImporter) createCache(filesDB *model.Files, repo *model.Reposit
 
 	return cache, nil
 }
+
 func (g *gitBlameImporter) listToCompute(filesDB *model.Files, repo *model.Repository,
 	gitRepo *git.Repository, gitTree *object.Tree, gitCommit *object.Commit,
 ) ([]*blameWork, error) {
@@ -381,7 +382,7 @@ func (g *gitBlameImporter) listToCompute(filesDB *model.Files, repo *model.Repos
 
 		return nil
 	})
-	if err != nil && err == g.abort {
+	if err != nil && err != g.abort {
 		return nil, err
 	}
 

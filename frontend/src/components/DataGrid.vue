@@ -1,6 +1,6 @@
 <script setup>
 import _ from 'lodash'
-import moment from 'moment/moment'
+import moment from 'moment'
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
 import PaginationCardFooter from '@/components/PaginationCardFooter.vue'
@@ -245,7 +245,7 @@ defineExpose({ refresh })
                     <a
                       v-if="!a.before && (!a.show || a.show(r))"
                       href="#"
-                      class="text-decoration-none float-end"
+                      class="text-decoration-none float-end ms-1"
                       style="position: relative; z-index: 1"
                       :title="a.name"
                       @click.prevent="click(r, a)"

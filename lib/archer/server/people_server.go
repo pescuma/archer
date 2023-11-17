@@ -9,7 +9,7 @@ import (
 )
 
 type PeopleFilters struct {
-	FilterSearch string `form:"search"`
+	FilterSearch string `form:"q"`
 }
 
 type PeopleListParams struct {

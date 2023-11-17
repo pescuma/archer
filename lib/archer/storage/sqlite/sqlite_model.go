@@ -152,8 +152,8 @@ type sqlRepository struct {
 	VCS     string
 
 	CommitsTotal int
-	FilesTotal   int
-	FilesHead    int
+	FilesTotal   *int
+	FilesHead    *int
 
 	Data      map[string]string `gorm:"serializer:json"`
 	FirstSeen time.Time
@@ -173,6 +173,7 @@ type sqlRepositoryCommit struct {
 	Name          string
 	Message       string
 	Parents       []model.UUID `gorm:"serializer:json"`
+	Children      []model.UUID `gorm:"serializer:json"`
 	Date          time.Time    `gorm:"index"`
 	CommitterID   model.UUID   `gorm:"index"`
 	DateAuthored  time.Time

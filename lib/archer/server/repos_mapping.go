@@ -67,17 +67,17 @@ func (s *server) sortRepos(col []*model.Repository, field string, asc *bool) err
 	}
 }
 
-func (s *server) toRepo(repo *model.Repository) gin.H {
+func (s *server) toRepo(r *model.Repository) gin.H {
 	return gin.H{
-		"id":           repo.ID,
-		"name":         repo.Name,
-		"rootDir":      repo.RootDir,
-		"vcs":          repo.VCS,
-		"commitsTotal": repo.CountCommits(),
-		"filesTotal":   repo.FilesTotal,
-		"filesHead":    repo.FilesHead,
-		"firstSeen":    repo.FirstSeen,
-		"lastSeen":     repo.LastSeen,
+		"id":           r.ID,
+		"name":         r.Name,
+		"rootDir":      r.RootDir,
+		"vcs":          r.VCS,
+		"commitsTotal": r.CountCommits(),
+		"filesTotal":   encodeMetric(r.FilesTotal),
+		"filesHead":    encodeMetric(r.FilesHead),
+		"firstSeen":    encodeDate(r.FirstSeen),
+		"lastSeen":     encodeDate(r.LastSeen),
 	}
 }
 
@@ -174,6 +174,7 @@ func (s *server) toCommit(commit *model.RepositoryCommit, repo *model.Repository
 		"message":       commit.Message,
 		"date":          commit.Date,
 		"parents":       commit.Parents,
+		"children":      commit.Children,
 		"committer":     s.toPersonReference(committer),
 		"dateAuthored":  commit.DateAuthored,
 		"author":        s.toPersonReference(author),

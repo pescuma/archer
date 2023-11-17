@@ -83,7 +83,7 @@ const columns = [
 
 async function loadPage(page, pageSize, sort, asc) {
   let s = sortParams(page, pageSize, sort, asc)
-  let f = filters.toQueryString({ person: 'search' })
+  let f = filters.toQueryString({ person: 'q' })
 
   return await window.api.get(`/api/people?${f}&${s}`)
 }

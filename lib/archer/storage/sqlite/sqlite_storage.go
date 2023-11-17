@@ -627,8 +627,8 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 		r.Data = decodeMap(sr.Data)
 		r.FirstSeen = sr.FirstSeen
 		r.LastSeen = sr.LastSeen
-		r.FilesTotal = sr.FilesTotal
-		r.FilesHead = sr.FilesHead
+		r.FilesTotal = decodeMetric(sr.FilesTotal)
+		r.FilesHead = decodeMetric(sr.FilesHead)
 	}
 
 	commitsById := map[model.UUID]*model.RepositoryCommit{}
@@ -638,6 +638,7 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 		c := repo.GetOrCreateCommitEx(sc.Name, &sc.ID)
 		c.Message = sc.Message
 		c.Parents = sc.Parents
+		c.Children = sc.Children
 		c.Date = sc.Date
 		c.CommitterID = sc.CommitterID
 		c.DateAuthored = sc.DateAuthored
@@ -1080,8 +1081,8 @@ func toSqlRepository(r *model.Repository) *sqlRepository {
 		FirstSeen:    r.FirstSeen,
 		LastSeen:     r.LastSeen,
 		CommitsTotal: r.CountCommits(),
-		FilesTotal:   r.FilesTotal,
-		FilesHead:    r.FilesHead,
+		FilesTotal:   encodeMetric(r.FilesTotal),
+		FilesHead:    encodeMetric(r.FilesHead),
 	}
 }
 
@@ -1092,6 +1093,7 @@ func toSqlRepositoryCommit(r *model.Repository, c *model.RepositoryCommit) *sqlR
 		Name:          c.Hash,
 		Message:       c.Message,
 		Parents:       c.Parents,
+		Children:      c.Children,
 		Date:          c.Date,
 		CommitterID:   c.CommitterID,
 		DateAuthored:  c.DateAuthored,

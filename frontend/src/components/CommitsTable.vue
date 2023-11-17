@@ -1,4 +1,5 @@
 <script setup>
+import moment from 'moment'
 import { ref, watch } from 'vue'
 import DataGrid from '@/components/DataGrid.vue'
 import { sortParams } from './utils'
@@ -11,6 +12,7 @@ const columns = [
     name: 'Date',
     field: 'date',
     type: 'date',
+    tooltip: (v) => moment(v.date).toDate().toLocaleString(),
   },
   {
     name: 'Repo',
@@ -43,7 +45,7 @@ const columns = [
         name: 'Merge commit',
         icon: 'git-merge',
         before: true,
-        show: (v) => v.parents.length > 1,
+        show: (v) => v.parents && v.parents.length > 1,
       },
     ],
   },

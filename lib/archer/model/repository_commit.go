@@ -5,10 +5,11 @@ import (
 )
 
 type RepositoryCommit struct {
-	Hash    string
-	Message string
-	Parents []UUID
-	ID      UUID
+	Hash     string
+	Message  string
+	Parents  []UUID
+	Children []UUID
+	ID       UUID
 
 	Date         time.Time
 	CommitterID  UUID

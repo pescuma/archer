@@ -11,7 +11,7 @@ import (
 
 type RepoListParams struct {
 	GridParams
-	FilterRepo   string `form:"search"`
+	FilterRepo   string `form:"q"`
 	FilterPerson string `form:"person"`
 }
 

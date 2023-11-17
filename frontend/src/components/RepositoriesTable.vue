@@ -25,6 +25,12 @@ const columns = [
     name: 'VCS',
     field: 'vcs',
     type: 'text',
+    actions: [
+      {
+        icon: 'brand-git',
+        before: true,
+      },
+    ],
   },
   {
     name: 'Commits',
@@ -45,7 +51,7 @@ const columns = [
 
 async function loadPage(page, pageSize, sort, asc) {
   let s = sortParams(page, pageSize, sort, asc)
-  let f = filters.toQueryString({ repo: 'search', person: 'person' })
+  let f = filters.toQueryString({ repo: 'q', person: 'person' })
 
   return await window.api.get(`/api/repos?${f}&${s}`)
 }

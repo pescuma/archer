@@ -1,6 +1,5 @@
 <script setup>
 import { reactive } from 'vue'
-import { IconAlertTriangle } from '@tabler/icons-vue'
 
 const LOADING = 0
 const OK = 1
@@ -90,7 +89,7 @@ defineExpose({ startLoading, stopLoading, loading, request })
     <div class="card-body" v-if="props.type === 'count' && data.state === ERROR">
       <div class="row">
         <div class="col-auto">
-          <span class="bg-red-lt avatar"><i class="icon ti ti-alert-triangle"></i></span>
+          <span class="bg-red-lt avatar"><icon-alert-triangle class="icon" /></span>
         </div>
         <div class="col">
           <div class="text-red">{{ data.error }}</div>
@@ -109,7 +108,7 @@ defineExpose({ startLoading, stopLoading, loading, request })
     <div v-if="props.type === 'chart' && data.state === ERROR">
       <div class="card-header">
         <h3 class="card-title text-red">
-          <IconAlertTriangle class="icon" />
+          <icon-alert-triangle class="icon" />
           {{ data.error }}
         </h3>
       </div>
@@ -123,18 +122,18 @@ defineExpose({ startLoading, stopLoading, loading, request })
         <h3 class="card-title placeholder col-5"></h3>
       </div>
       <div class="card-body">
-        <div class="placeholder col-12" style="height: 650px"></div>
+        <div class="placeholder col-12" style="height: 520px"></div>
       </div>
     </div>
     <div v-if="props.type === 'table' && data.state === ERROR">
       <div class="card-header">
         <h3 class="card-title text-red">
-          <IconAlertTriangle class="icon" />
+          <icon-alert-triangle class="icon" />
           {{ data.error }}
         </h3>
       </div>
       <div class="card-body">
-        <div style="height: 650px"></div>
+        <div style="height: 520px"></div>
       </div>
     </div>
   </div>

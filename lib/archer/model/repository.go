@@ -35,6 +35,8 @@ func NewRepository(rootDir string, id *UUID) *Repository {
 		RootDir:       rootDir,
 		ID:            uuid,
 		Data:          map[string]string{},
+		FilesTotal:    -1,
+		FilesHead:     -1,
 		commitsByHash: map[string]*RepositoryCommit{},
 		commitsByID:   map[UUID]*RepositoryCommit{},
 	}

@@ -182,6 +182,12 @@ func (g *gitHistoryImporter) countFilesAtHEAD(gitRepo *git.Repository) (int, err
 	return result, nil
 }
 
+func (g *gitHistoryImporter) log(gitRepo *git.Repository) (object.CommitIter, error) {
+	return gitRepo.Log(&git.LogOptions{
+		Order: git.LogOrderCommitterTime,
+	})
+}
+
 func (g *gitHistoryImporter) countCommitsToImport(repo *model.Repository, gitRepo *git.Repository) (int, error) {
 	commitsIter, err := g.log(gitRepo)
 	if err != nil {
@@ -203,12 +209,6 @@ func (g *gitHistoryImporter) countCommitsToImport(repo *model.Repository, gitRep
 	}
 
 	return imported, nil
-}
-
-func (g *gitHistoryImporter) log(gitRepo *git.Repository) (object.CommitIter, error) {
-	return gitRepo.Log(&git.LogOptions{
-		Order: git.LogOrderCommitterTime,
-	})
 }
 
 func (g *gitHistoryImporter) importCommits(peopleDB *model.People, repo *model.Repository, gitRepo *git.Repository) (int, error) {
@@ -250,6 +250,34 @@ func (g *gitHistoryImporter) importCommits(peopleDB *model.People, repo *model.R
 		repo.SeenAt(commit.Date, commit.DateAuthored)
 		author.SeenAt(commit.Date, commit.DateAuthored)
 		committer.SeenAt(commit.Date, commit.DateAuthored)
+
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	commitsIter, err = g.log(gitRepo)
+	if err != nil {
+		return 0, err
+	}
+
+	err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
+		repoCommit := repo.GetCommit(gitCommit.Hash.String())
+
+		if g.options.Incremental && len(repoCommit.Parents) > 0 {
+			return nil
+		}
+
+		err = gitCommit.Parents().ForEach(func(gitParent *object.Commit) error {
+			repoParent := repo.GetCommit(gitParent.Hash.String())
+			repoCommit.Parents = append(repoCommit.Parents, repoParent.ID)
+			repoParent.Children = append(repoParent.Children, repoCommit.ID)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
 
 		return nil
 	})
@@ -327,16 +355,41 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage, filesDB *mode
 
 		bar.Describe(gitCommit.Committer.When.Format("2006-01-02 15"))
 
-		err = gitCommit.Parents().ForEach(func(gitParent *object.Commit) error {
-			repoParent := repo.GetCommit(gitParent.Hash.String())
-			commit.Parents = append(commit.Parents, repoParent.ID)
-			return nil
-		})
-		if err != nil {
-			return err
-		}
+		if len(commit.Parents) == 0 {
+			gitTree, err := gitCommit.Tree()
+			if err != nil {
+				return err
+			}
 
-		if len(commit.Parents) == 1 {
+			commit.ModifiedLines = 0
+			commit.AddedLines = 0
+			commit.DeletedLines = 0
+
+			err = gitTree.Files().ForEach(func(gitFile *object.File) error {
+				filePath := filepath.Join(repo.RootDir, gitFile.Name)
+
+				file := filesDB.GetOrCreateFile(filePath)
+				file.RepositoryID = &repo.ID
+
+				gitLines, err := gitFile.Lines()
+				if err != nil {
+					return err
+				}
+
+				cf := commit.GetOrCreateFile(file.ID)
+				cf.ModifiedLines = 0
+				cf.AddedLines = len(gitLines)
+				cf.DeletedLines = 0
+
+				commit.AddedLines += cf.AddedLines
+
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+
+		} else if len(commit.Parents) == 1 {
 			err = gitCommit.Parents().ForEach(func(gitParent *object.Commit) error {
 				repoParent := repo.GetCommit(gitParent.Hash.String())
 
@@ -388,40 +441,6 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage, filesDB *mode
 
 		} else if len(commit.Parents) > 1 {
 			// TODO: Handle merge commits
-
-		} else if len(commit.Parents) == 0 {
-			gitTree, err := gitCommit.Tree()
-			if err != nil {
-				return err
-			}
-
-			commit.ModifiedLines = 0
-			commit.AddedLines = 0
-			commit.DeletedLines = 0
-
-			err = gitTree.Files().ForEach(func(gitFile *object.File) error {
-				filePath := filepath.Join(repo.RootDir, gitFile.Name)
-
-				file := filesDB.GetOrCreateFile(filePath)
-				file.RepositoryID = &repo.ID
-
-				gitLines, err := gitFile.Lines()
-				if err != nil {
-					return err
-				}
-
-				cf := commit.GetOrCreateFile(file.ID)
-				cf.ModifiedLines = 0
-				cf.AddedLines = len(gitLines)
-				cf.DeletedLines = 0
-
-				commit.AddedLines += cf.AddedLines
-
-				return nil
-			})
-			if err != nil {
-				return err
-			}
 		}
 
 		if g.options.SaveEvery != nil && imported%*g.options.SaveEvery == 0 {

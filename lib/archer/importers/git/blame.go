@@ -1,3 +1,5 @@
+// Based on a file copied from go-git
+
 package git
 
 import (

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pescuma/archer/lib/archer/model"
@@ -133,6 +134,11 @@ func prepareToSearch(s string) string {
 
 func encodeMetric(v int) *int {
 	return utils.IIf(v == -1, nil, &v)
+}
+
+func encodeDate(v time.Time) *time.Time {
+	empty := time.Time{}
+	return utils.IIf(v == empty, nil, &v)
 }
 
 func (s *server) toSize(i *model.Size) gin.H {

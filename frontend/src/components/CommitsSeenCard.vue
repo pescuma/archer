@@ -1,6 +1,6 @@
 <script setup>
 import _ from 'lodash'
-import moment from 'moment/moment'
+import moment from 'moment'
 import { onMounted, reactive, ref } from 'vue'
 import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
 import gravatarUrl from 'gravatar-url'
@@ -203,7 +203,9 @@ function getGravatarStyle(commit) {
             <td class="td-truncate">
               <div class="text-truncate">{{ c.message }}</div>
             </td>
-            <td class="text-truncate text-muted">{{ moment(c.date).toDate().toLocaleDateString() }}</td>
+            <td class="text-truncate text-muted" :title="moment(c.date).toDate().toLocaleString()">
+              {{ moment(c.date).toDate().toLocaleDateString() }}
+            </td>
           </tr>
         </tbody>
       </table>

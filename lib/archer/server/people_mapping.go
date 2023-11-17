@@ -86,8 +86,8 @@ func (s *server) toPerson(p *model.Person) gin.H {
 		"emails":    p.ListEmails(),
 		"blame":     s.toSize(p.Blame),
 		"changes":   s.toChanges(p.Changes),
-		"firstSeen": p.FirstSeen,
-		"lastSeen":  p.LastSeen,
+		"firstSeen": encodeDate(p.FirstSeen),
+		"lastSeen":  encodeDate(p.LastSeen),
 	}
 }
 

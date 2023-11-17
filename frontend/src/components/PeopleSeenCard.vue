@@ -1,6 +1,6 @@
 <script setup>
 import _ from 'lodash'
-import moment from 'moment/moment'
+import moment from 'moment'
 import { onMounted, reactive, ref } from 'vue'
 import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
 
