@@ -643,10 +643,13 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 		c.CommitterID = sc.CommitterID
 		c.DateAuthored = sc.DateAuthored
 		c.AuthorID = sc.AuthorID
-		c.ModifiedLines = decodeMetric(sc.ModifiedLines)
-		c.AddedLines = decodeMetric(sc.AddedLines)
-		c.DeletedLines = decodeMetric(sc.DeletedLines)
-		c.SurvivedLines = decodeMetric(sc.SurvivedLines)
+		c.FilesModified = decodeMetric(sc.FilesModified)
+		c.FilesCreated = decodeMetric(sc.FilesCreated)
+		c.FilesDeleted = decodeMetric(sc.FilesDeleted)
+		c.LinesModified = decodeMetric(sc.LinesModified)
+		c.LinesAdded = decodeMetric(sc.LinesAdded)
+		c.LinesDeleted = decodeMetric(sc.LinesDeleted)
+		c.LinesSurvived = decodeMetric(sc.LinesSurvived)
 		c.Ignore = sc.Ignore
 
 		commitsById[c.ID] = c
@@ -657,10 +660,10 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 
 		file := commit.GetOrCreateFile(sf.FileID)
 		file.OldFileIDs = decodeOldFileIDs(sf.OldFileIDs)
-		file.ModifiedLines = sf.ModifiedLines
-		file.AddedLines = sf.AddedLines
-		file.DeletedLines = sf.DeletedLines
-		file.SurvivedLines = decodeMetric(sf.SurvivedLines)
+		file.LinesModified = decodeMetric(sf.LinesModified)
+		file.LinesAdded = decodeMetric(sf.LinesAdded)
+		file.LinesDeleted = decodeMetric(sf.LinesDeleted)
+		file.LinesSurvived = decodeMetric(sf.LinesSurvived)
 	}
 
 	return result, nil
@@ -739,7 +742,7 @@ func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.S
 	return nil
 }
 
-func (s *sqliteStorage) WriteCommit(repo *model.Repository, commit *model.RepositoryCommit, info archer.StorageChanges) error {
+func (s *sqliteStorage) WriteCommit(repo *model.Repository, commit *model.RepositoryCommit, _ archer.StorageChanges) error {
 	var sqlCommits []*sqlRepositoryCommit
 
 	sc := toSqlRepositoryCommit(repo, commit)
@@ -858,9 +861,9 @@ func toSqlChanges(c *model.Changes) *sqlChanges {
 	return &sqlChanges{
 		Semester:      encodeMetric(c.In6Months),
 		Total:         encodeMetric(c.Total),
-		ModifiedLines: encodeMetric(c.ModifiedLines),
-		AddedLines:    encodeMetric(c.AddedLines),
-		DeletedLines:  encodeMetric(c.DeletedLines),
+		LinesModified: encodeMetric(c.LinesModified),
+		LinesAdded:    encodeMetric(c.LinesAdded),
+		LinesDeleted:  encodeMetric(c.LinesDeleted),
 	}
 }
 
@@ -868,9 +871,9 @@ func toModelChanges(sc *sqlChanges) *model.Changes {
 	return &model.Changes{
 		In6Months:     decodeMetric(sc.Semester),
 		Total:         decodeMetric(sc.Total),
-		ModifiedLines: decodeMetric(sc.ModifiedLines),
-		AddedLines:    decodeMetric(sc.AddedLines),
-		DeletedLines:  decodeMetric(sc.DeletedLines),
+		LinesModified: decodeMetric(sc.LinesModified),
+		LinesAdded:    decodeMetric(sc.LinesAdded),
+		LinesDeleted:  decodeMetric(sc.LinesDeleted),
 	}
 }
 
@@ -1098,10 +1101,13 @@ func toSqlRepositoryCommit(r *model.Repository, c *model.RepositoryCommit) *sqlR
 		CommitterID:   c.CommitterID,
 		DateAuthored:  c.DateAuthored,
 		AuthorID:      c.AuthorID,
-		ModifiedLines: encodeMetric(c.ModifiedLines),
-		AddedLines:    encodeMetric(c.AddedLines),
-		DeletedLines:  encodeMetric(c.DeletedLines),
-		SurvivedLines: encodeMetric(c.SurvivedLines),
+		FilesModified: encodeMetric(c.FilesModified),
+		FilesCreated:  encodeMetric(c.FilesCreated),
+		FilesDeleted:  encodeMetric(c.FilesDeleted),
+		LinesModified: encodeMetric(c.LinesModified),
+		LinesAdded:    encodeMetric(c.LinesAdded),
+		LinesDeleted:  encodeMetric(c.LinesDeleted),
+		LinesSurvived: encodeMetric(c.LinesSurvived),
 		Ignore:        c.Ignore,
 	}
 }
@@ -1112,10 +1118,10 @@ func toSqlRepositoryCommitFile(r *model.Repository, c *model.RepositoryCommit, f
 		FileID:        f.FileID,
 		OldFileIDs:    encodeOldFileIDs(f.OldFileIDs),
 		RepositoryID:  r.ID,
-		ModifiedLines: f.ModifiedLines,
-		AddedLines:    f.AddedLines,
-		DeletedLines:  f.DeletedLines,
-		SurvivedLines: encodeMetric(f.SurvivedLines),
+		LinesModified: encodeMetric(f.LinesModified),
+		LinesAdded:    encodeMetric(f.LinesAdded),
+		LinesDeleted:  encodeMetric(f.LinesDeleted),
+		LinesSurvived: encodeMetric(f.LinesSurvived),
 	}
 }
 

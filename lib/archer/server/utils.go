@@ -154,8 +154,8 @@ func (s *server) toChanges(i *model.Changes) gin.H {
 	return gin.H{
 		"total":         encodeMetric(i.Total),
 		"in6Months":     encodeMetric(i.In6Months),
-		"modifiedLines": encodeMetric(i.ModifiedLines),
-		"addedLines":    encodeMetric(i.AddedLines),
-		"deletedLines":  encodeMetric(i.DeletedLines),
+		"linesModified": encodeMetric(i.LinesModified),
+		"linesAdded":    encodeMetric(i.LinesAdded),
+		"linesDeleted":  encodeMetric(i.LinesDeleted),
 	}
 }

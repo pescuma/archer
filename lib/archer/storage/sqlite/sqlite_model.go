@@ -178,10 +178,13 @@ type sqlRepositoryCommit struct {
 	CommitterID   model.UUID   `gorm:"index"`
 	DateAuthored  time.Time
 	AuthorID      model.UUID
-	AddedLines    *int
-	ModifiedLines *int
-	DeletedLines  *int
-	SurvivedLines *int
+	FilesModified *int
+	FilesCreated  *int
+	FilesDeleted  *int
+	LinesModified *int
+	LinesAdded    *int
+	LinesDeleted  *int
+	LinesSurvived *int
 	Ignore        bool
 
 	CreatedAt time.Time
@@ -196,10 +199,10 @@ type sqlRepositoryCommitFile struct {
 	FileID        model.UUID `gorm:"primaryKey"`
 	OldFileIDs    string
 	RepositoryID  model.UUID `gorm:"index"`
-	AddedLines    int        // TODO *
-	ModifiedLines int
-	DeletedLines  int
-	SurvivedLines *int
+	LinesAdded    *int
+	LinesModified *int
+	LinesDeleted  *int
+	LinesSurvived *int
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -234,7 +237,7 @@ type sqlMetricsAggregate struct {
 type sqlChanges struct {
 	Semester      *int
 	Total         *int
-	ModifiedLines *int
-	AddedLines    *int
-	DeletedLines  *int
+	LinesModified *int
+	LinesAdded    *int
+	LinesDeleted  *int
 }

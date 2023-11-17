@@ -106,7 +106,7 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 		}
 
 		if !importedHistory {
-			fmt.Printf("'%v': repository history not fully imported. run 'import git history'", rootDir)
+			fmt.Printf("'%v': repository history not fully imported. run 'import git history'\n", rootDir)
 			continue
 		}
 
@@ -513,10 +513,10 @@ func (g *gitBlameImporter) propagateChangesToParents(storage archer.Storage, peo
 	for _, r := range repos {
 		for _, c := range r.ListCommits() {
 			commits[c.ID] = c
-			c.SurvivedLines = 0
+			c.LinesSurvived = 0
 
 			for _, f := range c.Files {
-				f.SurvivedLines = 0
+				f.LinesSurvived = 0
 			}
 		}
 	}
@@ -530,11 +530,11 @@ func (g *gitBlameImporter) propagateChangesToParents(storage archer.Storage, peo
 
 	for _, blame := range blames {
 		if c, ok := commits[blame.CommitID]; ok {
-			c.SurvivedLines += blame.Lines
+			c.LinesSurvived += blame.Lines
 
 			// TODO Blame code is creating strange commit references
 			if file, ok := c.Files[blame.FileID]; ok {
-				file.SurvivedLines += blame.Lines
+				file.LinesSurvived += blame.Lines
 			}
 		}
 
@@ -576,14 +576,14 @@ func (g *gitBlameImporter) checkImportedHistory(repo *model.Repository, gitRepo 
 		return false, nil
 	}
 
-	commitsIter, err := gitRepo.Log(&git.LogOptions{})
+	commitsIter, err := log(gitRepo)
 	if err != nil {
 		return false, err
 	}
 
 	err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
 		repoCommit := repo.GetCommit(gitCommit.Hash.String())
-		if repoCommit == nil || repoCommit.ModifiedLines == -1 {
+		if repoCommit == nil || repoCommit.FilesModified == -1 {
 			return g.abort
 		}
 

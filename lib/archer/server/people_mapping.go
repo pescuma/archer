@@ -64,11 +64,11 @@ func (s *server) sortPeople(col []*model.Person, field string, asc *bool) error 
 	case "changes.in6Months":
 		return sortBy(col, func(r *model.Person) int { return r.Changes.In6Months }, *asc)
 	case "changes.modifiedLines":
-		return sortBy(col, func(r *model.Person) int { return r.Changes.ModifiedLines }, *asc)
+		return sortBy(col, func(r *model.Person) int { return r.Changes.LinesModified }, *asc)
 	case "changes.addedLines":
-		return sortBy(col, func(r *model.Person) int { return r.Changes.AddedLines }, *asc)
+		return sortBy(col, func(r *model.Person) int { return r.Changes.LinesAdded }, *asc)
 	case "changes.deletedLines":
-		return sortBy(col, func(r *model.Person) int { return r.Changes.DeletedLines }, *asc)
+		return sortBy(col, func(r *model.Person) int { return r.Changes.LinesDeleted }, *asc)
 	case "firstSeen":
 		return sortBy(col, func(r *model.Person) int64 { return r.FirstSeen.UnixMilli() }, *asc)
 	case "lastSeen":

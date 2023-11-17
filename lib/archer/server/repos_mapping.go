@@ -151,13 +151,13 @@ func (s *server) sortCommits(col []RepoAndCommit, field string, asc *bool) error
 	case "author.name":
 		return sortBy(col, func(r RepoAndCommit) string { return s.people.GetPersonByID(r.Commit.AuthorID).Name }, *asc)
 	case "modifiedLines":
-		return sortBy(col, func(r RepoAndCommit) int { return r.Commit.ModifiedLines }, *asc)
+		return sortBy(col, func(r RepoAndCommit) int { return r.Commit.LinesModified }, *asc)
 	case "addedLines":
-		return sortBy(col, func(r RepoAndCommit) int { return r.Commit.AddedLines }, *asc)
+		return sortBy(col, func(r RepoAndCommit) int { return r.Commit.LinesAdded }, *asc)
 	case "deletedLines":
-		return sortBy(col, func(r RepoAndCommit) int { return r.Commit.DeletedLines }, *asc)
+		return sortBy(col, func(r RepoAndCommit) int { return r.Commit.LinesDeleted }, *asc)
 	case "survivedLines":
-		return sortBy(col, func(r RepoAndCommit) int { return r.Commit.SurvivedLines }, *asc)
+		return sortBy(col, func(r RepoAndCommit) int { return r.Commit.LinesSurvived }, *asc)
 	default:
 		return fmt.Errorf("unknown sort field: %s", field)
 	}
@@ -178,9 +178,9 @@ func (s *server) toCommit(commit *model.RepositoryCommit, repo *model.Repository
 		"committer":     s.toPersonReference(committer),
 		"dateAuthored":  commit.DateAuthored,
 		"author":        s.toPersonReference(author),
-		"modifiedLines": encodeMetric(commit.ModifiedLines),
-		"addedLines":    encodeMetric(commit.AddedLines),
-		"deletedLines":  encodeMetric(commit.DeletedLines),
-		"survivedLines": encodeMetric(commit.SurvivedLines),
+		"modifiedLines": encodeMetric(commit.LinesModified),
+		"addedLines":    encodeMetric(commit.LinesAdded),
+		"deletedLines":  encodeMetric(commit.LinesDeleted),
+		"survivedLines": encodeMetric(commit.LinesSurvived),
 	}
 }

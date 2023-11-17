@@ -4,19 +4,19 @@ type RepositoryCommitFile struct {
 	FileID     UUID
 	OldFileIDs map[UUID]UUID
 
-	ModifiedLines int
-	AddedLines    int
-	DeletedLines  int
-	SurvivedLines int
+	LinesModified int
+	LinesAdded    int
+	LinesDeleted  int
+	LinesSurvived int
 }
 
 func NewRepositoryCommitFile(fileID UUID) *RepositoryCommitFile {
 	return &RepositoryCommitFile{
 		FileID:        fileID,
 		OldFileIDs:    make(map[UUID]UUID),
-		ModifiedLines: -1,
-		AddedLines:    -1,
-		DeletedLines:  -1,
-		SurvivedLines: -1,
+		LinesModified: -1,
+		LinesAdded:    -1,
+		LinesDeleted:  -1,
+		LinesSurvived: -1,
 	}
 }

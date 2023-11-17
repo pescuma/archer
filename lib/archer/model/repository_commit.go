@@ -16,10 +16,14 @@ type RepositoryCommit struct {
 	DateAuthored time.Time
 	AuthorID     UUID
 
-	ModifiedLines int
-	AddedLines    int
-	DeletedLines  int
-	SurvivedLines int
+	FilesModified int
+	FilesCreated  int
+	FilesDeleted  int
+
+	LinesModified int
+	LinesAdded    int
+	LinesDeleted  int
+	LinesSurvived int
 
 	Ignore bool
 
@@ -37,10 +41,13 @@ func NewRepositoryCommit(hash string, id *UUID) *RepositoryCommit {
 	result := &RepositoryCommit{
 		Hash:          hash,
 		ID:            uuid,
-		ModifiedLines: -1,
-		AddedLines:    -1,
-		DeletedLines:  -1,
-		SurvivedLines: -1,
+		FilesModified: -1,
+		FilesCreated:  -1,
+		FilesDeleted:  -1,
+		LinesModified: -1,
+		LinesAdded:    -1,
+		LinesDeleted:  -1,
+		LinesSurvived: -1,
 		Files:         make(map[UUID]*RepositoryCommitFile),
 	}
 

@@ -195,9 +195,9 @@ func (s *server) getChangedLines(params *StatsLinesParams) (any, error) {
 	})
 	s2 := lo.MapValues(s1, func(i []RepoAndCommit, _ string) gin.H {
 		return gin.H{
-			"modified": lo.SumBy(i, func(j RepoAndCommit) int { return j.Commit.ModifiedLines }),
-			"added":    lo.SumBy(i, func(j RepoAndCommit) int { return j.Commit.AddedLines }),
-			"deleted":  lo.SumBy(i, func(j RepoAndCommit) int { return j.Commit.DeletedLines }),
+			"modified": lo.SumBy(i, func(j RepoAndCommit) int { return j.Commit.LinesModified }),
+			"added":    lo.SumBy(i, func(j RepoAndCommit) int { return j.Commit.LinesAdded }),
+			"deleted":  lo.SumBy(i, func(j RepoAndCommit) int { return j.Commit.LinesDeleted }),
 		}
 	})
 
