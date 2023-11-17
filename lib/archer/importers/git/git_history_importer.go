@@ -72,9 +72,18 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
+	fmt.Printf("Importing and grouping authors...\n")
+
 	g.grouper, err = importPeople(peopleDB, g.rootDirs)
 	if err != nil {
 		return err
+	}
+
+	if g.options.SaveEvery != nil {
+		err = storage.WritePeople(peopleDB, archer.ChangedBasicInfo)
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, rootDir := range g.rootDirs {
@@ -93,7 +102,7 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 		repo.Name = filepath.Base(rootDir)
 		repo.VCS = "git"
 
-		err = g.importCommits(peopleDB, repo, gitRepo)
+		commitsImported, err := g.importCommits(peopleDB, repo, gitRepo)
 		if err != nil {
 			return err
 		}
@@ -103,7 +112,7 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 			return err
 		}
 
-		if g.options.SaveEvery != nil {
+		if g.options.SaveEvery != nil && commitsImported > 0 {
 			err = g.writeResults(storage, filesDB, repo)
 			if err != nil {
 				return err
@@ -174,7 +183,7 @@ func (g *gitHistoryImporter) countFilesAtHEAD(gitRepo *git.Repository) (int, err
 }
 
 func (g *gitHistoryImporter) countCommitsToImport(repo *model.Repository, gitRepo *git.Repository) (int, error) {
-	commitsIter, err := gitRepo.Log(&git.LogOptions{})
+	commitsIter, err := g.log(gitRepo)
 	if err != nil {
 		return 0, err
 	}
@@ -196,21 +205,27 @@ func (g *gitHistoryImporter) countCommitsToImport(repo *model.Repository, gitRep
 	return imported, nil
 }
 
-func (g *gitHistoryImporter) importCommits(peopleDB *model.People, repo *model.Repository, gitRepo *git.Repository) error {
+func (g *gitHistoryImporter) log(gitRepo *git.Repository) (object.CommitIter, error) {
+	return gitRepo.Log(&git.LogOptions{
+		Order: git.LogOrderCommitterTime,
+	})
+}
+
+func (g *gitHistoryImporter) importCommits(peopleDB *model.People, repo *model.Repository, gitRepo *git.Repository) (int, error) {
 	imported, err := g.countCommitsToImport(repo, gitRepo)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if imported == 0 {
-		return nil
+		return 0, nil
 	}
 
 	fmt.Printf("%v: Importing commits...\n", repo.Name)
 
-	commitsIter, err := gitRepo.Log(&git.LogOptions{})
+	commitsIter, err := g.log(gitRepo)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	bar := utils.NewProgressBar(imported)
@@ -239,14 +254,14 @@ func (g *gitHistoryImporter) importCommits(peopleDB *model.People, repo *model.R
 		return nil
 	})
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	return nil
+	return imported, nil
 }
 
 func (g *gitHistoryImporter) countChangesToImport(repo *model.Repository, gitRepo *git.Repository) (int, error) {
-	commitsIter, err := gitRepo.Log(&git.LogOptions{})
+	commitsIter, err := g.log(gitRepo)
 	if err != nil {
 		return 0, err
 	}
@@ -261,7 +276,7 @@ func (g *gitHistoryImporter) countChangesToImport(repo *model.Repository, gitRep
 
 		commit := repo.GetCommit(gitCommit.Hash.String())
 
-		if g.options.Incremental && commit.ModifiedLines != -1 {
+		if g.options.Incremental && (commit.ModifiedLines != -1 || len(commit.Parents) > 1) {
 			return nil
 		}
 		imported++
@@ -289,7 +304,7 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage, filesDB *mode
 
 	fmt.Printf("%v: Importing changes...\n", repo.Name)
 
-	commitsIter, err := gitRepo.Log(&git.LogOptions{})
+	commitsIter, err := g.log(gitRepo)
 	if err != nil {
 		return err
 	}
@@ -304,7 +319,7 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage, filesDB *mode
 
 		commit := repo.GetCommit(gitCommit.Hash.String())
 
-		if g.options.Incremental && commit.ModifiedLines != -1 {
+		if g.options.Incremental && (commit.ModifiedLines != -1 || len(commit.Parents) > 1) {
 			return nil
 		}
 		g.commitsImported++
@@ -312,65 +327,77 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage, filesDB *mode
 
 		bar.Describe(gitCommit.Committer.When.Format("2006-01-02 15"))
 
-		commit.ModifiedLines = 0
-		commit.AddedLines = 0
-		commit.DeletedLines = 0
-
 		err = gitCommit.Parents().ForEach(func(gitParent *object.Commit) error {
 			repoParent := repo.GetCommit(gitParent.Hash.String())
 			commit.Parents = append(commit.Parents, repoParent.ID)
-
-			gitChanges, err := g.computeChanges(gitCommit, gitParent)
-			if err != nil {
-				return err
-			}
-
-			modifiedLines := 0
-			addedLines := 0
-			deletedLines := 0
-
-			for _, gitFile := range gitChanges {
-				filePath := filepath.Join(repo.RootDir, gitFile.Name)
-
-				file := filesDB.GetOrCreateFile(filePath)
-				file.RepositoryID = &repo.ID
-				file.SeenAt(commit.Date, commit.DateAuthored)
-
-				cf := commit.GetOrCreateFile(file.ID)
-				cf.ModifiedLines = utils.Max(cf.ModifiedLines, gitFile.Modified)
-				cf.AddedLines = utils.Max(cf.AddedLines, gitFile.Added)
-				cf.DeletedLines = utils.Max(cf.DeletedLines, gitFile.Deleted)
-
-				if gitFile.Name != gitFile.OldName {
-					oldFilePath := filepath.Join(repo.RootDir, gitFile.OldName)
-
-					oldFile := filesDB.GetOrCreateFile(oldFilePath)
-					oldFile.RepositoryID = &repo.ID
-					oldFile.SeenAt(commit.Date, commit.DateAuthored)
-
-					cf.OldFileIDs[repoParent.ID] = oldFile.ID
-				}
-
-				modifiedLines += gitFile.Modified
-				addedLines += gitFile.Added
-				deletedLines += gitFile.Deleted
-			}
-
-			commit.ModifiedLines = utils.Max(commit.ModifiedLines, modifiedLines)
-			commit.AddedLines = utils.Max(commit.AddedLines, addedLines)
-			commit.DeletedLines = utils.Max(commit.DeletedLines, deletedLines)
-
 			return nil
 		})
 		if err != nil {
 			return err
 		}
 
-		if len(commit.Parents) == 0 {
+		if len(commit.Parents) == 1 {
+			err = gitCommit.Parents().ForEach(func(gitParent *object.Commit) error {
+				repoParent := repo.GetCommit(gitParent.Hash.String())
+
+				gitChanges, err := g.computeChanges(gitCommit, gitParent)
+				if err != nil {
+					return err
+				}
+
+				modifiedLines := 0
+				addedLines := 0
+				deletedLines := 0
+
+				for _, gitFile := range gitChanges {
+					filePath := filepath.Join(repo.RootDir, gitFile.Name)
+
+					file := filesDB.GetOrCreateFile(filePath)
+					file.RepositoryID = &repo.ID
+					file.SeenAt(commit.Date, commit.DateAuthored)
+
+					cf := commit.GetOrCreateFile(file.ID)
+					cf.ModifiedLines = utils.Max(cf.ModifiedLines, gitFile.Modified)
+					cf.AddedLines = utils.Max(cf.AddedLines, gitFile.Added)
+					cf.DeletedLines = utils.Max(cf.DeletedLines, gitFile.Deleted)
+
+					if gitFile.Name != gitFile.OldName {
+						oldFilePath := filepath.Join(repo.RootDir, gitFile.OldName)
+
+						oldFile := filesDB.GetOrCreateFile(oldFilePath)
+						oldFile.RepositoryID = &repo.ID
+						oldFile.SeenAt(commit.Date, commit.DateAuthored)
+
+						cf.OldFileIDs[repoParent.ID] = oldFile.ID
+					}
+
+					modifiedLines += gitFile.Modified
+					addedLines += gitFile.Added
+					deletedLines += gitFile.Deleted
+				}
+
+				commit.ModifiedLines = modifiedLines
+				commit.AddedLines = addedLines
+				commit.DeletedLines = deletedLines
+
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+
+		} else if len(commit.Parents) > 1 {
+			// TODO: Handle merge commits
+
+		} else if len(commit.Parents) == 0 {
 			gitTree, err := gitCommit.Tree()
 			if err != nil {
 				return err
 			}
+
+			commit.ModifiedLines = 0
+			commit.AddedLines = 0
+			commit.DeletedLines = 0
 
 			err = gitTree.Files().ForEach(func(gitFile *object.File) error {
 				filePath := filepath.Join(repo.RootDir, gitFile.Name)

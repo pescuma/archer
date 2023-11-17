@@ -139,17 +139,27 @@ onMounted(function () {
 })
 
 function createInitials(commit) {
-  let initials = commit.committer.name.split(' ').map(function (i) {
+  if (!commit.author) {
+    return '?'
+  }
+
+  let initials = commit.author.name.split(' ').map(function (i) {
     return i[0]
   })
 
-  if (initials.length > 2) initials = [initials[0], initials[initials.length - 1]]
+  if (initials.length > 2) {
+    initials = [initials[0], initials[initials.length - 1]]
+  }
 
   return initials.join('').toUpperCase()
 }
 
 function getGravatarStyle(commit) {
-  let candidates = commit.committer.emails.find(function (i) {
+  if (!commit.author) {
+    return ''
+  }
+
+  let candidates = commit.author.emails.find(function (i) {
     return !i.match(/@users.noreply.github.com$/)
   })
   if (!candidates) {
@@ -176,24 +186,24 @@ function getGravatarStyle(commit) {
       <table class="table table-vcenter">
         <thead>
           <tr>
-            <th>User</th>
-            <th>Repo</th>
-            <th>Commit</th>
+            <th class="w-1">Author</th>
+            <th class="w-2">Repo</th>
+            <th>Message</th>
             <th>Date</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="c in data.commits" :key="c.id">
-            <td class="w-1">
+            <td>
               <span class="avatar avatar-sm" :style="getGravatarStyle(c)">{{ createInitials(c) }}</span>
             </td>
-            <td class="w-2">
+            <td>
               <div class="text-truncate">{{ c.repo.name }}</div>
             </td>
             <td class="td-truncate">
               <div class="text-truncate">{{ c.message }}</div>
             </td>
-            <td class="text-nowrap text-muted">{{ moment(c.date).format('YYYY-MM-DD') }}</td>
+            <td class="text-truncate text-muted">{{ moment(c.date).toDate().toLocaleDateString() }}</td>
           </tr>
         </tbody>
       </table>

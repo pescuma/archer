@@ -38,11 +38,16 @@ const columns = computed(() => {
       defaultAsc: true,
       format: function (r) {
         if (c.format) return c.format(r)
-        else return _.get(r, c.field)
+
+        let v = _.get(r, c.field)
+        if (v === null || v === undefined) return ''
+
+        return v
       },
       tooltip: function (r) {
         if (c.tooltip) return c.tooltip(r)
-        else return undefined
+
+        return undefined
       },
     }
 
@@ -72,7 +77,11 @@ const columns = computed(() => {
         rc.defaultAsc = false
         rc.format = function (r) {
           if (c.format) return c.format(r)
-          else return Math.round(_.get(r, c.field)).toLocaleString()
+
+          let v = _.get(r, c.field)
+          if (v === null || v === undefined) return ''
+
+          return Math.round(v).toLocaleString()
         }
         break
       }
@@ -82,7 +91,11 @@ const columns = computed(() => {
         rc.defaultAsc = false
         rc.format = function (r) {
           if (c.format) return c.format(r)
-          return Math.round(Math.round(_.get(r, c.field) * 100) / 100).toLocaleString()
+
+          let v = _.get(r, c.field)
+          if (v === null || v === undefined) return ''
+
+          return Math.round(Math.round(v * 100) / 100).toLocaleString()
         }
         break
       }
@@ -92,7 +105,11 @@ const columns = computed(() => {
         rc.defaultAsc = false
         rc.format = function (r) {
           if (c.format) return c.format(r)
-          else return moment(_.get(r, c.field)).toDate().toLocaleDateString()
+
+          let v = _.get(r, c.field)
+          if (v === null || v === undefined) return ''
+
+          return moment(v).toDate().toLocaleDateString()
         }
         break
       }
@@ -102,7 +119,11 @@ const columns = computed(() => {
         rc.defaultAsc = false
         rc.format = function (r) {
           if (c.format) return c.format(r)
-          else return moment(_.get(r, c.field)).toDate().toLocaleString()
+
+          let v = _.get(r, c.field)
+          if (v === null || v === undefined) return ''
+
+          return moment(v).toDate().toLocaleString()
         }
         break
       }
@@ -170,7 +191,7 @@ function sort(field) {
 }
 
 function click(r, a) {
-  a.onClick(r)
+  if (a.onClick) a.onClick(r)
 }
 
 function refresh() {
@@ -206,26 +227,46 @@ defineExpose({ refresh })
         <tbody>
           <tr v-for="r in data.pageRows">
             <td v-for="c in columns" :class="c.td_class" :style="c.style">
-              <div class="row">
+              <div class="row" v-if="c.actions">
                 <div class="col-auto text-truncate text-nowrap" :title="c.tooltip(r)">
-                  <a
-                    v-for="a in c.actions"
-                    href="#"
-                    class="text-decoration-none float-end ms-1"
-                    :title="a.name"
-                    @click.prevent="click(r, a)"
-                  >
-                    <component :is="'icon-' + a.icon" class="icon icon-sm align-text-bottom" />
-                  </a>
+                  <template v-for="a in c.actions">
+                    <a
+                      v-if="a.before && (!a.show || a.show(r))"
+                      href="#"
+                      class="text-decoration-none"
+                      style="position: relative; z-index: 1"
+                      :title="a.name"
+                      @click.prevent="click(r, a)"
+                    >
+                      <component :is="'icon-' + a.icon" class="icon icon-sm align-text-bottom" />
+                    </a>
+                  </template>
+                  <template v-for="a in c.actions">
+                    <a
+                      v-if="!a.before && (!a.show || a.show(r))"
+                      href="#"
+                      class="text-decoration-none float-end"
+                      style="position: relative; z-index: 1"
+                      :title="a.name"
+                      @click.prevent="click(r, a)"
+                    >
+                      <component :is="'icon-' + a.icon" class="icon icon-sm align-text-bottom" />
+                    </a>
+                  </template>
 
                   {{ c.format(r) }}
                 </div>
               </div>
+              <div class="text-truncate text-nowrap" :title="c.tooltip(r)" v-else>
+                {{ c.format(r) }}
+              </div>
             </td>
             <td v-if="actions">
-              <a v-for="a in actions" href="#" class="text-decoration-none" :title="a.name" @click.prevent="click(r, a)">
-                <component :is="'icon-' + a.icon" class="icon" />
-              </a>
+              <template v-for="a in actions">
+                <a v-if="!a.show || a.show(r)" href="#" class="text-decoration-none" :title="a.name" @click.prevent="click(r, a)">
+                  <component :is="'icon-' + a.icon" class="icon" />
+                </a>
+              </template>
             </td>
           </tr>
         </tbody>

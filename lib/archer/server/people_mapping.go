@@ -92,6 +92,10 @@ func (s *server) toPerson(p *model.Person) gin.H {
 }
 
 func (s *server) toPersonReference(p *model.Person) gin.H {
+	if p == nil {
+		return nil
+	}
+
 	return gin.H{
 		"id":     p.ID,
 		"name":   p.Name,

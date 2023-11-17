@@ -10,10 +10,10 @@ const columns = [
   {
     name: 'Date',
     field: 'date',
-    type: 'datetime',
+    type: 'date',
   },
   {
-    name: 'Repository',
+    name: 'Repo',
     field: 'repo.name',
     type: 'text',
     actions: [
@@ -38,16 +38,47 @@ const columns = [
     field: 'message',
     type: 'text',
     size: 'l',
-  },
-  {
-    name: 'Committer',
-    field: 'committer.name',
-    type: 'text',
+    actions: [
+      {
+        name: 'Merge commit',
+        icon: 'git-merge',
+        before: true,
+        show: (v) => v.parents.length > 1,
+      },
+    ],
   },
   {
     name: 'Author',
     field: 'author.name',
     type: 'text',
+    actions: [
+      {
+        name: 'Filter',
+        icon: 'filter',
+        onClick: function (v) {
+          filters.data.person = v.author.name
+        },
+      },
+    ],
+  },
+  {
+    name: 'Committer',
+    field: 'committer.name',
+    type: 'text',
+    format: (v) => {
+      if (v.committer.id === v.author.id) return ''
+      return v.committer.name
+    },
+    actions: [
+      {
+        name: 'Filter',
+        icon: 'filter',
+        show: (v) => v.committer.id !== v.author.id,
+        onClick: function (v) {
+          filters.data.person = v.author.name
+        },
+      },
+    ],
   },
   {
     name: 'Modified',

@@ -29,6 +29,8 @@ func (g gitPeopleImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
+	fmt.Printf("Importing people...\n")
+
 	_, err = importPeople(peopleDB, g.rootDirs)
 	if err != nil {
 		return err
@@ -45,8 +47,6 @@ func (g gitPeopleImporter) Import(storage archer.Storage) error {
 }
 
 func importPeople(peopleDB *model.People, rootDirs []string) (*nameEmailGrouper, error) {
-	fmt.Printf("Importing and grouping authors...\n")
-
 	grouper := newNameEmailGrouperFrom(peopleDB)
 
 	for _, rootDir := range rootDirs {
