@@ -10,11 +10,9 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/utils/diff"
-	"github.com/hashicorp/go-set/v2"
 	"github.com/hexops/gotextdiff"
 	"github.com/hexops/gotextdiff/myers"
 	"github.com/pkg/errors"
-	"github.com/samber/lo"
 	"github.com/sergi/go-diff/diffmatchpatch"
 
 	"github.com/pescuma/archer/lib/archer"
@@ -590,16 +588,16 @@ func (g *gitHistoryImporter) writeResults(storage archer.Storage, filesDB *model
 		return nil
 	}
 
+	err = storage.WriteRepository(repo, archer.ChangedBasicInfo|archer.ChangedHistory)
+	if err != nil {
+		return err
+	}
+
 	if commitFiles != nil {
 		err = storage.WriteRepositoryCommitFiles(commitFiles)
 		if err != nil {
 			return err
 		}
-	}
-
-	err = storage.WriteRepository(repo, archer.ChangedBasicInfo|archer.ChangedHistory)
-	if err != nil {
-		return err
 	}
 
 	return nil
@@ -801,7 +799,7 @@ func (g *gitHistoryImporter) propagateChangesToParents(storage archer.Storage, r
 	now := time.Now()
 
 	for _, repo := range reposDB.List() {
-		files := set.New[*model.File](1000)
+		files := make(map[*model.File]bool)
 
 		for _, c := range repo.ListCommits() {
 			inLast6Months := now.Sub(c.Date) < 6*30*24*time.Hour
@@ -818,18 +816,20 @@ func (g *gitHistoryImporter) propagateChangesToParents(storage archer.Storage, r
 				return err
 			}
 
-			projs := map[*model.Project]bool{}
-			dirs := map[*model.ProjectDirectory]bool{}
-			areas := map[*model.ProductArea]bool{}
+			projs := make(map[*model.Project]bool)
+			dirs := make(map[*model.ProjectDirectory]bool)
+			areas := make(map[*model.ProductArea]bool)
 			for _, cf := range commitFiles.List() {
 				addLines := func(c *model.Changes) {
-					c.LinesModified += cf.LinesModified
-					c.LinesAdded += cf.LinesAdded
-					c.LinesDeleted += cf.LinesDeleted
+					if cf.LinesModified != -1 {
+						c.LinesModified += cf.LinesModified
+						c.LinesAdded += cf.LinesAdded
+						c.LinesDeleted += cf.LinesDeleted
+					}
 				}
 
 				file := filesDB.GetFileByID(cf.FileID)
-				files.Insert(file)
+				files[file] = true
 
 				addChanges(file.Changes)
 				addLines(file.Changes)
@@ -854,19 +854,19 @@ func (g *gitHistoryImporter) propagateChangesToParents(storage archer.Storage, r
 				}
 			}
 
-			for _, p := range lo.Keys(projs) {
+			for p := range projs {
 				addChanges(p.Changes)
 			}
-			for _, d := range lo.Keys(dirs) {
+			for d := range dirs {
 				addChanges(d.Changes)
 			}
 
-			for _, a := range lo.Keys(areas) {
+			for a := range areas {
 				addChanges(a.Changes)
 			}
 		}
 
-		repo.FilesTotal = files.Size()
+		repo.FilesTotal = len(files)
 	}
 
 	return nil
