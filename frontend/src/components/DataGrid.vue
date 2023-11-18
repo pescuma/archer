@@ -36,6 +36,7 @@ const columns = computed(() => {
       td_class: '',
       style: '',
       defaultAsc: true,
+      right: false,
       format: function (r) {
         if (c.format) return c.format(r)
 
@@ -49,6 +50,15 @@ const columns = computed(() => {
 
         return undefined
       },
+    }
+
+    if (!rc.actions) rc.actions = []
+    for (let a of rc.actions) {
+      if (!a.onClick) {
+        a.class = 'cursor-default'
+      }
+      if (!a.show) a.show = () => true
+      if (!a.onClick) a.onClick = () => {}
     }
 
     switch (c.type) {
@@ -73,7 +83,7 @@ const columns = computed(() => {
       }
       case 'int': {
         rc.th_class = 'w-1 text-end'
-        rc.td_class = 'text-end'
+        rc.right = true
         rc.defaultAsc = false
         rc.format = function (r) {
           if (c.format) return c.format(r)
@@ -87,8 +97,8 @@ const columns = computed(() => {
       }
       case 'float': {
         rc.th_class = 'w-1 text-end'
-        rc.td_class = 'text-end'
         rc.defaultAsc = false
+        rc.right = true
         rc.format = function (r) {
           if (c.format) return c.format(r)
 
@@ -101,8 +111,8 @@ const columns = computed(() => {
       }
       case 'date': {
         rc.th_class = 'w-1 text-end'
-        rc.td_class = 'text-end'
         rc.defaultAsc = false
+        rc.right = true
         rc.format = function (r) {
           if (c.format) return c.format(r)
 
@@ -117,6 +127,7 @@ const columns = computed(() => {
         rc.size = 'l'
         rc.th_class = 'w-1'
         rc.defaultAsc = false
+        rc.right = true
         rc.format = function (r) {
           if (c.format) return c.format(r)
 
@@ -227,28 +238,28 @@ defineExpose({ refresh })
         <tbody>
           <tr v-for="r in data.pageRows">
             <td v-for="c in columns" :class="c.td_class" :style="c.style">
-              <div class="row" v-if="c.actions">
-                <div class="col-auto text-truncate text-nowrap" :title="c.tooltip(r)">
+              <div class="row">
+                <div :class="'col-auto text-truncate text-nowrap ' + (c.right ? ' ms-auto' : ' me-auto')" :title="c.tooltip(r)">
                   <template v-for="a in c.actions">
                     <a
-                      v-if="a.before && (!a.show || a.show(r))"
+                      v-if="a.before && a.show(r)"
                       href="#"
-                      class="text-decoration-none"
+                      :class="'text-decoration-none ' + a.class"
                       style="position: relative; z-index: 1"
                       :title="a.name"
-                      @click.prevent="click(r, a)"
+                      @click.prevent="a.onClick(r)"
                     >
                       <component :is="'icon-' + a.icon" class="icon icon-sm align-text-bottom" />
                     </a>
                   </template>
                   <template v-for="a in c.actions">
                     <a
-                      v-if="!a.before && (!a.show || a.show(r))"
+                      v-if="!a.before && a.show(r)"
                       href="#"
-                      class="text-decoration-none float-end ms-1"
+                      :class="'text-decoration-none float-end ms-1 ' + a.class"
                       style="position: relative; z-index: 1"
                       :title="a.name"
-                      @click.prevent="click(r, a)"
+                      @click.prevent="a.onClick(r)"
                     >
                       <component :is="'icon-' + a.icon" class="icon icon-sm align-text-bottom" />
                     </a>
@@ -257,10 +268,8 @@ defineExpose({ refresh })
                   {{ c.format(r) }}
                 </div>
               </div>
-              <div class="text-truncate text-nowrap" :title="c.tooltip(r)" v-else>
-                {{ c.format(r) }}
-              </div>
             </td>
+
             <td v-if="actions">
               <template v-for="a in actions">
                 <a v-if="!a.show || a.show(r)" href="#" class="text-decoration-none" :title="a.name" @click.prevent="click(r, a)">
