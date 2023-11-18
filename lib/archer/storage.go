@@ -40,6 +40,8 @@ type Storage interface {
 	LoadRepository(rootDir string) (*model.Repository, error)
 	WriteRepository(repo *model.Repository, changes StorageChanges) error
 	WriteCommit(repo *model.Repository, commit *model.RepositoryCommit, info StorageChanges) error
+	LoadRepositoryCommitFiles(repo *model.Repository, commit *model.RepositoryCommit) (*model.RepositoryCommitFiles, error)
+	WriteRepositoryCommitFiles(files []*model.RepositoryCommitFiles) error
 
 	LoadConfig() (*map[string]string, error)
 	WriteConfig(*map[string]string) error

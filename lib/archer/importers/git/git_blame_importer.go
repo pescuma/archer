@@ -247,7 +247,7 @@ func (g *gitBlameImporter) computeBlame(storage archer.Storage, filesDB *model.F
 
 	fmt.Printf("%v: Computing blame of %v files...\n", repo.Name, len(toProcess))
 
-	cache, err := g.createCache(filesDB, repo, gitRepo)
+	cache, err := g.createCache(storage, filesDB, repo, gitRepo)
 	if err != nil {
 		return err
 	}
@@ -267,7 +267,7 @@ func (g *gitBlameImporter) computeBlame(storage archer.Storage, filesDB *model.F
 	return nil
 }
 
-func (g *gitBlameImporter) createCache(filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository) (*BlameCache, error) {
+func (g *gitBlameImporter) createCache(storage archer.Storage, filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository) (*BlameCache, error) {
 	cache := &BlameCache{
 		Commits: make(map[plumbing.Hash]*BlameCommitCache),
 	}
@@ -310,11 +310,17 @@ func (g *gitBlameImporter) createCache(filesDB *model.Files, repo *model.Reposit
 			return rel, nil
 		}
 
-		for _, commitFile := range repoCommit.Files {
+		files, err := storage.LoadRepositoryCommitFiles(repo, repoCommit)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, commitFile := range files.List() {
 			filename, err := getFilename(commitFile.FileID)
 			if err != nil {
 				return nil, err
 			}
+
 			commitCache.Touched.Insert(filename)
 
 			for repoParentID, oldFileID := range commitFile.OldFileIDs {
@@ -515,9 +521,9 @@ func (g *gitBlameImporter) propagateChangesToParents(storage archer.Storage, peo
 			commits[c.ID] = c
 			c.LinesSurvived = 0
 
-			for _, f := range c.Files {
-				f.LinesSurvived = 0
-			}
+			//for _, f := range c.Files {
+			//	f.LinesSurvived = 0
+			//}
 		}
 	}
 
@@ -533,9 +539,9 @@ func (g *gitBlameImporter) propagateChangesToParents(storage archer.Storage, peo
 			c.LinesSurvived += blame.Lines
 
 			// TODO Blame code is creating strange commit references
-			if file, ok := c.Files[blame.FileID]; ok {
-				file.LinesSurvived += blame.Lines
-			}
+			//if file, ok := c.Files[blame.FileID]; ok {
+			//	file.LinesSurvived += blame.Lines
+			//}
 		}
 
 		p := peopleDB.GetPersonByID(blame.AuthorID)

@@ -26,16 +26,15 @@ import (
 type sqliteStorage struct {
 	db *gorm.DB
 
-	configs         map[string]*sqlConfig
-	projs           map[model.UUID]*sqlProject
-	projDeps        map[model.UUID]*sqlProjectDependency
-	projDirs        map[model.UUID]*sqlProjectDirectory
-	files           map[model.UUID]*sqlFile
-	people          map[model.UUID]*sqlPerson
-	area            map[model.UUID]*sqlProductArea
-	repos           map[model.UUID]*sqlRepository
-	repoCommits     map[model.UUID]*sqlRepositoryCommit
-	repoCommitFiles map[model.UUID]*sqlRepositoryCommitFile
+	configs     map[string]*sqlConfig
+	projs       map[model.UUID]*sqlProject
+	projDeps    map[model.UUID]*sqlProjectDependency
+	projDirs    map[model.UUID]*sqlProjectDirectory
+	files       map[model.UUID]*sqlFile
+	people      map[model.UUID]*sqlPerson
+	area        map[model.UUID]*sqlProductArea
+	repos       map[model.UUID]*sqlRepository
+	repoCommits map[model.UUID]*sqlRepositoryCommit
 }
 
 func NewSqliteStorage(file string) (archer.Storage, error) {
@@ -90,16 +89,15 @@ func newFrom(dsn string) (archer.Storage, error) {
 	}
 
 	return &sqliteStorage{
-		db:              db,
-		configs:         map[string]*sqlConfig{},
-		projs:           map[model.UUID]*sqlProject{},
-		projDeps:        map[model.UUID]*sqlProjectDependency{},
-		projDirs:        map[model.UUID]*sqlProjectDirectory{},
-		files:           map[model.UUID]*sqlFile{},
-		people:          map[model.UUID]*sqlPerson{},
-		repos:           map[model.UUID]*sqlRepository{},
-		repoCommits:     map[model.UUID]*sqlRepositoryCommit{},
-		repoCommitFiles: map[model.UUID]*sqlRepositoryCommitFile{},
+		db:          db,
+		configs:     map[string]*sqlConfig{},
+		projs:       map[model.UUID]*sqlProject{},
+		projDeps:    map[model.UUID]*sqlProjectDependency{},
+		projDirs:    map[model.UUID]*sqlProjectDirectory{},
+		files:       map[model.UUID]*sqlFile{},
+		people:      map[model.UUID]*sqlPerson{},
+		repos:       map[model.UUID]*sqlRepository{},
+		repoCommits: map[model.UUID]*sqlRepositoryCommit{},
 	}, nil
 }
 
@@ -610,16 +608,6 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 		return i.ID, i
 	}))
 
-	var commitFiles []*sqlRepositoryCommitFile
-	err = s.db.Scopes(scope(repos)).Find(&commitFiles).Error
-	if err != nil {
-		return nil, err
-	}
-
-	addMap(&s.repoCommitFiles, lo.Associate(commitFiles, func(i *sqlRepositoryCommitFile) (model.UUID, *sqlRepositoryCommitFile) {
-		return i.CommitID + "\n" + i.FileID, i
-	}))
-
 	for _, sr := range repos {
 		r := result.GetOrCreateEx(sr.RootDir, &sr.ID)
 		r.Name = sr.Name
@@ -655,24 +643,12 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 		commitsById[c.ID] = c
 	}
 
-	for _, sf := range commitFiles {
-		commit := commitsById[sf.CommitID]
-
-		file := commit.GetOrCreateFile(sf.FileID)
-		file.OldFileIDs = decodeOldFileIDs(sf.OldFileIDs)
-		file.LinesModified = decodeMetric(sf.LinesModified)
-		file.LinesAdded = decodeMetric(sf.LinesAdded)
-		file.LinesDeleted = decodeMetric(sf.LinesDeleted)
-		file.LinesSurvived = decodeMetric(sf.LinesSurvived)
-	}
-
 	return result, nil
 }
 
 func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.StorageChanges) error {
 	changedRepos := changed(changes, archer.ChangedBasicInfo|archer.ChangedHistory)
 	changedCommits := changed(changes, archer.ChangedHistory|archer.ChangedChanges)
-	changedFiles := changed(changes, archer.ChangedHistory|archer.ChangedChanges)
 
 	var sqlRepos []*sqlRepository
 	if changedRepos {
@@ -688,18 +664,6 @@ func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.S
 			sc := toSqlRepositoryCommit(repo, c)
 			if prepareChange(&s.repoCommits, sc.ID, sc) {
 				sqlCommits = append(sqlCommits, sc)
-			}
-		}
-	}
-
-	var sqlCommitFiles []*sqlRepositoryCommitFile
-	if changedFiles {
-		for _, c := range repo.ListCommits() {
-			for _, f := range c.Files {
-				sf := toSqlRepositoryCommitFile(repo, c, f)
-				if prepareChange(&s.repoCommitFiles, sf.CommitID+"\n"+sf.FileID, sf) {
-					sqlCommitFiles = append(sqlCommitFiles, sf)
-				}
 			}
 		}
 	}
@@ -728,15 +692,6 @@ func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.S
 		addList(&s.repoCommits, sqlCommits, func(s *sqlRepositoryCommit) model.UUID { return s.ID })
 	}
 
-	if changedFiles {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommitFiles).Error
-		if err != nil {
-			return err
-		}
-
-		addList(&s.repoCommitFiles, sqlCommitFiles, func(s *sqlRepositoryCommitFile) model.UUID { return s.CommitID + "\n" + s.FileID })
-	}
-
 	// TODO delete
 
 	return nil
@@ -748,16 +703,6 @@ func (s *sqliteStorage) WriteCommit(repo *model.Repository, commit *model.Reposi
 	sc := toSqlRepositoryCommit(repo, commit)
 	if prepareChange(&s.repoCommits, sc.ID, sc) {
 		sqlCommits = append(sqlCommits, sc)
-	}
-
-	var sqlCommitFiles []*sqlRepositoryCommitFile
-	for _, c := range repo.ListCommits() {
-		for _, f := range c.Files {
-			sf := toSqlRepositoryCommitFile(repo, c, f)
-			if prepareChange(&s.repoCommitFiles, sf.CommitID+"\n"+sf.FileID, sf) {
-				sqlCommitFiles = append(sqlCommitFiles, sf)
-			}
-		}
 	}
 
 	now := time.Now().Local()
@@ -773,12 +718,49 @@ func (s *sqliteStorage) WriteCommit(repo *model.Repository, commit *model.Reposi
 
 	addList(&s.repoCommits, sqlCommits, func(s *sqlRepositoryCommit) model.UUID { return s.ID })
 
-	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommitFiles).Error
+	// TODO delete
+
+	return nil
+}
+
+func (s *sqliteStorage) LoadRepositoryCommitFiles(repo *model.Repository, commit *model.RepositoryCommit) (*model.RepositoryCommitFiles, error) {
+	var commitFiles []*sqlRepositoryCommitFile
+	err := s.db.Where("commit_id = ?", commit.ID).Find(&commitFiles).Error
+	if err != nil {
+		return nil, err
+	}
+
+	result := model.NewRepositoryCommitFiles(repo.ID, commit.ID)
+	for _, sf := range commitFiles {
+		file := result.GetOrCreate(sf.FileID)
+		file.OldFileIDs = decodeOldFileIDs(sf.OldFileIDs)
+		file.LinesModified = decodeMetric(sf.LinesModified)
+		file.LinesAdded = decodeMetric(sf.LinesAdded)
+		file.LinesDeleted = decodeMetric(sf.LinesDeleted)
+		file.LinesSurvived = decodeMetric(sf.LinesSurvived)
+	}
+	return result, nil
+}
+
+func (s *sqliteStorage) WriteRepositoryCommitFiles(files []*model.RepositoryCommitFiles) error {
+	var sqlCommitFiles []*sqlRepositoryCommitFile
+	for _, fs := range files {
+		for _, f := range fs.List() {
+			sf := toSqlRepositoryCommitFile(fs.RepositoryID, fs.CommitID, f)
+			sqlCommitFiles = append(sqlCommitFiles, sf)
+		}
+	}
+
+	now := time.Now().Local()
+	db := s.db.Session(&gorm.Session{
+		NowFunc:         func() time.Time { return now },
+		CreateBatchSize: 1000,
+	})
+
+	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommitFiles).Error
 	if err != nil {
 		return err
 	}
-
-	addList(&s.repoCommitFiles, sqlCommitFiles, func(s *sqlRepositoryCommitFile) model.UUID { return s.CommitID + "\n" + s.FileID })
 
 	// TODO delete
 
@@ -1112,12 +1094,12 @@ func toSqlRepositoryCommit(r *model.Repository, c *model.RepositoryCommit) *sqlR
 	}
 }
 
-func toSqlRepositoryCommitFile(r *model.Repository, c *model.RepositoryCommit, f *model.RepositoryCommitFile) *sqlRepositoryCommitFile {
+func toSqlRepositoryCommitFile(r model.UUID, c model.UUID, f *model.RepositoryCommitFile) *sqlRepositoryCommitFile {
 	return &sqlRepositoryCommitFile{
-		CommitID:      c.ID,
+		CommitID:      c,
 		FileID:        f.FileID,
 		OldFileIDs:    encodeOldFileIDs(f.OldFileIDs),
-		RepositoryID:  r.ID,
+		RepositoryID:  r,
 		LinesModified: encodeMetric(f.LinesModified),
 		LinesAdded:    encodeMetric(f.LinesAdded),
 		LinesDeleted:  encodeMetric(f.LinesDeleted),

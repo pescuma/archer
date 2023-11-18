@@ -26,8 +26,6 @@ type RepositoryCommit struct {
 	LinesSurvived int
 
 	Ignore bool
-
-	Files map[UUID]*RepositoryCommitFile
 }
 
 func NewRepositoryCommit(hash string, id *UUID) *RepositoryCommit {
@@ -48,19 +46,7 @@ func NewRepositoryCommit(hash string, id *UUID) *RepositoryCommit {
 		LinesAdded:    -1,
 		LinesDeleted:  -1,
 		LinesSurvived: -1,
-		Files:         make(map[UUID]*RepositoryCommitFile),
 	}
 
 	return result
-}
-
-func (c *RepositoryCommit) GetOrCreateFile(fileID UUID) *RepositoryCommitFile {
-	file, ok := c.Files[fileID]
-
-	if !ok {
-		file = NewRepositoryCommitFile(fileID)
-		c.Files[fileID] = file
-	}
-
-	return file
 }
