@@ -9,6 +9,7 @@ import LinesSurvivedCard from '@/components/LinesSurvivedCard.vue'
 import FilesSeenCard from '@/components/FilesSeenCard.vue'
 import PeopleSeenCard from '@/components/PeopleSeenCard.vue'
 import { onMounted } from 'vue'
+import CommitsTable from '../components/CommitsTable.vue'
 </script>
 
 <template>
@@ -36,7 +37,7 @@ import { onMounted } from 'vue'
     </div>
   </div>
   <div class="col-lg-6">
-    <CommitsSeenCard />
+    <CommitsTable type="sm" />
   </div>
 
   <div class="col-lg-6">

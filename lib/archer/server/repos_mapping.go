@@ -9,6 +9,10 @@ import (
 	"github.com/samber/lo"
 )
 
+func (s *server) listRepos(search string, person string) []*model.Repository {
+	return s.filterRepos(s.repos.List(), search, person)
+}
+
 func (s *server) filterRepos(col []*model.Repository, search string, person string) []*model.Repository {
 	search = prepareToSearch(search)
 	person = prepareToSearch(person)
@@ -91,6 +95,21 @@ func (s *server) toRepoReference(repo *model.Repository) gin.H {
 type RepoAndCommit struct {
 	Repo   *model.Repository
 	Commit *model.RepositoryCommit
+}
+
+func (s *server) listReposAndCommits(repo string, person string) []RepoAndCommit {
+	commits := lo.FlatMap(s.repos.List(), func(i *model.Repository, index int) []RepoAndCommit {
+		return lo.Map(i.ListCommits(), func(c *model.RepositoryCommit, _ int) RepoAndCommit {
+			return RepoAndCommit{
+				Repo:   i,
+				Commit: c,
+			}
+		})
+	})
+
+	commits = s.filterCommits(commits, repo, person)
+
+	return commits
 }
 
 func (s *server) filterCommits(col []RepoAndCommit, repo string, person string) []RepoAndCommit {

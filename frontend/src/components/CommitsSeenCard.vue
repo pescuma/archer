@@ -2,8 +2,8 @@
 import _ from 'lodash'
 import moment from 'moment'
 import { onMounted, reactive, ref } from 'vue'
-import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
 import gravatarUrl from 'gravatar-url'
+import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
 
 const card = ref(null)
 

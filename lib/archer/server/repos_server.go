@@ -9,10 +9,13 @@ import (
 	"github.com/samber/lo"
 )
 
-type RepoListParams struct {
-	GridParams
+type RepoFilters struct {
 	FilterRepo   string `form:"q"`
 	FilterPerson string `form:"person"`
+}
+type RepoListParams struct {
+	GridParams
+	RepoFilters
 }
 
 type CommitFilters struct {
@@ -30,23 +33,29 @@ type CommitPatchParams struct {
 	Ignore   *bool      `json:"ignore"`
 }
 
+type StatsSeenReposParams struct {
+	RepoFilters
+}
+type StatsSeenCommitsParams struct {
+	CommitFilters
+}
 type StatsLinesParams struct {
 	CommitFilters
 }
 
 func (s *server) initRepos(r *gin.Engine) {
-	r.GET("/api/repos", getP[RepoListParams](s.listRepos))
-	r.GET("/api/repos/:id", get(s.getRepo))
-	r.GET("/api/commits", getP[CommitListParams](s.listCommits))
-	r.PATCH("/api/repos/:repoID/commits/:commitID", patchP[CommitPatchParams](s.patchCommit))
-	r.GET("/api/stats/count/repos", get(s.countRepos))
-	r.GET("/api/stats/seen/repos", get(s.getReposSeenStats))
-	r.GET("/api/stats/seen/commits", get(s.getCommitsSeenStats))
-	r.GET("/api/stats/changed/lines", getP[StatsLinesParams](s.getChangedLines))
-	r.GET("/api/stats/survived/lines", getP[StatsLinesParams](s.getSurvivedLines))
+	r.GET("/api/repos", getP[RepoListParams](s.reposList))
+	r.GET("/api/repos/:id", get(s.repoGet))
+	r.GET("/api/commits", getP[CommitListParams](s.commitsList))
+	r.PATCH("/api/repos/:repoID/commits/:commitID", patchP[CommitPatchParams](s.commitPatch))
+	r.GET("/api/stats/count/repos", get(s.statsCountRepos))
+	r.GET("/api/stats/seen/repos", getP[StatsSeenReposParams](s.statsSeenRepos))
+	r.GET("/api/stats/seen/commits", getP[StatsSeenCommitsParams](s.statsSeenCommits))
+	r.GET("/api/stats/changed/lines", getP[StatsLinesParams](s.statsChangedLines))
+	r.GET("/api/stats/survived/lines", getP[StatsLinesParams](s.statsSurvivedLines))
 }
 
-func (s *server) countRepos() (any, error) {
+func (s *server) statsCountRepos() (any, error) {
 	repos := s.repos.List()
 
 	return gin.H{
@@ -54,10 +63,8 @@ func (s *server) countRepos() (any, error) {
 	}, nil
 }
 
-func (s *server) listRepos(params *RepoListParams) (any, error) {
-	repos := s.repos.List()
-
-	repos = s.filterRepos(repos, params.FilterRepo, params.FilterPerson)
+func (s *server) reposList(params *RepoListParams) (any, error) {
+	repos := s.listRepos(params.FilterRepo, params.FilterPerson)
 
 	err := s.sortRepos(repos, params.Sort, params.Asc)
 	if err != nil {
@@ -79,21 +86,12 @@ func (s *server) listRepos(params *RepoListParams) (any, error) {
 	}, nil
 }
 
-func (s *server) getRepo() (any, error) {
+func (s *server) repoGet() (any, error) {
 	return nil, nil
 }
 
-func (s *server) listCommits(params *CommitListParams) (any, error) {
-	commits := lo.FlatMap(s.repos.List(), func(i *model.Repository, index int) []RepoAndCommit {
-		return lo.Map(i.ListCommits(), func(c *model.RepositoryCommit, _ int) RepoAndCommit {
-			return RepoAndCommit{
-				Repo:   i,
-				Commit: c,
-			}
-		})
-	})
-
-	commits = s.filterCommits(commits, params.FilterRepo, params.FilterPerson)
+func (s *server) commitsList(params *CommitListParams) (any, error) {
+	commits := s.listReposAndCommits(params.FilterRepo, params.FilterPerson)
 
 	err := s.sortCommits(commits, params.Sort, params.Asc)
 	if err != nil {
@@ -115,7 +113,7 @@ func (s *server) listCommits(params *CommitListParams) (any, error) {
 	}, nil
 }
 
-func (s *server) patchCommit(params *CommitPatchParams) (any, error) {
+func (s *server) commitPatch(params *CommitPatchParams) (any, error) {
 	repo := s.repos.GetByID(params.RepoID)
 	if repo == nil {
 		return nil, errorNotFound
@@ -143,8 +141,10 @@ func (s *server) patchCommit(params *CommitPatchParams) (any, error) {
 	return commit, nil
 }
 
-func (s *server) getReposSeenStats() (any, error) {
-	s1 := lo.GroupBy(s.repos.List(), func(i *model.Repository) string {
+func (s *server) statsSeenRepos(params *StatsSeenReposParams) (any, error) {
+	repos := s.listRepos(params.FilterRepo, params.FilterPerson)
+
+	s1 := lo.GroupBy(repos, func(i *model.Repository) string {
 		y, m, _ := i.FirstSeen.Date()
 		return fmt.Sprintf("%04d-%02d", y, m)
 	})
@@ -155,39 +155,22 @@ func (s *server) getReposSeenStats() (any, error) {
 	return s2, nil
 }
 
-func (s *server) getCommitsSeenStats() (any, error) {
-	s1 := lo.FlatMap(s.repos.List(), func(i *model.Repository, index int) []*model.RepositoryCommit {
-		return i.ListCommits()
-	})
-	s2 := lo.Filter(s1, func(i *model.RepositoryCommit, index int) bool {
-		return !i.Ignore
-	})
-	s3 := lo.GroupBy(s2, func(i *model.RepositoryCommit) string {
-		y, m, _ := i.Date.Date()
+func (s *server) statsSeenCommits(params *StatsSeenCommitsParams) (any, error) {
+	commits := s.listReposAndCommits(params.FilterRepo, params.FilterPerson)
+
+	s3 := lo.GroupBy(commits, func(i RepoAndCommit) string {
+		y, m, _ := i.Commit.Date.Date()
 		return fmt.Sprintf("%04d-%02d", y, m)
 	})
-	s4 := lo.MapValues(s3, func(is []*model.RepositoryCommit, _ string) int {
+	s4 := lo.MapValues(s3, func(is []RepoAndCommit, _ string) int {
 		return len(is)
 	})
 
 	return s4, nil
 }
 
-func (s *server) getChangedLines(params *StatsLinesParams) (any, error) {
-	repos := s.repos.List()
-
-	repos = s.filterRepos(repos, params.FilterRepo, "")
-
-	commits := lo.FlatMap(repos, func(i *model.Repository, index int) []RepoAndCommit {
-		return lo.Map(i.ListCommits(), func(c *model.RepositoryCommit, _ int) RepoAndCommit {
-			return RepoAndCommit{
-				Repo:   i,
-				Commit: c,
-			}
-		})
-	})
-
-	commits = s.filterCommits(commits, params.FilterRepo, params.FilterPerson)
+func (s *server) statsChangedLines(params *StatsLinesParams) (any, error) {
+	commits := s.listReposAndCommits(params.FilterRepo, params.FilterPerson)
 
 	s1 := lo.GroupBy(commits, func(i RepoAndCommit) string {
 		y, m, _ := i.Commit.Date.Date()
@@ -204,7 +187,7 @@ func (s *server) getChangedLines(params *StatsLinesParams) (any, error) {
 	return s2, nil
 }
 
-func (s *server) getSurvivedLines(params *StatsLinesParams) (any, error) {
+func (s *server) statsSurvivedLines(params *StatsLinesParams) (any, error) {
 	repoName := prepareToSearch(params.FilterRepo)
 	personSearch := prepareToSearch(params.FilterPerson)
 

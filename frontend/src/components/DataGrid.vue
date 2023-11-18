@@ -11,16 +11,25 @@ const props = defineProps({
   title: String,
   columns: Array,
   actions: Array,
+  pageSize: Number,
   loadPage: Function,
+  loadChart: Function,
 })
 
 const data = reactive({
   count: 0,
   sort: '',
   asc: true,
-  page: -1,
-  pageSize: 10,
+  pageNum: -1,
   pageRows: [],
+})
+
+const page = computed(() => {
+  return {
+    num: data.pageNum,
+    size: props.pageSize || 10,
+    rows: data.pageRows,
+  }
 })
 
 const columns = computed(() => {
@@ -29,9 +38,10 @@ const columns = computed(() => {
   for (let c of props.columns) {
     let rc = {
       name: c.name,
+      show: c.show === undefined || c.show === null ? true : c.show,
       sort: c.field,
       size: c.size,
-      actions: c.actions,
+      actions: prepareActions(c.actions),
       th_class: '',
       td_class: '',
       style: '',
@@ -50,15 +60,6 @@ const columns = computed(() => {
 
         return undefined
       },
-    }
-
-    if (!rc.actions) rc.actions = []
-    for (let a of rc.actions) {
-      if (!a.onClick) {
-        a.class = 'cursor-default'
-      }
-      if (!a.show) a.show = () => true
-      if (!a.onClick) a.onClick = () => {}
     }
 
     switch (c.type) {
@@ -165,14 +166,42 @@ const columns = computed(() => {
   return result
 })
 
-async function loadPage(page, sort, asc) {
+const actions = computed(() => {
+  return prepareActions(props.actions)
+})
+
+function prepareActions(actions) {
+  const result = []
+
+  for (const a of actions || []) {
+    if (typeof a.show === 'boolean' && !a.show) continue
+
+    let ra = {
+      name: a.name,
+      icon: 'icon-' + a.icon,
+      class: 'text-decoration-none',
+      show: typeof a.show === 'function' ? a.show : () => true,
+      onClick: a.onClick || (() => {}),
+    }
+
+    if (!a.onClick) {
+      ra.class += ' cursor-default'
+    }
+
+    result.push(ra)
+  }
+
+  return result
+}
+
+async function loadPage(pageNum, sort, asc) {
   let result = await card.value.loading(async function () {
-    return await props.loadPage(page, data.pageSize, sort, asc)
+    return await props.loadPage(pageNum, page.value.size, sort, asc)
   })
 
   data.count = result.total
   data.pageRows = result.data
-  data.page = page
+  data.pageNum = pageNum
   data.sort = sort
   data.asc = asc
 
@@ -185,33 +214,52 @@ async function loadPage(page, sort, asc) {
   })
 }
 
-function page(p) {
+function onPage(p) {
   loadPage(p, data.sort, data.asc)
 }
 
-function sort(field) {
+function onSort(field) {
   if (field === data.sort) {
-    loadPage(data.page, data.sort, !data.asc)
+    loadPage(page.value.num, data.sort, !data.asc)
   } else {
     let c = _.chain(columns.value)
       .filter((c) => c.sort === field)
       .first()
       .value()
-    loadPage(data.page, c.sort, c.defaultAsc)
+    loadPage(page.value.num, c.sort, c.defaultAsc)
   }
 }
 
-function click(r, a) {
-  if (a.onClick) a.onClick(r)
+const chart = reactive({
+  opts: {},
+  series: [],
+})
+
+async function loadChart() {
+  if (!props.loadChart) return
+
+  let result = await card.value.loading(async function () {
+    return await props.loadChart()
+  })
+
+  chart.opts = result.opts
+  chart.series = result.series
 }
 
 function refresh() {
-  loadPage(data.page, data.sort, data.asc)
+  if (data.pageNum === -1) {
+    let c = columns.value[0]
+    data.pageNum = 1
+    data.sort = c.sort
+    data.asc = c.defaultAsc
+  }
+
+  loadChart()
+  loadPage(data.pageNum, data.sort, data.asc)
 }
 
 onMounted(async function () {
-  let c = columns.value[0]
-  await loadPage(1, c.sort, c.defaultAsc)
+  refresh()
 })
 
 defineExpose({ refresh })
@@ -223,57 +271,67 @@ defineExpose({ refresh })
       <h3 class="card-title">{{ props.title }}</h3>
     </div>
 
+    <div class="card-body" v-if="chart.series.length > 0">
+      <div class="chart-lg">
+        <apexchart type="line" height="240" :options="chart.opts" :series="chart.series" />
+      </div>
+    </div>
+
     <div class="table-responsive border-bottom-0">
       <table class="card-table table table-vcenter text-nowrap">
         <thead>
           <tr>
-            <th v-for="c in columns" :class="c.th_class" @click.prevent="sort(c.sort)">
-              {{ c.name }}
-              <icon-chevron-up class="icon icon-sm icon-thick" v-if="c.sort === data.sort && data.asc" />
-              <icon-chevron-down class="icon icon-sm icon-thick" v-if="c.sort === data.sort && !data.asc" />
-            </th>
-            <th v-if="actions" class="w-1"></th>
+            <template v-for="c in columns">
+              <th v-if="c.show" @click.prevent="onSort(c.sort)" :class="c.th_class">
+                {{ c.name }}
+                <icon-chevron-up class="icon icon-sm icon-thick" v-if="c.sort === data.sort && data.asc" />
+                <icon-chevron-down class="icon icon-sm icon-thick" v-if="c.sort === data.sort && !data.asc" />
+              </th>
+            </template>
+            <th v-if="actions.length > 0" class="w-1"></th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="r in data.pageRows">
-            <td v-for="c in columns" :class="c.td_class" :style="c.style">
-              <div class="row">
-                <div :class="'col-auto text-truncate text-nowrap ' + (c.right ? ' ms-auto' : ' me-auto')" :title="c.tooltip(r)">
-                  <template v-for="a in c.actions">
-                    <a
-                      v-if="a.before && a.show(r)"
-                      href="#"
-                      :class="'text-decoration-none ' + a.class"
-                      style="position: relative; z-index: 1"
-                      :title="a.name"
-                      @click.prevent="a.onClick(r)"
-                    >
-                      <component :is="'icon-' + a.icon" class="icon icon-sm align-text-bottom" />
-                    </a>
-                  </template>
-                  <template v-for="a in c.actions">
-                    <a
-                      v-if="!a.before && a.show(r)"
-                      href="#"
-                      :class="'text-decoration-none float-end ms-1 ' + a.class"
-                      style="position: relative; z-index: 1"
-                      :title="a.name"
-                      @click.prevent="a.onClick(r)"
-                    >
-                      <component :is="'icon-' + a.icon" class="icon icon-sm align-text-bottom" />
-                    </a>
-                  </template>
+          <tr v-for="r in page.rows">
+            <template v-for="c in columns">
+              <td v-if="c.show" :class="c.td_class" :style="c.style">
+                <div class="row">
+                  <div :class="'col-auto text-truncate text-nowrap ' + (c.right ? ' ms-auto' : ' me-auto')" :title="c.tooltip(r)">
+                    <template v-for="a in c.actions">
+                      <a
+                        v-if="a.before && a.show(r)"
+                        href="#"
+                        :class="a.class"
+                        style="position: relative; z-index: 1"
+                        :title="a.name"
+                        @click.prevent="a.onClick(r)"
+                      >
+                        <component :is="a.icon" class="icon icon-sm align-text-bottom" />
+                      </a>
+                    </template>
+                    <template v-for="a in c.actions">
+                      <a
+                        v-if="!a.before && a.show(r)"
+                        href="#"
+                        :class="a.class + ' float-end'"
+                        style="position: relative; z-index: 1"
+                        :title="a.name"
+                        @click.prevent="a.onClick(r)"
+                      >
+                        <component :is="a.icon" class="icon icon-sm align-text-bottom" />
+                      </a>
+                    </template>
 
-                  {{ c.format(r) }}
+                    {{ c.format(r) }}
+                  </div>
                 </div>
-              </div>
-            </td>
+              </td>
+            </template>
 
-            <td v-if="actions">
+            <td v-if="actions.length > 0">
               <template v-for="a in actions">
-                <a v-if="!a.show || a.show(r)" href="#" class="text-decoration-none" :title="a.name" @click.prevent="click(r, a)">
-                  <component :is="'icon-' + a.icon" class="icon" />
+                <a v-if="a.show(r)" href="#" :class="a.class" :title="a.name" @click.prevent="a.onClick(r)">
+                  <component :is="a.icon" class="icon" />
                 </a>
               </template>
             </td>
@@ -282,7 +340,7 @@ defineExpose({ refresh })
       </table>
     </div>
 
-    <PaginationCardFooter :count="data.count" :page="data.page" :page-size="data.pageSize" @pageChange="page" />
+    <PaginationCardFooter :count="data.count" :page="page.num" :page-size="page.size" @pageChange="onPage" />
   </CardWithPlaceholder>
 </template>
 
