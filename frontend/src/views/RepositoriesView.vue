@@ -7,18 +7,17 @@ import CommitsTable from '@/components/CommitsTable.vue'
 
 <template>
   <div class="col-12">
+    <RepositoriesTable />
+  </div>
+  <div class="col-12">
+    <CommitsTable />
+  </div>
+
+  <div class="col-12">
     <LinesChangedCard />
   </div>
   <div class="col-12">
     <LinesSurvivedCard />
-  </div>
-
-  <div class="col-12">
-    <RepositoriesTable />
-  </div>
-
-  <div class="col-12">
-    <CommitsTable />
   </div>
 </template>
 

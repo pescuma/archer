@@ -84,7 +84,7 @@ const columns = [
         icon: 'filter',
         show: (v) => v.committer.id !== v.author.id,
         onClick: function (v) {
-          filters.data.person = v.author.name
+          filters.data.person = v.committer.name
         },
       },
     ],
