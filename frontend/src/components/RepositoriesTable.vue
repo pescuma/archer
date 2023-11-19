@@ -1,8 +1,8 @@
 <script setup>
-import DataGrid from '@/components/DataGrid.vue'
 import { ref, watch } from 'vue'
 import { sortParams } from '@/components/utils'
 import { filters } from '@/utils/filters'
+import DataGrid from '@/components/DataGrid.vue'
 
 const grid = ref(null)
 

@@ -27,12 +27,12 @@ func NewImporter(rootDir string) archer.Importer {
 }
 
 func (g *gradleImporter) Import(storage archer.Storage) error {
-	projs, err := storage.LoadProjects()
+	projsDB, err := storage.LoadProjects()
 	if err != nil {
 		return err
 	}
 
-	files, err := storage.LoadFiles()
+	filesDB, err := storage.LoadFiles()
 	if err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func (g *gradleImporter) Import(storage archer.Storage) error {
 
 	bar := utils.NewProgressBar(len(queue))
 	for _, p := range queue {
-		err = g.importBasicInfo(projs, p, rootProj)
+		err = g.importBasicInfo(projsDB, filesDB, p, rootProj)
 		if err != nil {
 			return err
 		}
@@ -62,9 +62,9 @@ func (g *gradleImporter) Import(storage archer.Storage) error {
 
 	bar = utils.NewProgressBar(len(queue))
 	for _, p := range queue {
-		proj := projs.GetOrCreate(rootProj, p)
+		proj := projsDB.GetOrCreate(rootProj, p)
 
-		err = g.importDirectories(files, proj)
+		err = g.importDirectories(filesDB, proj)
 		if err != nil {
 			return err
 		}
@@ -80,7 +80,7 @@ func (g *gradleImporter) Import(storage archer.Storage) error {
 	for i := 0; i < len(queue); i += block {
 		piece := utils.Take(queue[i:], block)
 
-		err = g.loadDependencies(projs, piece, rootProj, projsInsideRoot)
+		err = g.loadDependencies(projsDB, piece, rootProj, projsInsideRoot)
 		if err != nil {
 			return err
 		}
@@ -89,7 +89,7 @@ func (g *gradleImporter) Import(storage archer.Storage) error {
 	}
 
 	for _, p := range queue {
-		proj := projs.GetOrCreate(rootProj, p)
+		proj := projsDB.GetOrCreate(rootProj, p)
 
 		for _, d := range proj.ListDependencies(model.FilterAll) {
 			if d.Source.IsCode() && strings.HasSuffix(d.Source.Name, "-api") {
@@ -105,12 +105,12 @@ func (g *gradleImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Writing results...\n")
 
-	err = storage.WriteProjects(projs, archer.ChangedBasicInfo|archer.ChangedData|archer.ChangedDependencies)
+	err = storage.WriteProjects(projsDB, archer.ChangedBasicInfo|archer.ChangedData|archer.ChangedDependencies)
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteFiles(files, archer.ChangedBasicInfo)
+	err = storage.WriteFiles(filesDB, archer.ChangedBasicInfo)
 	if err != nil {
 		return err
 	}
@@ -127,23 +127,28 @@ func (g *gradleImporter) importProjectNames() ([]string, error) {
 	return projNames, nil
 }
 
-func (g *gradleImporter) importBasicInfo(projs *model.Projects, projName string, rootProj string) error {
+func (g *gradleImporter) importBasicInfo(projsDB *model.Projects, filesDB *model.Files, projName string, rootProj string) error {
 	projDir, err := g.getProjectDir(projName)
 	if err != nil {
 		return err
 	}
 
-	projFile, err := g.getProjectFile(projName)
+	projFileName, err := g.getProjectFile(projName)
 	if err != nil {
 		return err
 	}
 
-	proj := projs.GetOrCreate(rootProj, projName)
+	proj := projsDB.GetOrCreate(rootProj, projName)
 	proj.NameParts = utils.IIf(projName == rootProj, []string{rootProj}, strings.Split(projName[1:], ":"))
 	proj.Root = rootProj
 	proj.Type = model.CodeType
 	proj.RootDir = projDir
-	proj.ProjectFile = projFile
+	proj.ProjectFile = projFileName
+
+	projFile := filesDB.GetOrCreateFile(projFileName)
+	projFile.ProjectID = &proj.ID
+
+	proj.RepositoryID = projFile.RepositoryID
 
 	return nil
 }
@@ -166,7 +171,12 @@ func (g *gradleImporter) importDirectories(files *model.Files, proj *model.Proje
 	}
 
 	for _, c := range candidates {
-		err = g.importDirectory(files, proj, filepath.Join(proj.RootDir, c.Path), c.Type, true)
+		dirPath, err := utils.PathAbs(proj.RootDir, c.Path)
+		if err != nil {
+			return err
+		}
+
+		err = g.importDirectory(files, proj, dirPath, c.Type, true)
 		if err != nil {
 			return err
 		}
@@ -220,10 +230,10 @@ func (g *gradleImporter) importDirectory(files *model.Files, proj *model.Project
 
 func (g *gradleImporter) getProjectDir(projName string) (string, error) {
 	if projName[0] == ':' {
-		return filepath.Abs(filepath.Join(
+		return utils.PathAbs(
 			g.rootDir,
 			strings.ReplaceAll(projName[1:], ":", string(os.PathSeparator)),
-		))
+		)
 
 	} else {
 		return g.rootDir, nil
@@ -243,7 +253,7 @@ func (g *gradleImporter) getProjectFile(projName string) (string, error) {
 
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), "build.gradle.") {
-			return filepath.Join(dir, e.Name()), nil
+			return utils.PathAbs(dir, e.Name())
 		}
 	}
 

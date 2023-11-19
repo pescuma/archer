@@ -1,45 +1,94 @@
 package server
 
 import (
-	"fmt"
-
 	"github.com/gin-gonic/gin"
 	"github.com/pescuma/archer/lib/archer/model"
 	"github.com/samber/lo"
 )
 
+type ProjectsFilters struct {
+	FilterFile    string `form:"file"`
+	FilterProject string `form:"q"`
+	FilterRepo    string `form:"repo"`
+	FilterPerson  string `form:"person"`
+}
+
+type ProjectsListParams struct {
+	GridParams
+	ProjectsFilters
+}
+
+type StatsProjectsParams struct {
+	ProjectsFilters
+}
+
 func (s *server) initProjects(r *gin.Engine) {
-	r.GET("/api/projects", get(s.listProjects))
-	r.GET("/api/projects/:id", get(s.getProject))
-	r.GET("/api/stats/count/projects", get(s.countProjects))
-	r.GET("/api/stats/seen/projects", get(s.getProjectsSeenStats))
+	r.GET("/api/projects", getP[ProjectsListParams](s.projectsList))
+	r.GET("/api/projects/:id", get(s.projectGet))
+	r.GET("/api/stats/count/projects", getP[StatsProjectsParams](s.statsCountProjects))
+	r.GET("/api/stats/seen/projects", getP[StatsProjectsParams](s.statsProjectsSeen))
 }
 
-func (s *server) listProjects() (any, error) {
-	return nil, nil
-}
+func (s *server) projectsList(params *ProjectsListParams) (any, error) {
+	projs, err := s.listProjects(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	if err != nil {
+		return nil, err
+	}
 
-func (s *server) countProjects() (any, error) {
-	all := s.projects.ListProjects(model.FilterAll)
+	err = s.sortProjects(projs, params.Sort, params.Asc)
+	if err != nil {
+		return nil, err
+	}
+
+	total := len(projs)
+
+	projs = paginate(projs, params.Offset, params.Limit)
+
+	var result []gin.H
+	for _, r := range projs {
+		result = append(result, s.toProject(r))
+	}
 
 	return gin.H{
-		"total":    len(all),
-		"external": lo.CountBy(all, func(p *model.Project) bool { return p.IsExternalDependency() }),
+		"data":  result,
+		"total": total,
 	}, nil
 }
 
-func (s *server) getProject() (any, error) {
+func (s *server) statsCountProjects(params *StatsProjectsParams) (any, error) {
+	projs, err := s.listProjects(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	if err != nil {
+		return nil, err
+	}
+
+	external := lo.Filter(s.projects.ListProjects(model.FilterAll), func(i *model.Project, index int) bool {
+		return i.IsExternalDependency()
+	})
+
+	return gin.H{
+		"total":    len(projs),
+		"external": len(external),
+	}, nil
+}
+
+func (s *server) projectGet() (any, error) {
 	return nil, nil
 }
 
-func (s *server) getProjectsSeenStats() (any, error) {
-	s1 := lo.GroupBy(s.projects.ListProjects(model.FilterExcludeExternal), func(proj *model.Project) string {
-		y, m, _ := proj.FirstSeen.Date()
-		return fmt.Sprintf("%04d-%02d", y, m)
-	})
-	s2 := lo.MapValues(s1, func(projs []*model.Project, _ string) int {
-		return len(projs)
-	})
+func (s *server) statsProjectsSeen(params *StatsProjectsParams) (any, error) {
+	projs, err := s.listProjects(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	if err != nil {
+		return nil, err
+	}
 
-	return s2, nil
+	result := make(map[string]map[string]int)
+	for _, f := range projs {
+		y, m, _ := f.FirstSeen.Date()
+		s.incSeenStats(result, y, m, "firstSeen")
+
+		y, m, _ = f.LastSeen.Date()
+		s.incSeenStats(result, y, m, "lastSeen")
+	}
+
+	return result, nil
 }

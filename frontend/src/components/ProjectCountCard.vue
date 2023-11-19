@@ -12,7 +12,7 @@ const data = reactive({
 
 onMounted(function () {
   card.value.request('/api/stats/count/projects', function (response) {
-    data.text = (response.total - response.external).toLocaleString() + ' Projects'
+    data.text = response.total.toLocaleString() + ' Projects'
     data.details = response.external.toLocaleString() + ' external'
   })
 })

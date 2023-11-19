@@ -3,13 +3,11 @@ import FileCountCard from '@/components/FileCountCard.vue'
 import ProjectCountCard from '@/components/ProjectCountCard.vue'
 import RepositoryCountCard from '@/components/RepositoryCountCard.vue'
 import PersonCountCard from '@/components/PersonCountCard.vue'
-import CommitsSeenCard from '@/components/CommitsSeenCard.vue'
 import LinesChangedCard from '@/components/LinesChangedCard.vue'
 import LinesSurvivedCard from '@/components/LinesSurvivedCard.vue'
-import FilesSeenCard from '@/components/FilesSeenCard.vue'
 import PeopleSeenCard from '@/components/PeopleSeenCard.vue'
-import { onMounted } from 'vue'
 import CommitsTable from '../components/CommitsTable.vue'
+import FilesTable from '@/components/FilesTable.vue'
 </script>
 
 <template>
@@ -37,11 +35,11 @@ import CommitsTable from '../components/CommitsTable.vue'
     </div>
   </div>
   <div class="col-lg-6">
-    <CommitsTable type="sm" />
+    <CommitsTable size="md" />
   </div>
 
   <div class="col-lg-6">
-    <FilesSeenCard />
+    <FilesTable size="sm" />
   </div>
   <div class="col-lg-6">
     <PeopleSeenCard />

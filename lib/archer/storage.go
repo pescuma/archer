@@ -23,6 +23,7 @@ type Storage interface {
 	LoadProjects() (*model.Projects, error)
 	WriteProjects(projs *model.Projects, changes StorageChanges) error
 	WriteProject(proj *model.Project, changes StorageChanges) error
+	QueryProjects(file string, proj string, repo string, person string) ([]model.UUID, error)
 
 	LoadFiles() (*model.Files, error)
 	WriteFiles(files *model.Files, changes StorageChanges) error
@@ -30,8 +31,8 @@ type Storage interface {
 
 	LoadFileContents(fileID model.UUID) (*model.FileContents, error)
 	WriteFileContents(contents *model.FileContents, changes StorageChanges) error
-	ComputeBlamePerAuthor() ([]*BlamePerAuthor, error)
-	ComputeSurvivedLines(repoName string, personSearch string) ([]*SurvivedLineCount, error)
+	QueryBlamePerAuthor() ([]*BlamePerAuthor, error)
+	QueryFiles(file string, proj string, repo string, person string) ([]model.UUID, error)
 
 	LoadPeople() (*model.People, error)
 	WritePeople(people *model.People, changes StorageChanges) error
@@ -42,6 +43,9 @@ type Storage interface {
 	WriteCommit(repo *model.Repository, commit *model.RepositoryCommit, info StorageChanges) error
 	LoadRepositoryCommitFiles(repo *model.Repository, commit *model.RepositoryCommit) (*model.RepositoryCommitFiles, error)
 	WriteRepositoryCommitFiles(files []*model.RepositoryCommitFiles) error
+	QueryRepositories(file string, proj string, repo string, person string) ([]model.UUID, error)
+	QueryCommits(file string, proj string, repo string, person string) ([]model.UUID, error)
+	QuerySurvivedLines(file string, proj string, repo string, person string) ([]*SurvivedLineCount, error)
 
 	LoadConfig() (*map[string]string, error)
 	WriteConfig(*map[string]string) error

@@ -132,6 +132,23 @@ func prepareToSearch(s string) string {
 	return s
 }
 
+func (s *server) incSeenStats(result map[string]map[string]int, y int, m time.Month, field string) {
+	ym := fmt.Sprintf("%04d-%02d", y, m)
+
+	months, ok := result[ym]
+	if !ok {
+		months = make(map[string]int)
+		result[ym] = months
+	}
+
+	val, ok := months[field]
+	if !ok {
+		months[field] = 1
+	} else {
+		months[field] = val + 1
+	}
+}
+
 func encodeMetric(v int) *int {
 	return utils.IIf(v == -1, nil, &v)
 }
@@ -157,5 +174,15 @@ func (s *server) toChanges(i *model.Changes) gin.H {
 		"linesModified": encodeMetric(i.LinesModified),
 		"linesAdded":    encodeMetric(i.LinesAdded),
 		"linesDeleted":  encodeMetric(i.LinesDeleted),
+	}
+}
+
+func (s *server) toMetrics(i *model.Metrics) gin.H {
+	return gin.H{
+		"guiceDependencies":    i.GuiceDependencies,
+		"abstracts":            i.Abstracts,
+		"cyclomaticComplexity": i.CyclomaticComplexity,
+		"cognitiveComplexity":  i.CognitiveComplexity,
+		"focusedComplexity":    i.FocusedComplexity,
 	}
 }

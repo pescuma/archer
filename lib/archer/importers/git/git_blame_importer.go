@@ -185,7 +185,7 @@ func (g *gitBlameImporter) listToDelete(filesDB *model.Files, repo *model.Reposi
 	existing := set.New[string](1000)
 
 	err := gitTree.Files().ForEach(func(file *object.File) error {
-		path, err := utils.PathAbs(filepath.Join(repo.RootDir, file.Name))
+		path, err := utils.PathAbs(repo.RootDir, file.Name)
 		if err != nil {
 			return err
 		}
@@ -245,12 +245,14 @@ func (g *gitBlameImporter) computeBlame(storage archer.Storage, filesDB *model.F
 		return nil
 	}
 
-	fmt.Printf("%v: Computing blame of %v files...\n", repo.Name, len(toProcess))
+	fmt.Printf("%v: Creating cache...\n", repo.Name)
 
 	cache, err := g.createCache(storage, filesDB, repo, gitRepo)
 	if err != nil {
 		return err
 	}
+
+	fmt.Printf("%v: Computing blame of %v files...\n", repo.Name, len(toProcess))
 
 	bar := utils.NewProgressBar(len(toProcess))
 	for _, w := range toProcess {
@@ -350,12 +352,15 @@ func (g *gitBlameImporter) listToCompute(filesDB *model.Files, repo *model.Repos
 			return g.abort
 		}
 
-		path, err := utils.PathAbs(filepath.Join(repo.RootDir, gitFile.Name))
+		path, err := utils.PathAbs(repo.RootDir, gitFile.Name)
 		if err != nil {
 			return err
 		}
 
 		file := filesDB.GetFile(path)
+		if file == nil {
+			return fmt.Errorf("file not found in repo %v: %v", repo.Name, path)
+		}
 
 		lastMod := ""
 		stat, err := os.Stat(path)
@@ -510,7 +515,7 @@ func (g *gitBlameImporter) computeLOC(name string, contents string) ([]model.Fil
 }
 
 func (g *gitBlameImporter) propagateChangesToParents(storage archer.Storage, peopleDB *model.People, repos []*model.Repository) error {
-	blames, err := storage.ComputeBlamePerAuthor()
+	blames, err := storage.QueryBlamePerAuthor()
 	if err != nil {
 		return err
 	}
@@ -535,14 +540,13 @@ func (g *gitBlameImporter) propagateChangesToParents(storage archer.Storage, peo
 	}
 
 	for _, blame := range blames {
-		if c, ok := commits[blame.CommitID]; ok {
-			c.LinesSurvived += blame.Lines
+		c := commits[blame.CommitID]
+		c.LinesSurvived += blame.Lines
 
-			// TODO Blame code is creating strange commit references
-			//if file, ok := c.Files[blame.FileID]; ok {
-			//	file.LinesSurvived += blame.Lines
-			//}
-		}
+		// TODO Blame code is creating strange commit references
+		//if file, ok := c.Files[blame.FileID]; ok {
+		//	file.LinesSurvived += blame.Lines
+		//}
 
 		p := peopleDB.GetPersonByID(blame.AuthorID)
 

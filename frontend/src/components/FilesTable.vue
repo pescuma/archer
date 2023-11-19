@@ -1,10 +1,10 @@
 <script setup>
-import _ from 'lodash'
-import moment from 'moment'
 import { ref, watch } from 'vue'
-import { sortParams } from './utils'
+import { sortParams } from '@/components/utils'
 import { filters } from '@/utils/filters'
 import DataGrid from '@/components/DataGrid.vue'
+import _ from 'lodash'
+import moment from 'moment/moment'
 
 const props = defineProps({
   size: {
@@ -17,137 +17,105 @@ const grid = ref(null)
 
 const columns = [
   {
-    name: 'Date',
-    field: 'date',
-    type: 'date',
-    tooltip: (v) => moment(v.date).toDate().toLocaleString(),
+    name: 'Path',
+    field: 'path',
+    type: 'text',
+    size: 'l',
+    actions: [
+      {
+        name: 'Filter',
+        icon: 'filter',
+        onClick: (v) => {
+          filters.data.file = v.path
+        },
+      },
+    ],
   },
   {
-    name: 'Repo',
-    field: 'repo.name',
+    name: 'Project',
+    field: 'project.name',
     type: 'text',
     actions: [
       {
         name: 'Filter',
         icon: 'filter',
-        onClick: function (v) {
+        show: (v) => v.project,
+        onClick: (v) => {
+          filters.data.project = v.project.name
+        },
+      },
+    ],
+  },
+  {
+    name: 'Repo',
+    field: 'repo.name',
+    type: 'text',
+    show: props.size === 'lg',
+    actions: [
+      {
+        name: 'Filter',
+        icon: 'filter',
+        show: (v) => v.repo,
+        onClick: (v) => {
           filters.data.repo = v.repo.name
         },
       },
     ],
   },
   {
-    name: 'Hash',
-    field: 'hash',
-    type: 'text',
-    show: props.size === 'lg',
-    format: (v) => v.hash.slice(0, 7),
-    tooltip: (v) => v.hash,
-  },
-  {
-    name: 'Message',
-    field: 'message',
-    type: 'text',
-    size: 'l',
-    actions: [
-      {
-        name: 'Merge commit',
-        icon: 'git-merge',
-        before: true,
-        show: (v) => v.parents && v.parents.length > 1,
-      },
-    ],
-  },
-  {
-    name: 'Author',
-    field: 'author.name',
-    type: 'text',
-    actions: [
-      {
-        name: 'Filter',
-        icon: 'filter',
-        onClick: function (v) {
-          filters.data.person = v.author.name
-        },
-      },
-    ],
-  },
-  {
-    name: 'Committer',
-    field: 'committer.name',
-    type: 'text',
-    show: props.size === 'lg',
-    format: (v) => {
-      if (v.committer.id === v.author.id) return ''
-      return v.committer.name
-    },
-    actions: [
-      {
-        name: 'Filter',
-        icon: 'filter',
-        show: (v) => v.committer.id !== v.author.id,
-        onClick: function (v) {
-          filters.data.person = v.committer.name
-        },
-      },
-    ],
-  },
-  {
-    name: 'Modified',
-    field: 'modifiedLines',
+    name: 'Lines',
+    field: 'size.lines',
     type: 'int',
-    show: props.size === 'lg',
   },
   {
-    name: 'Added',
-    field: 'addedLines',
+    name: 'Changes 6m',
+    field: 'changes.in6Months',
+    show: props.size === 'lg',
     type: 'int',
-    show: props.size === 'lg',
   },
   {
-    name: 'Deleted',
-    field: 'deletedLines',
+    name: 'Changes total',
+    field: 'changes.total',
+    show: props.size === 'lg',
     type: 'int',
+  },
+  {
+    name: 'First seen',
+    field: 'firstSeen',
+    type: 'date',
     show: props.size === 'lg',
   },
   {
-    name: 'Survived',
-    field: 'survivedLines',
-    type: 'int',
+    name: 'Last seen',
+    field: 'lastSeen',
+    type: 'date',
     show: props.size === 'lg',
   },
-]
-
-const actions = [
   {
-    name: 'Ignore',
-    icon: 'circle-minus',
-    show: props.size === 'lg',
-    onClick: async function (commit) {
-      await window.api.patch(`/api/repos/${commit.repo.id}/commits/${commit.id}`, { ignore: true })
-    },
+    name: 'Exists',
+    field: 'exists',
+    type: 'text',
+    format: (v) => (v.exists ? 'Yes' : 'No'),
   },
 ]
 
 async function loadPage(page, pageSize, sort, asc) {
   let s = sortParams(page, pageSize, sort, asc)
-  let f = filters.toQueryString({ repo: 'repo', person: 'person' })
+  let f = filters.toQueryString({ file: 'q', repo: 'repo', person: 'person' })
 
-  return await window.api.get(`/api/commits?${f}&${s}`)
+  return await window.api.get(`/api/files?${f}&${s}`)
 }
 
 async function loadChart() {
   const response = await Promise.all([
-    window.api.get('/api/stats/seen/repos?' + filters.toQueryString({ repo: 'q', person: 'person' })),
-    window.api.get('/api/stats/seen/commits?' + filters.toQueryString({ repo: 'repo', person: 'person' })),
+    window.api.get('/api/stats/seen/files?' + filters.toQueryString({ file: 'q', repo: 'repo', person: 'person' })),
   ])
 
   const labels = []
-  const repos = []
-  const commitsSum = []
-  const commitsMonth = []
-  let reposPrev = 0
-  let commitsPrev = 0
+  const filesSum = []
+  const filesAdd = []
+  const filesDel = []
+  let filesPrev = 0
 
   let format = 'YYYY-MM'
   let months = _.chain(response)
@@ -160,21 +128,20 @@ async function loadChart() {
     .concat(moment().format(format))
   let min = moment(months.min(), format)
   let max = moment(months.max(), format)
+  let now = moment().format(format)
   for (let i = min; i <= max; i = i.add(1, 'month')) {
     let month = i.format(format)
 
     labels.push(month + '-15')
 
-    let rm = response[0][month] || 0
-    reposPrev += rm.firstSeen || 0
-    repos.push(reposPrev)
+    let fs = response[0][month] || {}
 
-    let cm = response[1][month] || 0
+    filesPrev += fs.firstSeen || 0
+    filesSum.push(filesPrev)
+    filesPrev -= fs.lastSeen || 0
 
-    commitsPrev += cm
-    commitsSum.push(commitsPrev)
-
-    commitsMonth.push(cm)
+    filesAdd.push(fs.firstSeen || 0)
+    filesDel.push(month === now ? 0 : -(fs.lastSeen || 0))
   }
 
   const opts = {
@@ -190,12 +157,13 @@ async function loadChart() {
       animations: {
         enabled: false,
       },
+      stacked: true,
     },
     fill: {
-      opacity: [1, 0.2, 1],
+      opacity: [1, 0.2, 0.2],
     },
     stroke: {
-      width: [2, 0, 0.5],
+      width: [2, 0, 0],
       lineCap: 'round',
       curve: 'smooth',
     },
@@ -239,6 +207,7 @@ async function loadChart() {
       },
       {
         show: false,
+        seriesName: 'Files added',
         labels: {
           padding: 4,
           formatter: function (value) {
@@ -247,18 +216,18 @@ async function loadChart() {
         },
       },
       {
-        opposite: true,
         show: false,
+        seriesName: 'Files added',
         labels: {
           padding: 4,
           formatter: function (value) {
-            return value.toLocaleString()
+            return Math.abs(value).toLocaleString()
           },
         },
       },
     ],
     labels: labels,
-    colors: [tabler.getColor('azure'), tabler.getColor('azure'), tabler.getColor('lime')],
+    colors: [tabler.getColor('blue'), tabler.getColor('green'), tabler.getColor('red')],
     legend: {
       show: false,
     },
@@ -266,19 +235,19 @@ async function loadChart() {
 
   const series = [
     {
-      name: 'Commits total',
+      name: 'Files total',
       type: 'line',
-      data: commitsSum,
+      data: filesSum,
     },
     {
-      name: 'Commits',
+      name: 'Files added',
       type: 'column',
-      data: commitsMonth,
+      data: filesAdd,
     },
     {
-      name: 'Repositories total',
-      type: 'line',
-      data: repos,
+      name: 'Files deleted',
+      type: 'column',
+      data: filesDel,
     },
   ]
 
@@ -298,9 +267,8 @@ watch(
 <template>
   <DataGrid
     ref="grid"
-    title="Commits"
+    title="Files"
     :columns="columns"
-    :actions="actions"
     :pageSize="size === 'md' ? 5 : null"
     :loadPage="size !== 'sm' ? loadPage : null"
     :loadChart="loadChart"

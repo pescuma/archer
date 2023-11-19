@@ -97,6 +97,12 @@ func (i *csprojImporter) process(projsDB *model.Projects, filesDB *model.Files, 
 	dir := proj.GetDirectory(".")
 	dir.Type = model.SourceDir
 
+	projFile := filesDB.GetOrCreateFile(path)
+	projFile.ProjectID = &proj.ID
+	projFile.ProjectDirectoryID = &dir.ID
+
+	proj.RepositoryID = projFile.RepositoryID
+
 	excludes := set.New[string](10)
 
 	filter, err := common.CreateFileFilter(proj.RootDir, i.options.RespectGitignore,

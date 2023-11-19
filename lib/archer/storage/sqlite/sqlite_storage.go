@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"math"
@@ -141,6 +142,7 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 
 		p.RootDir = sp.RootDir
 		p.ProjectFile = sp.ProjectFile
+		p.RepositoryID = sp.RepositoryID
 
 		for k, v := range sp.Sizes {
 			p.Sizes[k] = toModelSize(v)
@@ -266,6 +268,40 @@ func (s *sqliteStorage) writeProjects(projs []*model.Project, changes archer.Sto
 	// TODO delete
 
 	return nil
+}
+
+func (s *sqliteStorage) QueryProjects(file string, proj string, repo string, person string) ([]model.UUID, error) {
+	var result []model.UUID
+
+	err := s.db.Raw(`
+select distinct p.id
+from projects p
+         left join files f
+                   on f.project_id = p.id
+         left join repositories r
+                   on r.id = p.repository_id
+         left join repository_commits c
+                   on c.repository_id = r.id
+         left join people pa
+                   on pa.id = c.author_id
+         left join people pc
+                   on pc.id = c.committer_id
+where (c.ignore is null or c.ignore = 0)
+  and (@proj = '' or p.name like @proj)
+  and (@file = '' or f.name like @file)
+  and (@repo = '' or r.name like @repo)
+  and (@person = '' or pc.names like @person or pc.emails like @person or pa.names like @person or pa.emails like @person)
+		`,
+		sql.Named("proj", proj),
+		sql.Named("file", file),
+		sql.Named("repo", repo),
+		sql.Named("person", person),
+	).Scan(&result).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
@@ -401,14 +437,14 @@ func (s *sqliteStorage) WriteFileContents(contents *model.FileContents, changes 
 	return nil
 }
 
-func (s *sqliteStorage) ComputeBlamePerAuthor() ([]*archer.BlamePerAuthor, error) {
+func (s *sqliteStorage) QueryBlamePerAuthor() ([]*archer.BlamePerAuthor, error) {
 	var result []*archer.BlamePerAuthor
 
 	err := s.db.Raw(`
-		select author_id, commit_id, file_id, type line_type, count(*) lines
-		from file_lines l
-		group by author_id, commit_id, file_id, type
-		`).Scan(&result).Error
+select author_id, commit_id, file_id, type line_type, count(*) lines
+from file_lines l
+group by author_id, commit_id, file_id, type
+	`).Scan(&result).Error
 	if err != nil {
 		return nil, err
 	}
@@ -416,30 +452,34 @@ func (s *sqliteStorage) ComputeBlamePerAuthor() ([]*archer.BlamePerAuthor, error
 	return result, nil
 }
 
-func (s *sqliteStorage) ComputeSurvivedLines(repoName string, personSearch string) ([]*archer.SurvivedLineCount, error) {
-	var result []*archer.SurvivedLineCount
+func (s *sqliteStorage) QueryFiles(file string, proj string, repo string, person string) ([]model.UUID, error) {
+	var result []model.UUID
 
 	err := s.db.Raw(`
-select strftime('%Y-%m', c.date) month, l.type line_type, count(*) lines
-from file_lines l
-         join repository_commits c
-              on c.id = l.commit_id
-         join repositories r
-              on r.id = c.repository_id
-         join people pc
-              on pc.id = c.committer_id
-         join people pa
-              on pa.id = c.author_id
-where c.ignore = 0
-  and r.name like ?
-  and (pc.names like ? or pc.emails like ? or pa.names like ? or pa.emails like ?)
-group by 1, 2
+select distinct f.id
+from files f
+         left join projects p
+                   on p.id = f.project_id
+         left join repositories r
+                   on r.id = f.repository_id
+         left join repository_commits c
+                   on c.repository_id = r.id
+         left join repository_commit_files cf
+                   on cf.file_id = f.id and cf.commit_id = c.id
+         left join people pa
+                   on pa.id = c.author_id
+         left join people pc
+                   on pc.id = c.committer_id
+where (c.ignore is null or c.ignore = 0)
+  and (@proj = '' or p.name like @proj)
+  and (@file = '' or f.name like @file)
+  and (@repo = '' or r.name like @repo)
+  and (@person = '' or pc.names like @person or pc.emails like @person or pa.names like @person or pa.emails like @person)
 		`,
-		"%"+repoName+"%",
-		"%"+personSearch+"%",
-		"%"+personSearch+"%",
-		"%"+personSearch+"%",
-		"%"+personSearch+"%",
+		sql.Named("proj", proj),
+		sql.Named("file", file),
+		sql.Named("repo", repo),
+		sql.Named("person", person),
 	).Scan(&result).Error
 	if err != nil {
 		return nil, err
@@ -767,6 +807,113 @@ func (s *sqliteStorage) WriteRepositoryCommitFiles(files []*model.RepositoryComm
 	return nil
 }
 
+func (s *sqliteStorage) QueryRepositories(file string, proj string, repo string, person string) ([]model.UUID, error) {
+	var result []model.UUID
+
+	err := s.db.Raw(`
+select distinct r.id
+from repositories r
+         left join repository_commits c
+                   on c.repository_id = r.id
+         left join people pa
+                   on pa.id = c.author_id
+         left join people pc
+                   on pc.id = c.committer_id
+         left join files f
+                   on f.repository_id = r.id
+         left join projects p
+                   on p.repository_id = r.id
+where (c.ignore is null or c.ignore = 0)
+  and (@proj = '' or p.name like @proj)
+  and (@file = '' or f.name like @file)
+  and (@repo = '' or r.name like @repo)
+  and (@person = '' or pc.names like @person or pc.emails like @person or pa.names like @person or pa.emails like @person)
+		`,
+		sql.Named("proj", proj),
+		sql.Named("file", file),
+		sql.Named("repo", repo),
+		sql.Named("person", person),
+	).Scan(&result).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (s *sqliteStorage) QueryCommits(file string, proj string, repo string, person string) ([]model.UUID, error) {
+	var result []model.UUID
+
+	err := s.db.Raw(`
+select distinct c.id
+from repository_commits c
+         join repositories r
+              on r.id = c.repository_id
+         join people pa
+              on pa.id = c.author_id
+         join people pc
+              on pc.id = c.committer_id
+         join repository_commit_files cf
+              on cf.commit_id = c.id
+         join files f
+              on f.id = cf.file_id
+         left join projects p
+              on p.id = f.project_id
+where c.ignore = 0
+  and (@proj = '' or p.name like @proj)
+  and (@file = '' or f.name like @file)
+  and (@repo = '' or r.name like @repo)
+  and (@person = '' or pc.names like @person or pc.emails like @person or pa.names like @person or pa.emails like @person)
+		`,
+		sql.Named("proj", proj),
+		sql.Named("file", file),
+		sql.Named("repo", repo),
+		sql.Named("person", person),
+	).Scan(&result).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (s *sqliteStorage) QuerySurvivedLines(file string, proj string, repo string, person string) ([]*archer.SurvivedLineCount, error) {
+	var result []*archer.SurvivedLineCount
+
+	err := s.db.Raw(`
+select strftime('%Y-%m', c.date) month, l.type line_type, count(1) lines
+from file_lines l
+         join repository_commits c
+              on c.id = l.commit_id
+         join repositories r
+              on r.id = c.repository_id
+         join people pa
+              on pa.id = c.author_id
+         join people pc
+              on pc.id = c.committer_id
+         join files f
+              on f.id = l.file_id
+         left join projects p
+              on p.id = f.project_id
+where c.ignore = 0
+  and (@proj = '' or p.name like @proj)
+  and (@file = '' or f.name like @file)
+  and (@repo = '' or r.name like @repo)
+  and (@person = '' or pc.names like @person or pc.emails like @person or pa.names like @person or pa.emails like @person)
+group by 1, 2
+		`,
+		sql.Named("proj", proj),
+		sql.Named("file", file),
+		sql.Named("repo", repo),
+		sql.Named("person", person),
+	).Scan(&result).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
 func (s *sqliteStorage) LoadConfig() (*map[string]string, error) {
 	result := map[string]string{}
 
@@ -946,21 +1093,22 @@ func toSqlProject(p *model.Project) *sqlProject {
 	size := p.GetSize()
 
 	sp := &sqlProject{
-		ID:          p.ID,
-		Name:        p.String(),
-		Root:        p.Root,
-		ProjectName: p.Name,
-		NameParts:   p.NameParts,
-		Type:        p.Type,
-		RootDir:     p.RootDir,
-		ProjectFile: p.ProjectFile,
-		Size:        toSqlSize(size),
-		Sizes:       map[string]*sqlSize{},
-		Changes:     toSqlChanges(p.Changes),
-		Metrics:     toSqlMetricsAggregate(p.Metrics, size),
-		Data:        encodeMap(p.Data),
-		FirstSeen:   p.FirstSeen,
-		LastSeen:    p.LastSeen,
+		ID:           p.ID,
+		Name:         p.String(),
+		Root:         p.Root,
+		ProjectName:  p.Name,
+		NameParts:    p.NameParts,
+		Type:         p.Type,
+		RootDir:      p.RootDir,
+		ProjectFile:  p.ProjectFile,
+		RepositoryID: p.RepositoryID,
+		Size:         toSqlSize(size),
+		Sizes:        map[string]*sqlSize{},
+		Changes:      toSqlChanges(p.Changes),
+		Metrics:      toSqlMetricsAggregate(p.Metrics, size),
+		Data:         encodeMap(p.Data),
+		FirstSeen:    p.FirstSeen,
+		LastSeen:     p.LastSeen,
 	}
 
 	for k, v := range p.Sizes {

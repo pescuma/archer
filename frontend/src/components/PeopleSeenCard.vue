@@ -37,6 +37,7 @@ onMounted(function () {
 
     data.opts = {
       chart: {
+        type: 'line',
         fontFamily: 'inherit',
         parentHeightOffset: 0,
         toolbar: {

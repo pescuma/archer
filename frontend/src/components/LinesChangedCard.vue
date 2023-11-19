@@ -47,6 +47,7 @@ function refresh() {
 
     data.opts = {
       chart: {
+        type: 'bar',
         fontFamily: 'inherit',
         toolbar: {
           show: false,

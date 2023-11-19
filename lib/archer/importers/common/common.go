@@ -40,6 +40,11 @@ func ImportFiles(rootDir string, queue []string, process func(string) error) err
 
 		bar.Describe(utils.TruncateFilename(relativePath))
 
+		file, err = utils.PathAbs(file)
+		if err != nil {
+			return err
+		}
+
 		err = process(file)
 		if err != nil {
 			return err

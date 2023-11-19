@@ -1,26 +1,65 @@
 package server
 
 import (
-	"fmt"
-
 	"github.com/gin-gonic/gin"
 	"github.com/pescuma/archer/lib/archer/model"
 	"github.com/samber/lo"
 )
 
+type FilesFilters struct {
+	FilterFile    string `form:"q"`
+	FilterProject string `form:"proj"`
+	FilterRepo    string `form:"repo"`
+	FilterPerson  string `form:"person"`
+}
+
+type FilesListParams struct {
+	GridParams
+	FilesFilters
+}
+
+type StatsFilesParams struct {
+	FilesFilters
+}
+
 func (s *server) initFiles(r *gin.Engine) {
-	r.GET("/api/files", get(s.listFiles))
-	r.GET("/api/files/:id", get(s.getFile))
-	r.GET("/api/stats/count/files", get(s.countFiles))
-	r.GET("/api/stats/seen/files", get(s.getFilesSeenStats))
+	r.GET("/api/files", getP[FilesListParams](s.filesList))
+	r.GET("/api/files/:id", get(s.fileGet))
+	r.GET("/api/stats/count/files", getP[StatsFilesParams](s.statsCountFiles))
+	r.GET("/api/stats/seen/files", getP[StatsFilesParams](s.statsSeenFiles))
 }
 
-func (s *server) listFiles() (any, error) {
-	return nil, nil
+func (s *server) filesList(params *FilesListParams) (any, error) {
+	files, err := s.listFiles(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.sortFiles(files, params.Sort, params.Asc)
+	if err != nil {
+		return nil, err
+	}
+
+	total := len(files)
+
+	files = paginate(files, params.Offset, params.Limit)
+
+	var result []gin.H
+	for _, r := range files {
+		result = append(result, s.toFile(r))
+	}
+
+	return gin.H{
+		"data":  result,
+		"total": total,
+	}, nil
 }
 
-func (s *server) countFiles() (any, error) {
-	files := s.files.ListFiles()
+func (s *server) statsCountFiles(params *StatsFilesParams) (any, error) {
+	files, err := s.listFiles(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	if err != nil {
+		return nil, err
+	}
 
 	return gin.H{
 		"total":   len(files),
@@ -28,18 +67,24 @@ func (s *server) countFiles() (any, error) {
 	}, nil
 }
 
-func (s *server) getFile() (any, error) {
+func (s *server) fileGet() (any, error) {
 	return nil, nil
 }
 
-func (s *server) getFilesSeenStats() (any, error) {
-	s1 := lo.GroupBy(s.files.ListFiles(), func(file *model.File) string {
-		y, m, _ := file.FirstSeen.Date()
-		return fmt.Sprintf("%04d-%02d", y, m)
-	})
-	s2 := lo.MapValues(s1, func(files []*model.File, _ string) int {
-		return len(files)
-	})
+func (s *server) statsSeenFiles(params *StatsFilesParams) (any, error) {
+	files, err := s.listFiles(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	if err != nil {
+		return nil, err
+	}
 
-	return s2, nil
+	result := make(map[string]map[string]int)
+	for _, f := range files {
+		y, m, _ := f.FirstSeen.Date()
+		s.incSeenStats(result, y, m, "firstSeen")
+
+		y, m, _ = f.LastSeen.Date()
+		s.incSeenStats(result, y, m, "lastSeen")
+	}
+
+	return result, nil
 }

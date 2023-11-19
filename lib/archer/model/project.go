@@ -19,6 +19,8 @@ type Project struct {
 	RootDir     string
 	ProjectFile string
 
+	RepositoryID *UUID
+
 	Dirs         map[string]*ProjectDirectory
 	Dependencies map[string]*ProjectDependency
 	Sizes        map[string]*Size

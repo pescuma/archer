@@ -96,6 +96,12 @@ func (i *gomodImporter) process(projsDB *model.Projects, filesDB *model.Files, p
 	dir := proj.GetDirectory(".")
 	dir.Type = model.SourceDir
 
+	projFile := filesDB.GetOrCreateFile(path)
+	projFile.ProjectID = &proj.ID
+	projFile.ProjectDirectoryID = &dir.ID
+
+	proj.RepositoryID = projFile.RepositoryID
+
 	for _, req := range ast.Require {
 		i.addDep(projsDB, proj, req.Mod)
 	}

@@ -96,7 +96,53 @@ fui.count = computed(() => {
                 </div>
                 <div class="card-body" v-if="fui.visible">
                   <div class="row">
-                    <div class="col-4">
+                    <div class="col-3">
+                      <div class="mb-3">
+                        <label class="form-label">File</label>
+                        <div class="input-group mb-2">
+                          <input
+                            type="text"
+                            class="form-control"
+                            :value="fui.filters.file"
+                            @input="
+                              (event) => {
+                                _.debounce(() => {
+                                  fui.filters.file = event.target.value
+                                }, 1000)()
+                              }
+                            "
+                          />
+                          <a href="#" class="btn btn-icon text-muted" @click.prevent="fui.filters.file = ''">
+                            <icon-trash class="icon" />
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="col-3">
+                      <div class="mb-3">
+                        <label class="form-label">Project</label>
+                        <div class="input-group mb-2">
+                          <input
+                            type="text"
+                            class="form-control"
+                            :value="fui.filters.project"
+                            @input="
+                              (event) => {
+                                _.debounce(() => {
+                                  fui.filters.project = event.target.value
+                                }, 1000)()
+                              }
+                            "
+                          />
+                          <a href="#" class="btn btn-icon text-muted" @click.prevent="fui.filters.project = ''">
+                            <icon-trash class="icon" />
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="col-3">
                       <div class="mb-3">
                         <label class="form-label">Repository</label>
                         <div class="input-group mb-2">
@@ -119,7 +165,7 @@ fui.count = computed(() => {
                       </div>
                     </div>
 
-                    <div class="col-4">
+                    <div class="col-3">
                       <div class="mb-3">
                         <label class="form-label">Person</label>
                         <div class="input-group mb-2">

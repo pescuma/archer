@@ -5,39 +5,41 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hashicorp/go-set/v2"
 	"github.com/pescuma/archer/lib/archer/model"
 	"github.com/samber/lo"
 )
 
-func (s *server) listRepos(search string, person string) []*model.Repository {
-	return s.filterRepos(s.repos.List(), search, person)
+func (s *server) listRepos(file string, proj string, repo string, person string) ([]*model.Repository, error) {
+	return s.filterRepos(s.repos.List(), file, proj, repo, person)
 }
 
-func (s *server) filterRepos(col []*model.Repository, search string, person string) []*model.Repository {
-	search = prepareToSearch(search)
+func (s *server) filterRepos(col []*model.Repository, file string, proj string, repo string, person string) ([]*model.Repository, error) {
+	file = prepareToSearch(file)
+	proj = prepareToSearch(proj)
+	repo = prepareToSearch(repo)
 	person = prepareToSearch(person)
 
+	var ids *set.Set[model.UUID]
+	if file != "" || proj != "" || person != "" {
+		r, err := s.storage.QueryRepositories(file, proj, repo, person)
+		if err != nil {
+			return nil, err
+		}
+		ids = set.From(r)
+	}
+
 	return lo.Filter(col, func(i *model.Repository, index int) bool {
-		if search != "" && !strings.Contains(strings.ToLower(i.Name), search) {
+		if repo != "" && !strings.Contains(strings.ToLower(i.Name), repo) {
 			return false
 		}
 
-		if person != "" && !s.repoHasPerson(i, person) {
+		if ids != nil && !ids.Contains(i.ID) {
 			return false
 		}
 
 		return true
-	})
-}
-
-func (s *server) repoHasPerson(i *model.Repository, person string) bool {
-	for _, c := range i.ListCommits() {
-		if s.filterCommit(RepoAndCommit{Repo: i, Commit: c}, "", person) {
-			return true
-		}
-	}
-
-	return false
+	}), nil
 }
 
 func (s *server) sortRepos(col []*model.Repository, field string, asc *bool) error {
@@ -85,7 +87,13 @@ func (s *server) toRepo(r *model.Repository) gin.H {
 	}
 }
 
-func (s *server) toRepoReference(repo *model.Repository) gin.H {
+func (s *server) toRepoReference(id *model.UUID) gin.H {
+	if id == nil {
+		return nil
+	}
+
+	repo := s.repos.GetByID(*id)
+
 	return gin.H{
 		"id":   repo.ID,
 		"name": repo.Name,
@@ -97,7 +105,7 @@ type RepoAndCommit struct {
 	Commit *model.RepositoryCommit
 }
 
-func (s *server) listReposAndCommits(repo string, person string) []RepoAndCommit {
+func (s *server) listReposAndCommits(file string, proj string, repo string, person string) ([]RepoAndCommit, error) {
 	commits := lo.FlatMap(s.repos.List(), func(i *model.Repository, index int) []RepoAndCommit {
 		return lo.Map(i.ListCommits(), func(c *model.RepositoryCommit, _ int) RepoAndCommit {
 			return RepoAndCommit{
@@ -107,18 +115,31 @@ func (s *server) listReposAndCommits(repo string, person string) []RepoAndCommit
 		})
 	})
 
-	commits = s.filterCommits(commits, repo, person)
-
-	return commits
+	return s.filterCommits(commits, file, proj, repo, person)
 }
 
-func (s *server) filterCommits(col []RepoAndCommit, repo string, person string) []RepoAndCommit {
+func (s *server) filterCommits(col []RepoAndCommit, file string, proj string, repo string, person string) ([]RepoAndCommit, error) {
+	file = prepareToSearch(file)
+	proj = prepareToSearch(proj)
 	repo = prepareToSearch(repo)
 	person = prepareToSearch(person)
 
+	var ids *set.Set[model.UUID]
+	if repo != "" || person != "" {
+		r, err := s.storage.QueryCommits(file, proj, repo, person)
+		if err != nil {
+			return nil, err
+		}
+		ids = set.From(r)
+	}
+
 	return lo.Filter(col, func(i RepoAndCommit, index int) bool {
-		return s.filterCommit(i, repo, person)
-	})
+		if ids != nil && !ids.Contains(i.Commit.ID) {
+			return false
+		}
+
+		return true
+	}), nil
 }
 
 func (s *server) filterCommit(i RepoAndCommit, repo string, person string) bool {
@@ -183,20 +204,17 @@ func (s *server) sortCommits(col []RepoAndCommit, field string, asc *bool) error
 }
 
 func (s *server) toCommit(commit *model.RepositoryCommit, repo *model.Repository) gin.H {
-	author := s.people.GetPersonByID(commit.AuthorID)
-	committer := s.people.GetPersonByID(commit.CommitterID)
-
 	return gin.H{
-		"repo":          s.toRepoReference(repo),
 		"id":            commit.ID,
+		"repo":          s.toRepoReference(&repo.ID),
 		"hash":          commit.Hash,
 		"message":       commit.Message,
 		"date":          commit.Date,
 		"parents":       commit.Parents,
 		"children":      commit.Children,
-		"committer":     s.toPersonReference(committer),
+		"committer":     s.toPersonReference(&commit.AuthorID),
 		"dateAuthored":  commit.DateAuthored,
-		"author":        s.toPersonReference(author),
+		"author":        s.toPersonReference(&commit.CommitterID),
 		"modifiedLines": encodeMetric(commit.LinesModified),
 		"addedLines":    encodeMetric(commit.LinesAdded),
 		"deletedLines":  encodeMetric(commit.LinesDeleted),

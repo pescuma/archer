@@ -111,7 +111,14 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 		}
 
 		if g.options.SaveEvery != nil && commitsImported > 0 {
-			err = g.writeResults(storage, filesDB, repo, nil)
+			fmt.Printf("%v: Writing results...\n", repo.Name)
+
+			err = storage.WritePeople(peopleDB, archer.ChangedBasicInfo|archer.ChangedChanges)
+			if err != nil {
+				return err
+			}
+
+			err := storage.WriteRepository(repo, archer.ChangedBasicInfo|archer.ChangedHistory)
 			if err != nil {
 				return err
 			}
@@ -333,6 +340,27 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage, filesDB *mode
 		return err
 	}
 
+	writeResults := func(commitFiles []*model.RepositoryCommitFiles) error {
+		fmt.Printf("%v: Writing results...\n", repo.Name)
+
+		err := storage.WriteFiles(filesDB, archer.ChangedBasicInfo)
+		if err != nil {
+			return nil
+		}
+
+		err = storage.WriteRepository(repo, archer.ChangedBasicInfo|archer.ChangedHistory)
+		if err != nil {
+			return err
+		}
+
+		err = storage.WriteRepositoryCommitFiles(commitFiles)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
 	var commitFilesToWrite []*model.RepositoryCommitFiles
 
 	bar := utils.NewProgressBar(imported)
@@ -381,7 +409,7 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage, filesDB *mode
 
 		if g.options.SaveEvery != nil && imported%*g.options.SaveEvery == 0 {
 			_ = bar.Clear()
-			err = g.writeResults(storage, filesDB, repo, commitFilesToWrite)
+			err = writeResults(commitFilesToWrite)
 			if err != nil {
 				return err
 			}
@@ -398,7 +426,7 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage, filesDB *mode
 		return err
 	}
 
-	err = g.writeResults(storage, filesDB, repo, commitFilesToWrite)
+	err = writeResults(commitFilesToWrite)
 	if err != nil {
 		return err
 	}
@@ -421,7 +449,10 @@ func (g *gitHistoryImporter) computeChangesMergeCommit(gitCommit *object.Commit,
 		}
 
 		for _, gitFile := range gitChanges {
-			filePath := filepath.Join(repo.RootDir, gitFile.Name)
+			filePath, err := utils.PathAbs(repo.RootDir, gitFile.Name)
+			if err != nil {
+				return err
+			}
 
 			file := filesDB.GetOrCreateFile(filePath)
 			file.RepositoryID = &repo.ID
@@ -430,7 +461,10 @@ func (g *gitHistoryImporter) computeChangesMergeCommit(gitCommit *object.Commit,
 			cf := commitFiles.GetOrCreate(file.ID)
 
 			if gitFile.Name != gitFile.OldName {
-				oldFilePath := filepath.Join(repo.RootDir, gitFile.OldName)
+				oldFilePath, err := utils.PathAbs(repo.RootDir, gitFile.OldName)
+				if err != nil {
+					return err
+				}
 
 				oldFile := filesDB.GetOrCreateFile(oldFilePath)
 				oldFile.RepositoryID = &repo.ID
@@ -492,7 +526,10 @@ func (g *gitHistoryImporter) computeChangesSimpleCommit(gitCommit *object.Commit
 		linesCreated := 0
 
 		for _, gitFile := range gitChanges {
-			filePath := filepath.Join(repo.RootDir, gitFile.Name)
+			filePath, err := utils.PathAbs(repo.RootDir, gitFile.Name)
+			if err != nil {
+				return err
+			}
 
 			file := filesDB.GetOrCreateFile(filePath)
 			file.RepositoryID = &repo.ID
@@ -504,7 +541,10 @@ func (g *gitHistoryImporter) computeChangesSimpleCommit(gitCommit *object.Commit
 			cf.LinesDeleted = utils.Max(cf.LinesDeleted, gitFile.Deleted)
 
 			if gitFile.Name != gitFile.OldName {
-				oldFilePath := filepath.Join(repo.RootDir, gitFile.OldName)
+				oldFilePath, err := utils.PathAbs(repo.RootDir, gitFile.OldName)
+				if err != nil {
+					return err
+				}
 
 				oldFile := filesDB.GetOrCreateFile(oldFilePath)
 				oldFile.RepositoryID = &repo.ID
@@ -558,7 +598,10 @@ func (g *gitHistoryImporter) computeChangesRootCommit(gitCommit *object.Commit,
 	commit.LinesDeleted = 0
 
 	return gitTree.Files().ForEach(func(gitFile *object.File) error {
-		filePath := filepath.Join(repo.RootDir, gitFile.Name)
+		filePath, err := utils.PathAbs(repo.RootDir, gitFile.Name)
+		if err != nil {
+			return err
+		}
 
 		file := filesDB.GetOrCreateFile(filePath)
 		file.RepositoryID = &repo.ID
@@ -578,29 +621,6 @@ func (g *gitHistoryImporter) computeChangesRootCommit(gitCommit *object.Commit,
 
 		return nil
 	})
-}
-
-func (g *gitHistoryImporter) writeResults(storage archer.Storage, filesDB *model.Files, repo *model.Repository, commitFiles []*model.RepositoryCommitFiles) error {
-	fmt.Printf("%v: Writing results...\n", repo.Name)
-
-	err := storage.WriteFiles(filesDB, archer.ChangedBasicInfo)
-	if err != nil {
-		return nil
-	}
-
-	err = storage.WriteRepository(repo, archer.ChangedBasicInfo|archer.ChangedHistory)
-	if err != nil {
-		return err
-	}
-
-	if commitFiles != nil {
-		err = storage.WriteRepositoryCommitFiles(commitFiles)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (g *gitHistoryImporter) computeChangesNoLines(commit *object.Commit, parent *object.Commit) ([]*gitFileChange, error) {
@@ -774,6 +794,11 @@ func (g *gitHistoryImporter) countLines(text string) int {
 func (g *gitHistoryImporter) propagateChangesToParents(storage archer.Storage, reposDB *model.Repositories, projectsDB *model.Projects, filesDB *model.Files, peopleDB *model.People) error {
 	dirsByIDs := map[model.UUID]*model.ProjectDirectory{}
 	for _, p := range projectsDB.ListProjects(model.FilterExcludeExternal) {
+		projFile := filesDB.GetFile(p.ProjectFile)
+		if projFile != nil {
+			p.RepositoryID = projFile.RepositoryID
+		}
+
 		for _, d := range p.Dirs {
 			dirsByIDs[d.ID] = d
 		}

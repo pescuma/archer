@@ -194,7 +194,9 @@ function prepareActions(actions) {
   return result
 }
 
-async function loadPage(pageNum, sort, asc) {
+async function onLoadPage(pageNum, sort, asc) {
+  if (!props.loadPage) return
+
   let result = await card.value.loading(async function () {
     return await props.loadPage(pageNum, page.value.size, sort, asc)
   })
@@ -215,18 +217,18 @@ async function loadPage(pageNum, sort, asc) {
 }
 
 function onPage(p) {
-  loadPage(p, data.sort, data.asc)
+  onLoadPage(p, data.sort, data.asc)
 }
 
 function onSort(field) {
   if (field === data.sort) {
-    loadPage(page.value.num, data.sort, !data.asc)
+    onLoadPage(page.value.num, data.sort, !data.asc)
   } else {
     let c = _.chain(columns.value)
       .filter((c) => c.sort === field)
       .first()
       .value()
-    loadPage(page.value.num, c.sort, c.defaultAsc)
+    onLoadPage(page.value.num, c.sort, c.defaultAsc)
   }
 }
 
@@ -235,7 +237,7 @@ const chart = reactive({
   series: [],
 })
 
-async function loadChart() {
+async function onLoadChart() {
   if (!props.loadChart) return
 
   let result = await card.value.loading(async function () {
@@ -254,8 +256,8 @@ function refresh() {
     data.asc = c.defaultAsc
   }
 
-  loadChart()
-  loadPage(data.pageNum, data.sort, data.asc)
+  onLoadChart()
+  onLoadPage(data.pageNum, data.sort, data.asc)
 }
 
 onMounted(async function () {
@@ -271,13 +273,13 @@ defineExpose({ refresh })
       <h3 class="card-title">{{ props.title }}</h3>
     </div>
 
-    <div class="card-body" v-if="chart.series.length > 0">
+    <div v-if="loadChart && chart.series.length > 0" class="card-body">
       <div class="chart-lg">
-        <apexchart type="line" height="240" :options="chart.opts" :series="chart.series" />
+        <apexchart height="240" :options="chart.opts" :series="chart.series" />
       </div>
     </div>
 
-    <div class="table-responsive border-bottom-0">
+    <div v-if="loadPage" class="table-responsive border-bottom-0">
       <table class="card-table table table-vcenter text-nowrap">
         <thead>
           <tr>
@@ -340,7 +342,7 @@ defineExpose({ refresh })
       </table>
     </div>
 
-    <PaginationCardFooter :count="data.count" :page="page.num" :page-size="page.size" @pageChange="onPage" />
+    <PaginationCardFooter v-if="loadPage" :count="data.count" :page="page.num" :page-size="page.size" @pageChange="onPage" />
   </CardWithPlaceholder>
 </template>
 

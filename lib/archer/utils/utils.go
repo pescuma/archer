@@ -76,6 +76,16 @@ func Coalesce[T comparable](vs ...T) T {
 	return def
 }
 
+func In[T comparable](v T, cs ...T) bool {
+	for _, c := range cs {
+		if v == c {
+			return true
+		}
+	}
+
+	return false
+}
+
 func MapContains[K comparable, V any](m map[K]V, k K) bool {
 	_, ok := m[k]
 	return ok

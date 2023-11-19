@@ -10,8 +10,10 @@ import (
 )
 
 type RepoFilters struct {
-	FilterRepo   string `form:"q"`
-	FilterPerson string `form:"person"`
+	FilterFile    string `form:"file"`
+	FilterProject string `form:"proj"`
+	FilterRepo    string `form:"q"`
+	FilterPerson  string `form:"person"`
 }
 type RepoListParams struct {
 	GridParams
@@ -19,8 +21,10 @@ type RepoListParams struct {
 }
 
 type CommitFilters struct {
-	FilterRepo   string `form:"repo"`
-	FilterPerson string `form:"person"`
+	FilterFile    string `form:"file"`
+	FilterProject string `form:"proj"`
+	FilterRepo    string `form:"repo"`
+	FilterPerson  string `form:"person"`
 }
 
 type CommitListParams struct {
@@ -64,9 +68,12 @@ func (s *server) statsCountRepos() (any, error) {
 }
 
 func (s *server) reposList(params *RepoListParams) (any, error) {
-	repos := s.listRepos(params.FilterRepo, params.FilterPerson)
+	repos, err := s.listRepos(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	if err != nil {
+		return nil, err
+	}
 
-	err := s.sortRepos(repos, params.Sort, params.Asc)
+	err = s.sortRepos(repos, params.Sort, params.Asc)
 	if err != nil {
 		return nil, err
 	}
@@ -91,9 +98,12 @@ func (s *server) repoGet() (any, error) {
 }
 
 func (s *server) commitsList(params *CommitListParams) (any, error) {
-	commits := s.listReposAndCommits(params.FilterRepo, params.FilterPerson)
+	commits, err := s.listReposAndCommits(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	if err != nil {
+		return nil, err
+	}
 
-	err := s.sortCommits(commits, params.Sort, params.Asc)
+	err = s.sortCommits(commits, params.Sort, params.Asc)
 	if err != nil {
 		return nil, err
 	}
@@ -142,21 +152,25 @@ func (s *server) commitPatch(params *CommitPatchParams) (any, error) {
 }
 
 func (s *server) statsSeenRepos(params *StatsSeenReposParams) (any, error) {
-	repos := s.listRepos(params.FilterRepo, params.FilterPerson)
+	repos, err := s.listRepos(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	if err != nil {
+		return nil, err
+	}
 
-	s1 := lo.GroupBy(repos, func(i *model.Repository) string {
-		y, m, _ := i.FirstSeen.Date()
-		return fmt.Sprintf("%04d-%02d", y, m)
-	})
-	s2 := lo.MapValues(s1, func(is []*model.Repository, _ string) int {
-		return len(is)
-	})
+	result := make(map[string]map[string]int)
+	for _, f := range repos {
+		y, m, _ := f.FirstSeen.Date()
+		s.incSeenStats(result, y, m, "firstSeen")
 
-	return s2, nil
+		y, m, _ = f.LastSeen.Date()
+		s.incSeenStats(result, y, m, "lastSeen")
+	}
+
+	return result, nil
 }
 
 func (s *server) statsSeenCommits(params *StatsSeenCommitsParams) (any, error) {
-	commits := s.listReposAndCommits(params.FilterRepo, params.FilterPerson)
+	commits, _ := s.listReposAndCommits(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
 
 	s3 := lo.GroupBy(commits, func(i RepoAndCommit) string {
 		y, m, _ := i.Commit.Date.Date()
@@ -170,7 +184,7 @@ func (s *server) statsSeenCommits(params *StatsSeenCommitsParams) (any, error) {
 }
 
 func (s *server) statsChangedLines(params *StatsLinesParams) (any, error) {
-	commits := s.listReposAndCommits(params.FilterRepo, params.FilterPerson)
+	commits, _ := s.listReposAndCommits(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
 
 	s1 := lo.GroupBy(commits, func(i RepoAndCommit) string {
 		y, m, _ := i.Commit.Date.Date()
@@ -188,10 +202,12 @@ func (s *server) statsChangedLines(params *StatsLinesParams) (any, error) {
 }
 
 func (s *server) statsSurvivedLines(params *StatsLinesParams) (any, error) {
-	repoName := prepareToSearch(params.FilterRepo)
-	personSearch := prepareToSearch(params.FilterPerson)
+	file := prepareToSearch(params.FilterFile)
+	proj := prepareToSearch(params.FilterProject)
+	repo := prepareToSearch(params.FilterRepo)
+	person := prepareToSearch(params.FilterPerson)
 
-	s1, err := s.storage.ComputeSurvivedLines(repoName, personSearch)
+	s1, err := s.storage.QuerySurvivedLines(file, proj, repo, person)
 	if err != nil {
 		return nil, err
 	}

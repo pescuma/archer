@@ -91,14 +91,29 @@ func (s *server) toPerson(p *model.Person) gin.H {
 	}
 }
 
-func (s *server) toPersonReference(p *model.Person) gin.H {
-	if p == nil {
+func (s *server) toPersonReference(id *model.UUID) gin.H {
+	if id == nil {
 		return nil
 	}
+
+	p := s.people.GetPersonByID(*id)
 
 	return gin.H{
 		"id":     p.ID,
 		"name":   p.Name,
 		"emails": p.ListEmails(),
+	}
+}
+
+func (s *server) toProductAreaReference(id *model.UUID) gin.H {
+	if id == nil {
+		return nil
+	}
+
+	p := s.people.GetProductAreaByID(*id)
+
+	return gin.H{
+		"id":   p.ID,
+		"name": p.Name,
 	}
 }
