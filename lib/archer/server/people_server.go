@@ -9,7 +9,10 @@ import (
 )
 
 type PeopleFilters struct {
-	FilterSearch string `form:"q"`
+	FilterFile    string `form:"file"`
+	FilterProject string `form:"proj"`
+	FilterRepo    string `form:"repo"`
+	FilterPerson  string `form:"person"`
 }
 
 type PeopleListParams struct {
@@ -31,7 +34,7 @@ func (s *server) initPeople(r *gin.Engine) {
 func (s *server) countPeople(params *StatsPeopleParams) (any, error) {
 	people := s.people.ListPeople()
 
-	people = s.filterPeople(people, params.FilterSearch)
+	people = s.filterPeople(people, params.FilterPerson)
 
 	return gin.H{
 		"total": len(people),
@@ -41,7 +44,7 @@ func (s *server) countPeople(params *StatsPeopleParams) (any, error) {
 func (s *server) listPeople(params *PeopleListParams) (any, error) {
 	people := s.people.ListPeople()
 
-	people = s.filterPeople(people, params.FilterSearch)
+	people = s.filterPeople(people, params.FilterPerson)
 
 	err := s.sortPeople(people, params.Sort, params.Asc)
 	if err != nil {
@@ -70,7 +73,7 @@ func (s *server) getPerson() (any, error) {
 func (s *server) getPeopleSeenStats(params *StatsPeopleParams) (any, error) {
 	people := s.people.ListPeople()
 
-	people = s.filterPeople(people, params.FilterSearch)
+	people = s.filterPeople(people, params.FilterPerson)
 
 	s1 := lo.GroupBy(people, func(person *model.Person) string {
 		y, m, _ := person.FirstSeen.Date()

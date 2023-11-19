@@ -138,8 +138,8 @@ async function loadPage(page, pageSize, sort, asc) {
 
 async function loadChart() {
   const response = await Promise.all([
-    window.api.get('/api/stats/seen/repos?' + filters.toQueryString({ repo: 'q', person: 'person' })),
-    window.api.get('/api/stats/seen/commits?' + filters.toQueryString({ repo: 'repo', person: 'person' })),
+    window.api.get('/api/stats/seen/repos?' + filters.toQueryString()),
+    window.api.get('/api/stats/seen/commits?' + filters.toQueryString()),
   ])
 
   const labels = []
@@ -158,8 +158,8 @@ async function loadChart() {
       return i !== '0001-01'
     })
     .concat(moment().format(format))
-  let min = moment(months.min(), format)
-  let max = moment(months.max(), format)
+  let min = moment(months.min().value(), format)
+  let max = moment(months.max().value(), format)
   for (let i = min; i <= max; i = i.add(1, 'month')) {
     let month = i.format(format)
 

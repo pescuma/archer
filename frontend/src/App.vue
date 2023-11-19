@@ -126,16 +126,16 @@ fui.count = computed(() => {
                           <input
                             type="text"
                             class="form-control"
-                            :value="fui.filters.project"
+                            :value="fui.filters.proj"
                             @input="
                               (event) => {
                                 _.debounce(() => {
-                                  fui.filters.project = event.target.value
+                                  fui.filters.proj = event.target.value
                                 }, 1000)()
                               }
                             "
                           />
-                          <a href="#" class="btn btn-icon text-muted" @click.prevent="fui.filters.project = ''">
+                          <a href="#" class="btn btn-icon text-muted" @click.prevent="fui.filters.proj = ''">
                             <icon-trash class="icon" />
                           </a>
                         </div>

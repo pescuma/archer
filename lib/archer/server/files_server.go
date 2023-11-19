@@ -7,7 +7,7 @@ import (
 )
 
 type FilesFilters struct {
-	FilterFile    string `form:"q"`
+	FilterFile    string `form:"file"`
 	FilterProject string `form:"proj"`
 	FilterRepo    string `form:"repo"`
 	FilterPerson  string `form:"person"`

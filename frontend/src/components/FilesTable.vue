@@ -41,7 +41,7 @@ const columns = [
         icon: 'filter',
         show: (v) => v.project,
         onClick: (v) => {
-          filters.data.project = v.project.name
+          filters.data.proj = v.project.name
         },
       },
     ],
@@ -101,15 +101,13 @@ const columns = [
 
 async function loadPage(page, pageSize, sort, asc) {
   let s = sortParams(page, pageSize, sort, asc)
-  let f = filters.toQueryString({ file: 'q', repo: 'repo', person: 'person' })
+  let f = filters.toQueryString()
 
   return await window.api.get(`/api/files?${f}&${s}`)
 }
 
 async function loadChart() {
-  const response = await Promise.all([
-    window.api.get('/api/stats/seen/files?' + filters.toQueryString({ file: 'q', repo: 'repo', person: 'person' })),
-  ])
+  const response = await window.api.get('/api/stats/seen/files?' + filters.toQueryString())
 
   const labels = []
   const filesSum = []
@@ -118,23 +116,20 @@ async function loadChart() {
   let filesPrev = 0
 
   let format = 'YYYY-MM'
-  let months = _.chain(response)
-    .flatMap(function (i) {
-      return _.keys(i)
-    })
+  let months = _.chain(_.keys(response))
     .filter(function (i) {
       return i !== '0001-01'
     })
     .concat(moment().format(format))
-  let min = moment(months.min(), format)
-  let max = moment(months.max(), format)
+  let min = moment(months.min().value(), format)
+  let max = moment(months.max().value(), format)
   let now = moment().format(format)
   for (let i = min; i <= max; i = i.add(1, 'month')) {
     let month = i.format(format)
 
     labels.push(month + '-15')
 
-    let fs = response[0][month] || {}
+    let fs = response[month] || {}
 
     filesPrev += fs.firstSeen || 0
     filesSum.push(filesPrev)

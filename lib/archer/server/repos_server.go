@@ -12,7 +12,7 @@ import (
 type RepoFilters struct {
 	FilterFile    string `form:"file"`
 	FilterProject string `form:"proj"`
-	FilterRepo    string `form:"q"`
+	FilterRepo    string `form:"repo"`
 	FilterPerson  string `form:"person"`
 }
 type RepoListParams struct {
@@ -37,10 +37,10 @@ type CommitPatchParams struct {
 	Ignore   *bool      `json:"ignore"`
 }
 
-type StatsSeenReposParams struct {
+type StatsReposParams struct {
 	RepoFilters
 }
-type StatsSeenCommitsParams struct {
+type StatsCommitsParams struct {
 	CommitFilters
 }
 type StatsLinesParams struct {
@@ -52,15 +52,18 @@ func (s *server) initRepos(r *gin.Engine) {
 	r.GET("/api/repos/:id", get(s.repoGet))
 	r.GET("/api/commits", getP[CommitListParams](s.commitsList))
 	r.PATCH("/api/repos/:repoID/commits/:commitID", patchP[CommitPatchParams](s.commitPatch))
-	r.GET("/api/stats/count/repos", get(s.statsCountRepos))
-	r.GET("/api/stats/seen/repos", getP[StatsSeenReposParams](s.statsSeenRepos))
-	r.GET("/api/stats/seen/commits", getP[StatsSeenCommitsParams](s.statsSeenCommits))
+	r.GET("/api/stats/count/repos", getP[StatsReposParams](s.statsCountRepos))
+	r.GET("/api/stats/seen/repos", getP[StatsReposParams](s.statsSeenRepos))
+	r.GET("/api/stats/seen/commits", getP[StatsCommitsParams](s.statsSeenCommits))
 	r.GET("/api/stats/changed/lines", getP[StatsLinesParams](s.statsChangedLines))
 	r.GET("/api/stats/survived/lines", getP[StatsLinesParams](s.statsSurvivedLines))
 }
 
-func (s *server) statsCountRepos() (any, error) {
-	repos := s.repos.List()
+func (s *server) statsCountRepos(params *StatsReposParams) (any, error) {
+	repos, err := s.listRepos(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	if err != nil {
+		return nil, err
+	}
 
 	return gin.H{
 		"total": len(repos),
@@ -151,7 +154,7 @@ func (s *server) commitPatch(params *CommitPatchParams) (any, error) {
 	return commit, nil
 }
 
-func (s *server) statsSeenRepos(params *StatsSeenReposParams) (any, error) {
+func (s *server) statsSeenRepos(params *StatsReposParams) (any, error) {
 	repos, err := s.listRepos(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
 	if err != nil {
 		return nil, err
@@ -169,7 +172,7 @@ func (s *server) statsSeenRepos(params *StatsSeenReposParams) (any, error) {
 	return result, nil
 }
 
-func (s *server) statsSeenCommits(params *StatsSeenCommitsParams) (any, error) {
+func (s *server) statsSeenCommits(params *StatsCommitsParams) (any, error) {
 	commits, _ := s.listReposAndCommits(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
 
 	s3 := lo.GroupBy(commits, func(i RepoAndCommit) string {

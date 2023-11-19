@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { IconUsers } from '@tabler/icons-vue'
 import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
+import { filters } from '@/utils/filters'
 
 const card = ref(null)
 
@@ -11,7 +12,8 @@ const data = reactive({
 })
 
 onMounted(function () {
-  card.value.request('/api/stats/count/people', function (response) {
+  let f = filters.toQueryString()
+  card.value.request(`/api/stats/count/people?${f}`, function (response) {
     data.text = response.total.toLocaleString() + ' People'
   })
 })

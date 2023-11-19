@@ -3,7 +3,7 @@ import { reactive } from 'vue'
 export const filters = reactive({
   data: {
     file: null,
-    project: null,
+    proj: null,
     repo: null,
     person: null,
   },
@@ -23,13 +23,13 @@ filters.patch = (fs) => {
 
 filters.toQueryString = (mapping) => {
   let fs = ''
-  for (let f in mapping) {
+  for (let f in filters.data) {
     let v = filters.data[f]
     if (!v) continue
 
     v = (v + '').replace(/\s+/g, ' ').trim().toLowerCase()
 
-    f = mapping[f]
+    if (mapping && mapping[f]) f = mapping[f]
 
     if (fs) fs += '&'
     fs += `${encodeURIComponent(f)}=${encodeURIComponent(v)}`

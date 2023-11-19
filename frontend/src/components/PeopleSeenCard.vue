@@ -3,6 +3,7 @@ import _ from 'lodash'
 import moment from 'moment'
 import { onMounted, reactive, ref } from 'vue'
 import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
+import { filters } from '@/utils/filters'
 
 const card = ref(null)
 
@@ -12,7 +13,8 @@ const data = reactive({
 })
 
 onMounted(function () {
-  card.value.request('/api/stats/seen/people', function (response) {
+  let f = filters.toQueryString()
+  card.value.request(`/api/stats/seen/people?${f}`, function (response) {
     const labels = []
     const people = []
     let peoplePrev = 0
