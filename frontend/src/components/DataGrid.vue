@@ -244,8 +244,8 @@ async function onLoadChart() {
     return await props.loadChart()
   })
 
-  chart.opts = result.opts
-  chart.series = result.series
+  chart.opts = result.opts || {}
+  chart.series = result.series || []
 }
 
 function refresh() {

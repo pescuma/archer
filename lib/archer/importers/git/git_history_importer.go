@@ -822,11 +822,6 @@ func (g *gitHistoryImporter) countLines(text string) int {
 func (g *gitHistoryImporter) propagateChangesToParents(storage archer.Storage, reposDB *model.Repositories, projectsDB *model.Projects, filesDB *model.Files, peopleDB *model.People) error {
 	dirsByIDs := map[model.UUID]*model.ProjectDirectory{}
 	for _, p := range projectsDB.ListProjects(model.FilterExcludeExternal) {
-		projFile := filesDB.GetFile(p.ProjectFile)
-		if projFile != nil {
-			p.RepositoryID = projFile.RepositoryID
-		}
-
 		for _, d := range p.Dirs {
 			dirsByIDs[d.ID] = d
 		}
@@ -933,6 +928,16 @@ func (g *gitHistoryImporter) propagateChangesToParents(storage archer.Storage, r
 		}
 
 		repo.FilesTotal = len(files)
+	}
+
+	for _, p := range projectsDB.ListProjects(model.FilterExcludeExternal) {
+		projFile := filesDB.GetFile(p.ProjectFile)
+		if projFile != nil {
+			p.RepositoryID = projFile.RepositoryID
+			p.SeenAt(projFile.FirstSeen, projFile.LastSeen)
+		} else {
+			p.RepositoryID = nil
+		}
 	}
 
 	return nil

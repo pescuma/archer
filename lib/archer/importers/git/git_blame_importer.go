@@ -30,6 +30,7 @@ type gitBlameImporter struct {
 type BlameOptions struct {
 	Incremental      bool
 	MaxImportedFiles *int
+	SaveEvery        *int
 }
 
 func NewBlameImporter(rootDirs []string, options BlameOptions) archer.Importer {
@@ -69,7 +70,7 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Finding out which files to process...\n")
 
-	var repos []*model.Repository
+	imported := 0
 
 	for _, rootDir := range g.rootDirs {
 		rootDir, err := filepath.Abs(rootDir)
@@ -79,7 +80,7 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 
 		gitRepo, err := git.PlainOpen(rootDir)
 		if err != nil {
-			fmt.Printf("Skipping '%s': %s\n", rootDir, err)
+			fmt.Printf("Skipping %s: %s\n", rootDir, err)
 			continue
 		}
 
@@ -100,19 +101,24 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 
 		repo := reposDB.Get(rootDir)
 
+		if repo == nil {
+			fmt.Printf("%v: repository history not fully imported. run 'import git history'\n", rootDir)
+			continue
+		}
+
 		importedHistory, err := g.checkImportedHistory(repo, gitRepo)
 		if err != nil {
 			return err
 		}
 
 		if !importedHistory {
-			fmt.Printf("'%v': repository history not fully imported. run 'import git history'\n", rootDir)
+			fmt.Printf("%v: repository history not fully imported. run 'import git history'\n", repo.Name)
 			continue
 		}
 
 		repo.SeenAt(time.Now())
 
-		err = g.computeBlame(storage, filesDB, repo, gitRepo, gitTree, gitCommit)
+		imported, err = g.computeBlame(storage, filesDB, peopleDB, reposDB, repo, gitRepo, gitTree, gitCommit, imported)
 		if err != nil {
 			return err
 		}
@@ -122,35 +128,40 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 			return err
 		}
 
-		repos = append(repos, repo)
 	}
 
+	err = g.writeResults(storage, err, peopleDB, reposDB)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (g *gitBlameImporter) writeResults(storage archer.Storage, err error, peopleDB *model.People, reposDB *model.Repositories) error {
 	fmt.Printf("Propagating changes to parents...\n")
 
-	err = g.propagateChangesToParents(storage, peopleDB, repos)
+	err = g.propagateChangesToParents(storage, peopleDB, reposDB)
 	if err != nil {
 		return err
 	}
 
 	fmt.Printf("Writing results...\n")
 
-	err = storage.WriteFiles(filesDB)
-	if err != nil {
-		return err
-	}
-
 	err = storage.WritePeople(peopleDB)
 	if err != nil {
 		return err
 	}
 
-	for _, repo := range repos {
-		err = storage.WriteRepository(repo)
-		if err != nil {
-			return err
-		}
+	err = storage.WriteRepositories(reposDB)
+	if err != nil {
+		return err
 	}
 
+	err = storage.WriteSurvivedLinesCache()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -233,26 +244,26 @@ func (g *gitBlameImporter) deleteFileBlame(storage archer.Storage, file *model.F
 	return nil
 }
 
-func (g *gitBlameImporter) computeBlame(storage archer.Storage, filesDB *model.Files, repo *model.Repository,
-	gitRepo *git.Repository, gitTree *object.Tree, gitCommit *object.Commit,
-) error {
+func (g *gitBlameImporter) computeBlame(storage archer.Storage,
+	filesDB *model.Files, peopleDB *model.People, reposDB *model.Repositories,
+	repo *model.Repository, gitRepo *git.Repository, gitTree *object.Tree, gitCommit *object.Commit,
+	imported int,
+) (int, error) {
 	toProcess, err := g.listToCompute(filesDB, repo, gitRepo, gitTree, gitCommit)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if len(toProcess) == 0 {
-		return nil
-	}
-
-	fmt.Printf("%v: Creating cache...\n", repo.Name)
-
-	cache, err := g.createCache(storage, filesDB, repo, gitRepo)
-	if err != nil {
-		return err
+		return imported, nil
 	}
 
 	fmt.Printf("%v: Computing blame of %v files...\n", repo.Name, len(toProcess))
+
+	cache, err := g.createCache(storage, filesDB, repo, gitRepo)
+	if err != nil {
+		return 0, err
+	}
 
 	bar := utils.NewProgressBar(len(toProcess))
 	for _, w := range toProcess {
@@ -260,31 +271,58 @@ func (g *gitBlameImporter) computeBlame(storage archer.Storage, filesDB *model.F
 
 		err = g.computeFileBlame(storage, w, cache)
 		if err != nil {
-			return err
+			return 0, err
+		}
+
+		imported++
+		if g.options.SaveEvery != nil && imported%*g.options.SaveEvery == 0 {
+			_ = bar.Clear()
+
+			err = g.writeResults(storage, err, peopleDB, reposDB)
+			if err != nil {
+				return 0, err
+			}
 		}
 
 		_ = bar.Add(1)
 	}
 
-	return nil
+	return imported, nil
 }
 
-func (g *gitBlameImporter) createCache(storage archer.Storage, filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository) (*BlameCache, error) {
-	cache := &BlameCache{
-		Commits: make(map[plumbing.Hash]*BlameCommitCache),
-	}
+type blameCacheImpl struct {
+	commits map[plumbing.Hash]*BlameCommitCache
+	load    func(plumbing.Hash) (*BlameCommitCache, error)
+}
 
-	for _, repoCommit := range repo.ListCommits() {
-		gitCommit, err := gitRepo.CommitObject(plumbing.NewHash(repoCommit.Hash))
+func (b *blameCacheImpl) GetCommit(hash plumbing.Hash) (*BlameCommitCache, error) {
+	result, ok := b.commits[hash]
+
+	if !ok {
+		var err error
+		result, err = b.load(hash)
 		if err != nil {
 			return nil, err
 		}
 
-		commitCache := &BlameCommitCache{
+		b.commits[hash] = result
+	}
+
+	return result, nil
+}
+
+func (g *gitBlameImporter) createCache(storage archer.Storage, filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository) (BlameCache, error) {
+	cache := &blameCacheImpl{
+		commits: make(map[plumbing.Hash]*BlameCommitCache),
+	}
+
+	cache.load = func(hash plumbing.Hash) (*BlameCommitCache, error) {
+		result := &BlameCommitCache{
 			Parents: make(map[plumbing.Hash]*BlameParentCache),
 			Touched: set.New[string](10),
 		}
-		cache.Commits[gitCommit.Hash] = commitCache
+
+		repoCommit := repo.GetCommit(hash.String())
 
 		for _, repoParentID := range repoCommit.Parents {
 			repoParent := repo.GetCommitByID(repoParentID)
@@ -294,7 +332,7 @@ func (g *gitBlameImporter) createCache(storage archer.Storage, filesDB *model.Fi
 				return nil, err
 			}
 
-			commitCache.Parents[gitParent.Hash] = &BlameParentCache{
+			result.Parents[gitParent.Hash] = &BlameParentCache{
 				Commit:  gitParent,
 				Renames: make(map[string]string),
 			}
@@ -323,7 +361,7 @@ func (g *gitBlameImporter) createCache(storage archer.Storage, filesDB *model.Fi
 				return nil, err
 			}
 
-			commitCache.Touched.Insert(filename)
+			result.Touched.Insert(filename)
 
 			for repoParentID, oldFileID := range commitFile.OldFileIDs {
 				oldFilename, err := getFilename(oldFileID)
@@ -333,10 +371,12 @@ func (g *gitBlameImporter) createCache(storage archer.Storage, filesDB *model.Fi
 
 				repoParent := repo.GetCommitByID(repoParentID)
 
-				parentCache := commitCache.Parents[plumbing.NewHash(repoParent.Hash)]
+				parentCache := result.Parents[plumbing.NewHash(repoParent.Hash)]
 				parentCache.Renames[filename] = oldFilename
 			}
 		}
+
+		return result, nil
 	}
 
 	return cache, nil
@@ -403,7 +443,7 @@ func (g *gitBlameImporter) listToCompute(filesDB *model.Files, repo *model.Repos
 
 	return result, nil
 }
-func (g *gitBlameImporter) computeFileBlame(storage archer.Storage, w *blameWork, cache *BlameCache) error {
+func (g *gitBlameImporter) computeFileBlame(storage archer.Storage, w *blameWork, cache BlameCache) error {
 	blame, err := Blame(w.gitCommit, w.relativePath, cache)
 	if err != nil {
 		return err
@@ -514,14 +554,14 @@ func (g *gitBlameImporter) computeLOC(name string, contents string) ([]model.Fil
 	return result, nil
 }
 
-func (g *gitBlameImporter) propagateChangesToParents(storage archer.Storage, peopleDB *model.People, repos []*model.Repository) error {
+func (g *gitBlameImporter) propagateChangesToParents(storage archer.Storage, peopleDB *model.People, repos *model.Repositories) error {
 	blames, err := storage.QueryBlamePerAuthor()
 	if err != nil {
 		return err
 	}
 
 	commits := make(map[model.UUID]*model.RepositoryCommit)
-	for _, r := range repos {
+	for _, r := range repos.List() {
 		for _, c := range r.ListCommits() {
 			commits[c.ID] = c
 			c.LinesSurvived = 0

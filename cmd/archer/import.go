@@ -179,15 +179,18 @@ type ImportGitBlameCmd struct {
 	Paths         []string `arg:"" help:"Paths with the roots of git repositories." type:"existingpath"`
 	Incremental   bool     `default:"true" negatable:"" help:"Don't import files already imported."`
 	LimitImported int      `help:"Limit the number of imported files. Can be used to incrementally import data. Counted by file name."`
+	SaveEvery     int      `help:"Save results after some number of files."`
 }
 
 func (c *ImportGitBlameCmd) Run(ctx *context) error {
 	options := git.BlameOptions{
 		Incremental: c.Incremental,
 	}
-
 	if c.LimitImported != 0 {
 		options.MaxImportedFiles = &c.LimitImported
+	}
+	if c.SaveEvery != 0 {
+		options.SaveEvery = &c.SaveEvery
 	}
 
 	g := git.NewBlameImporter(c.Paths, options)

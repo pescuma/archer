@@ -52,7 +52,7 @@ func groupByRoot(ps []*model.Project, filter model.Filter, forceShowDependentPro
 				rg.children = append(rg.children, pg)
 			}
 
-			size := p.GetSize()
+			size := p.Size
 			pg.size.add(size)
 			rg.size.add(size)
 			tg.size.add(size)

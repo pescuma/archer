@@ -149,6 +149,7 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 		for k, v := range sp.Sizes {
 			p.Sizes[k] = toModelSize(v)
 		}
+		p.Size = toModelSize(sp.Size)
 		p.Changes = toModelChanges(sp.Changes)
 		p.Metrics = toModelMetricsAggregate(sp.Metrics)
 		p.Data = decodeMap(sp.Data)
@@ -929,8 +930,82 @@ where c.ignore = 0
 func (s *sqliteStorage) QuerySurvivedLines(file string, proj string, repo string, person string) ([]*archer.SurvivedLineCount, error) {
 	var result []*archer.SurvivedLineCount
 
-	err := s.db.Raw(`
+	if file == "" {
+		err := s.db.Raw(`
+select l.month, l.type line_type, sum(l.lines) lines
+from file_lines_month l
+         join repositories r
+              on r.id = l.repository_id
+         join people pa
+              on pa.id = l.author_id
+         join people pc
+              on pc.id = l.committer_id
+         left join projects p
+                   on p.id = l.project_id
+where (@proj = '' or p.name like @proj)
+  and (@repo = '' or r.name like @repo)
+  and (@person = '' or pc.names like @person or pc.emails like @person or pa.names like @person or pa.emails like @person)
+group by 1, 2
+		`,
+			sql.Named("proj", "%"+proj+"%"),
+			sql.Named("repo", "%"+repo+"%"),
+			sql.Named("person", "%"+person+"%"),
+		).Scan(&result).Error
+		if err != nil {
+			return nil, err
+		}
+
+	} else {
+		err := s.db.Raw(`
 select strftime('%Y-%m', c.date) month, l.type line_type, count(1) lines
+from files f
+         join file_lines l
+              on l.file_id = f.id
+         left join projects p
+                   on p.id = f.project_id
+         join repository_commits c
+              on c.id = l.commit_id
+         join repositories r
+              on r.id = c.repository_id
+         join people pa
+              on pa.id = c.author_id
+         join people pc
+              on pc.id = c.committer_id
+where c.ignore = 0
+  and f.name like @file
+  and (@proj = '' or p.name like @proj)
+  and (@repo = '' or r.name like @repo)
+  and (@person = '' or pc.names like @person or pc.emails like @person or pa.names like @person or pa.emails like @person)
+group by 1, 2
+		`,
+			sql.Named("proj", "%"+proj+"%"),
+			sql.Named("file", "%"+file+"%"),
+			sql.Named("repo", "%"+repo+"%"),
+			sql.Named("person", "%"+person+"%"),
+		).Scan(&result).Error
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
+}
+
+func (s *sqliteStorage) WriteSurvivedLinesCache() error {
+	err := s.db.Exec(`drop table file_lines_month`).Error
+	if err != nil {
+		return err
+	}
+
+	err = s.db.Exec(`
+create table file_lines_month as
+select strftime('%Y-%m', c.date) month,
+       p.id                      project_id,
+       r.id                      repository_id,
+       pa.id                     author_id,
+       pc.id                     committer_id,
+       l.type                    ,
+       count(1)                  lines
 from file_lines l
          join repository_commits c
               on c.id = l.commit_id
@@ -943,24 +1018,20 @@ from file_lines l
          join files f
               on f.id = l.file_id
          left join projects p
-              on p.id = f.project_id
+                   on p.id = f.project_id
 where c.ignore = 0
-  and (@proj = '' or p.name like @proj)
-  and (@file = '' or f.name like @file)
-  and (@repo = '' or r.name like @repo)
-  and (@person = '' or pc.names like @person or pc.emails like @person or pa.names like @person or pa.emails like @person)
-group by 1, 2
-		`,
-		sql.Named("proj", "%"+proj+"%"),
-		sql.Named("file", "%"+file+"%"),
-		sql.Named("repo", "%"+repo+"%"),
-		sql.Named("person", "%"+person+"%"),
-	).Scan(&result).Error
+group by 1,
+         p.id,
+         r.id,
+         pa.id,
+         pc.id,
+         l.type
+`).Error
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return result, nil
+	return nil
 }
 
 func (s *sqliteStorage) LoadConfig() (*map[string]string, error) {
@@ -1139,8 +1210,6 @@ func cloneMap[K comparable, V any](m map[K]V) map[K]V {
 }
 
 func toSqlProject(p *model.Project) *sqlProject {
-	size := p.GetSize()
-
 	sp := &sqlProject{
 		ID:           p.ID,
 		Name:         p.String(),
@@ -1151,10 +1220,10 @@ func toSqlProject(p *model.Project) *sqlProject {
 		RootDir:      p.RootDir,
 		ProjectFile:  p.ProjectFile,
 		RepositoryID: p.RepositoryID,
-		Size:         toSqlSize(size),
 		Sizes:        map[string]*sqlSize{},
+		Size:         toSqlSize(p.Size),
 		Changes:      toSqlChanges(p.Changes),
-		Metrics:      toSqlMetricsAggregate(p.Metrics, size),
+		Metrics:      toSqlMetricsAggregate(p.Metrics, p.Size),
 		Data:         encodeMap(p.Data),
 		FirstSeen:    p.FirstSeen,
 		LastSeen:     p.LastSeen,

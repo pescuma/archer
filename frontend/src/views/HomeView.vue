@@ -5,10 +5,10 @@ import RepositoryCountCard from '@/components/RepositoryCountCard.vue'
 import PersonCountCard from '@/components/PersonCountCard.vue'
 import LinesChangedCard from '@/components/LinesChangedCard.vue'
 import LinesSurvivedCard from '@/components/LinesSurvivedCard.vue'
-import PeopleSeenCard from '@/components/PeopleSeenCard.vue'
 import CommitsTable from '../components/CommitsTable.vue'
 import FilesTable from '@/components/FilesTable.vue'
 import PeopleTable from '@/components/PeopleTable.vue'
+import ProjectsTable from '@/components/ProjectsTable.vue'
 </script>
 
 <template>
@@ -26,21 +26,21 @@ import PeopleTable from '@/components/PeopleTable.vue'
   </div>
 
   <div class="col-lg-6">
-    <div class="row row-cards">
-      <div class="col-12">
-        <LinesChangedCard />
-      </div>
-      <div class="col-12">
-        <LinesSurvivedCard />
-      </div>
-    </div>
+    <FilesTable size="sm" />
   </div>
   <div class="col-lg-6">
-    <CommitsTable size="md" />
+    <ProjectsTable size="sm" />
   </div>
 
   <div class="col-lg-6">
-    <FilesTable size="sm" />
+    <LinesChangedCard />
+  </div>
+  <div class="col-lg-6">
+    <CommitsTable size="sm" />
+  </div>
+
+  <div class="col-lg-6">
+    <LinesSurvivedCard />
   </div>
   <div class="col-lg-6">
     <PeopleTable size="sm" />

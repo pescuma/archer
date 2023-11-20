@@ -21,7 +21,7 @@ func (s *server) filterPeople(col []*model.Person, file string, proj string, rep
 	person = prepareToSearch(person)
 
 	var ids *set.Set[model.UUID]
-	if file != "" || proj != "" || repo != "" || person != "" {
+	if file != "" || proj != "" || repo != "" {
 		r, err := s.storage.QueryPeople(file, proj, repo, person)
 		if err != nil {
 			return nil, err

@@ -17,8 +17,8 @@ const grid = ref(null)
 
 const columns = [
   {
-    name: 'Path',
-    field: 'path',
+    name: 'Root',
+    field: 'root',
     type: 'text',
     size: 'l',
     actions: [
@@ -26,25 +26,36 @@ const columns = [
         name: 'Filter',
         icon: 'filter',
         onClick: (v) => {
-          filters.data.file = v.path
+          filters.data.proj = 'root:' + v.root
         },
       },
     ],
   },
   {
-    name: 'Project',
-    field: 'project.name',
+    name: 'Name',
+    field: 'name',
     type: 'text',
+    size: 'l',
     actions: [
       {
         name: 'Filter',
         icon: 'filter',
-        show: (v) => v.project,
         onClick: (v) => {
-          filters.data.proj = v.project.name
+          filters.data.proj = v.name
         },
       },
     ],
+  },
+  {
+    name: 'Type',
+    field: 'type',
+    type: 'text',
+  },
+  {
+    name: 'Dir',
+    field: 'rootDir',
+    type: 'text',
+    show: props.size === 'lg',
   },
   {
     name: 'Repo',
@@ -61,6 +72,11 @@ const columns = [
         },
       },
     ],
+  },
+  {
+    name: 'Files',
+    field: 'size.files',
+    type: 'int',
   },
   {
     name: 'Lines',
@@ -85,29 +101,17 @@ const columns = [
     type: 'date',
     show: props.size === 'lg',
   },
-  {
-    name: 'Last seen',
-    field: 'lastSeen',
-    type: 'date',
-    show: props.size === 'lg',
-  },
-  {
-    name: 'Exists',
-    field: 'exists',
-    type: 'text',
-    format: (v) => (v.exists ? 'Yes' : 'No'),
-  },
 ]
 
 async function loadPage(page, pageSize, sort, asc) {
   let s = sortParams(page, pageSize, sort, asc)
   let f = filters.toQueryString()
 
-  return await window.api.get(`/api/files?${f}&${s}`)
+  return await window.api.get(`/api/projects?${f}&${s}`)
 }
 
 async function loadChart() {
-  const response = await window.api.get('/api/stats/seen/files?' + filters.toQueryString())
+  const response = await window.api.get('/api/stats/seen/projects?' + filters.toQueryString())
 
   const labels = []
   const sum = []
@@ -202,7 +206,7 @@ async function loadChart() {
       },
       {
         show: false,
-        seriesName: 'Files added',
+        seriesName: 'Projects added',
         labels: {
           padding: 4,
           formatter: function (value) {
@@ -212,7 +216,7 @@ async function loadChart() {
       },
       {
         show: false,
-        seriesName: 'Files added',
+        seriesName: 'Projects added',
         labels: {
           padding: 4,
           formatter: function (value) {
@@ -230,17 +234,17 @@ async function loadChart() {
 
   const series = [
     {
-      name: 'Files total',
+      name: 'Projects total',
       type: 'line',
       data: sum,
     },
     {
-      name: 'Files added',
+      name: 'Projects added',
       type: 'column',
       data: add,
     },
     {
-      name: 'Files deleted',
+      name: 'Projects deleted',
       type: 'column',
       data: del,
     },
@@ -262,7 +266,7 @@ watch(
 <template>
   <DataGrid
     ref="grid"
-    title="Files"
+    title="Projects"
     :columns="columns"
     :pageSize="size === 'md' ? 5 : null"
     :loadPage="size !== 'sm' ? loadPage : null"

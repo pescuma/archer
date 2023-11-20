@@ -27,8 +27,8 @@ type sqlProject struct {
 
 	RepositoryID *model.UUID `gorm:"index"`
 
-	Size      *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
 	Sizes     map[string]*sqlSize  `gorm:"serializer:json"`
+	Size      *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
 	Changes   *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
 	Metrics   *sqlMetricsAggregate `gorm:"embedded"`
 	Data      map[string]string    `gorm:"serializer:json"`

@@ -29,8 +29,8 @@ type BlameResult struct {
 	Lines []*Line
 }
 
-type BlameCache struct {
-	Commits map[plumbing.Hash]*BlameCommitCache
+type BlameCache interface {
+	GetCommit(hash plumbing.Hash) (*BlameCommitCache, error)
 }
 type BlameCommitCache struct {
 	Parents map[plumbing.Hash]*BlameParentCache
@@ -43,7 +43,7 @@ type BlameParentCache struct {
 
 // Blame returns a BlameResult with the information about the last author of
 // each line from file `path` at commit `c`.
-func Blame(c *object.Commit, path string, cache *BlameCache) (*BlameResult, error) {
+func Blame(c *object.Commit, path string, cache BlameCache) (*BlameResult, error) {
 	// The file to blame is identified by the input arguments:
 	// commit and path. commit is a Commit object obtained from a Repository. Path
 	// represents a path to a specific file contained in the repository.
@@ -192,7 +192,7 @@ type lineMap struct {
 	FromParentNo int
 }
 
-func (b *blame) addBlames(curItems []*queueItem, cache *BlameCache) (bool, error) {
+func (b *blame) addBlames(curItems []*queueItem, cache BlameCache) (bool, error) {
 	curItem := curItems[0]
 
 	// Simple optimisation to merge paths, there is potential to go a bit further here and check for any duplicates
@@ -563,13 +563,19 @@ type parentCommit struct {
 	Path   string
 }
 
-func parentsContainingPath(path string, c *object.Commit, cache *BlameCache) ([]parentCommit, error) {
-	commitCache := cache.Commits[c.Hash]
+func parentsContainingPath(path string, c *object.Commit, cache BlameCache) ([]parentCommit, error) {
+	commitCache, err := cache.GetCommit(c.Hash)
+	if err != nil {
+		return nil, err
+	}
 
 	for len(commitCache.Parents) == 1 && !commitCache.Touched.Contains(path) {
 		for _, p := range commitCache.Parents {
 			c = p.Commit
-			commitCache = cache.Commits[c.Hash]
+			commitCache, err = cache.GetCommit(c.Hash)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 

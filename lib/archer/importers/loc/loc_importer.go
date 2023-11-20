@@ -172,7 +172,7 @@ func updateParents(projectsDB *model.Projects, filesDB *model.Files, peopleDB *m
 	filesByDir := filesDB.GroupFilesByDirectory()
 
 	for _, proj := range projectsDB.ListProjects(model.FilterExcludeExternal) {
-		proj.Sizes = map[string]*model.Size{}
+		proj.ClearSizes()
 
 		for _, dir := range proj.Dirs {
 			dir.Size.Clear()

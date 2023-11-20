@@ -50,6 +50,7 @@ type Storage interface {
 	QueryRepositories(file string, proj string, repo string, person string) ([]model.UUID, error)
 	QueryCommits(file string, proj string, repo string, person string) ([]model.UUID, error)
 	QuerySurvivedLines(file string, proj string, repo string, person string) ([]*SurvivedLineCount, error)
+	WriteSurvivedLinesCache() error
 
 	LoadConfig() (*map[string]string, error)
 	WriteConfig(*map[string]string) error

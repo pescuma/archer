@@ -24,6 +24,7 @@ type Project struct {
 	Dirs         map[string]*ProjectDirectory
 	Dependencies map[string]*ProjectDependency
 	Sizes        map[string]*Size
+	Size         *Size
 	Changes      *Changes
 	Metrics      *Metrics
 	Data         map[string]string
@@ -47,6 +48,7 @@ func NewProject(root, name string, id *UUID) *Project {
 		Dirs:         map[string]*ProjectDirectory{},
 		Dependencies: map[string]*ProjectDependency{},
 		Sizes:        map[string]*Size{},
+		Size:         NewSize(),
 		Changes:      NewChanges(),
 		Metrics:      NewMetrics(),
 		Data:         map[string]string{},
@@ -68,16 +70,6 @@ func (p *Project) GetOrCreateDependency(d *Project) *ProjectDependency {
 	return result
 }
 
-func (p *Project) GetSize() *Size {
-	result := NewSize()
-
-	for _, v := range p.Sizes {
-		result.Add(v)
-	}
-
-	return result
-}
-
 func (p *Project) GetSizeOf(name string) *Size {
 	result, ok := p.Sizes[name]
 
@@ -88,7 +80,14 @@ func (p *Project) GetSizeOf(name string) *Size {
 	return result
 }
 
+func (p *Project) ClearSizes() {
+	p.Sizes = map[string]*Size{}
+	p.Size.Clear()
+}
+
 func (p *Project) AddSize(name string, size *Size) {
+	p.Size.Add(size)
+
 	old, ok := p.Sizes[name]
 	if !ok {
 		old = NewSize()

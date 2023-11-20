@@ -63,6 +63,14 @@ func (s *server) sortProjects(col []*model.Project, field string, asc *bool) err
 		return sortBy(col, func(r *model.Project) string { return r.RootDir }, *asc)
 	case "projectFile":
 		return sortBy(col, func(r *model.Project) string { return r.ProjectFile }, *asc)
+	case "repo.name":
+		return sortBy(col, func(r *model.Project) string {
+			if r.RepositoryID == nil {
+				return ""
+			} else {
+				return s.repos.GetByID(*r.RepositoryID).Name
+			}
+		}, *asc)
 	case "changes.total":
 		return sortBy(col, func(r *model.Project) int { return r.Changes.Total }, *asc)
 	case "changes.in6Months":
@@ -92,12 +100,14 @@ func (s *server) toProject(p *model.Project) gin.H {
 		"root":        p.Root,
 		"name":        p.Name,
 		"nameParts":   p.NameParts,
-		"type":        p.String(),
+		"type":        p.Type.String(),
 		"rootDir":     p.RootDir,
 		"projectFile": p.ProjectFile,
+		"repo":        s.toRepoReference(p.RepositoryID),
 		"sizes": lo.MapValues(p.Sizes, func(value *model.Size, key string) gin.H {
 			return s.toSize(value)
 		}),
+		"size":      s.toSize(p.Size),
 		"changes":   s.toChanges(p.Changes),
 		"metrics":   s.toMetrics(p.Metrics),
 		"firstSeen": encodeDate(p.FirstSeen),
