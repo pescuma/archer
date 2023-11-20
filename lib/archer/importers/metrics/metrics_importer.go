@@ -141,7 +141,7 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 				_ = bar.Clear()
 				fmt.Print("Writing metrics for files...")
 
-				err = storage.WriteFiles(filesDB, archer.ChangedData|archer.ChangedMetrics)
+				err = storage.WriteFiles(filesDB)
 				if err != nil {
 					return err
 				}
@@ -171,17 +171,17 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Writing results...\n")
 
-	err = storage.WriteProjects(projectsDB, archer.ChangedMetrics)
+	err = storage.WriteProjects(projectsDB)
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteFiles(filesDB, archer.ChangedData|archer.ChangedMetrics)
+	err = storage.WriteFiles(filesDB)
 	if err != nil {
 		return err
 	}
 
-	err = storage.WritePeople(peopleDB, archer.ChangedMetrics)
+	err = storage.WritePeople(peopleDB)
 	if err != nil {
 		return err
 	}

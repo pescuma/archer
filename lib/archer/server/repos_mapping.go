@@ -142,30 +142,6 @@ func (s *server) filterCommits(col []RepoAndCommit, file string, proj string, re
 	}), nil
 }
 
-func (s *server) filterCommit(i RepoAndCommit, repo string, person string) bool {
-	if i.Commit.Ignore {
-		return false
-	}
-
-	if repo != "" && !strings.Contains(strings.ToLower(i.Repo.Name), repo) {
-		return false
-	}
-
-	if person != "" {
-		committer := s.people.GetPersonByID(i.Commit.CommitterID)
-		hasCommitter := s.filterPerson(committer, person)
-
-		author := s.people.GetPersonByID(i.Commit.AuthorID)
-		hasAuthor := s.filterPerson(author, person)
-
-		if !hasCommitter && !hasAuthor {
-			return false
-		}
-	}
-
-	return true
-}
-
 func (s *server) sortCommits(col []RepoAndCommit, field string, asc *bool) error {
 	if field == "" {
 		field = "date"

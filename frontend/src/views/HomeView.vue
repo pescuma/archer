@@ -8,6 +8,7 @@ import LinesSurvivedCard from '@/components/LinesSurvivedCard.vue'
 import PeopleSeenCard from '@/components/PeopleSeenCard.vue'
 import CommitsTable from '../components/CommitsTable.vue'
 import FilesTable from '@/components/FilesTable.vue'
+import PeopleTable from '@/components/PeopleTable.vue'
 </script>
 
 <template>
@@ -42,6 +43,6 @@ import FilesTable from '@/components/FilesTable.vue'
     <FilesTable size="sm" />
   </div>
   <div class="col-lg-6">
-    <PeopleSeenCard />
+    <PeopleTable size="sm" />
   </div>
 </template>

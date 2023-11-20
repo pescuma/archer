@@ -5,36 +5,49 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hashicorp/go-set/v2"
 	"github.com/pescuma/archer/lib/archer/model"
 	"github.com/samber/lo"
 )
 
-func (s *server) filterPeople(col []*model.Person, search string) []*model.Person {
-	search = prepareToSearch(search)
+func (s *server) listPeople(file string, proj string, repo string, person string) ([]*model.Person, error) {
+	return s.filterPeople(s.people.ListPeople(), file, proj, repo, person)
+}
 
-	return lo.Filter(col, func(p *model.Person, index int) bool {
-		if !s.filterPerson(p, search) {
+func (s *server) filterPeople(col []*model.Person, file string, proj string, repo string, person string) ([]*model.Person, error) {
+	file = prepareToSearch(file)
+	proj = prepareToSearch(proj)
+	repo = prepareToSearch(repo)
+	person = prepareToSearch(person)
+
+	var ids *set.Set[model.UUID]
+	if file != "" || proj != "" || repo != "" || person != "" {
+		r, err := s.storage.QueryPeople(file, proj, repo, person)
+		if err != nil {
+			return nil, err
+		}
+		ids = set.From(r)
+	}
+
+	return lo.Filter(col, func(i *model.Person, index int) bool {
+		if person != "" {
+			hasName := lo.ContainsBy(i.ListNames(), func(j string) bool {
+				return strings.Contains(strings.ToLower(j), person)
+			})
+			hasEmail := lo.ContainsBy(i.ListEmails(), func(j string) bool {
+				return strings.Contains(strings.ToLower(j), person)
+			})
+			if !hasName && !hasEmail {
+				return false
+			}
+		}
+
+		if ids != nil && !ids.Contains(i.ID) {
 			return false
 		}
 
 		return true
-	})
-}
-
-func (s *server) filterPerson(p *model.Person, search string) bool {
-	if search != "" {
-		hasName := lo.ContainsBy(p.ListNames(), func(j string) bool {
-			return strings.Contains(strings.ToLower(j), search)
-		})
-		hasEmail := lo.ContainsBy(p.ListEmails(), func(j string) bool {
-			return strings.Contains(strings.ToLower(j), search)
-		})
-		if !hasName && !hasEmail {
-			return false
-		}
-	}
-
-	return true
+	}), nil
 }
 
 func (s *server) sortPeople(col []*model.Person, field string, asc *bool) error {

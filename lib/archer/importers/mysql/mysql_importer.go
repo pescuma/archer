@@ -53,7 +53,7 @@ func (m *mysqlImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Writing results...\n")
 
-	return storage.WriteProjects(projects, archer.ChangedBasicInfo|archer.ChangedSize|archer.ChangedDependencies)
+	return storage.WriteProjects(projects)
 }
 
 func (m *mysqlImporter) importTables(db *sql.DB, projs *model.Projects) error {

@@ -132,6 +132,18 @@ type sqlPerson struct {
 	CommitAuthors    []sqlRepositoryCommit `gorm:"foreignKey:AuthorID"`
 	CommitCommitters []sqlRepositoryCommit `gorm:"foreignKey:CommitterID"`
 	FileLineAuthors  []sqlFileLine         `gorm:"foreignKey:AuthorID"`
+	Repositories     []sqlPeopleRepository `gorm:"foreignKey:PersonID"`
+}
+
+type sqlPeopleRepository struct {
+	PersonID     model.UUID `gorm:"primaryKey"`
+	RepositoryID model.UUID `gorm:"primaryKey"`
+
+	FirstSeen time.Time
+	LastSeen  time.Time
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type sqlProductArea struct {
@@ -167,6 +179,7 @@ type sqlRepository struct {
 	Commits     []sqlRepositoryCommit     `gorm:"foreignKey:RepositoryID"`
 	CommitFiles []sqlRepositoryCommitFile `gorm:"foreignKey:RepositoryID"`
 	Files       []sqlFile                 `gorm:"foreignKey:RepositoryID"`
+	People      []sqlPeopleRepository     `gorm:"foreignKey:RepositoryID"`
 }
 
 type sqlRepositoryCommit struct {

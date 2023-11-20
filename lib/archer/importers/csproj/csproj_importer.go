@@ -58,12 +58,12 @@ func (i *csprojImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Writing results...\n")
 
-	err = storage.WriteProjects(projsDB, archer.ChangedBasicInfo|archer.ChangedDependencies)
+	err = storage.WriteProjects(projsDB)
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteFiles(filesDB, archer.ChangedBasicInfo)
+	err = storage.WriteFiles(filesDB)
 	if err != nil {
 		return err
 	}

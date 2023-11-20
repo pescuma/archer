@@ -33,6 +33,7 @@ type sqliteStorage struct {
 	projDirs    map[model.UUID]*sqlProjectDirectory
 	files       map[model.UUID]*sqlFile
 	people      map[model.UUID]*sqlPerson
+	peopleRepos map[string]*sqlPeopleRepository
 	area        map[model.UUID]*sqlProductArea
 	repos       map[model.UUID]*sqlRepository
 	repoCommits map[model.UUID]*sqlRepositoryCommit
@@ -82,7 +83,7 @@ func newFrom(dsn string) (archer.Storage, error) {
 		&sqlConfig{},
 		&sqlProject{}, &sqlProjectDependency{}, &sqlProjectDirectory{},
 		&sqlFile{}, &sqlFileLine{},
-		&sqlPerson{}, &sqlProductArea{},
+		&sqlPerson{}, &sqlPeopleRepository{}, &sqlProductArea{},
 		&sqlRepository{}, &sqlRepositoryCommit{}, &sqlRepositoryCommitFile{},
 	)
 	if err != nil {
@@ -97,6 +98,7 @@ func newFrom(dsn string) (archer.Storage, error) {
 		projDirs:    map[model.UUID]*sqlProjectDirectory{},
 		files:       map[model.UUID]*sqlFile{},
 		people:      map[model.UUID]*sqlPerson{},
+		peopleRepos: map[string]*sqlPeopleRepository{},
 		repos:       map[model.UUID]*sqlRepository{},
 		repoCommits: map[model.UUID]*sqlRepositoryCommit{},
 	}, nil
@@ -181,53 +183,43 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 	return result, nil
 }
 
-func (s *sqliteStorage) WriteProjects(projs *model.Projects, changes archer.StorageChanges) error {
+func (s *sqliteStorage) WriteProjects(projs *model.Projects) error {
 	all := projs.ListProjects(model.FilterAll)
 
-	return s.writeProjects(all, changes)
+	return s.writeProjects(all)
 }
 
-func (s *sqliteStorage) WriteProject(proj *model.Project, changes archer.StorageChanges) error {
+func (s *sqliteStorage) WriteProject(proj *model.Project) error {
 	projs := []*model.Project{proj}
 
-	return s.writeProjects(projs, changes)
+	return s.writeProjects(projs)
 }
 
-func (s *sqliteStorage) writeProjects(projs []*model.Project, changes archer.StorageChanges) error {
-	changedProjs := changed(changes, archer.ChangedBasicInfo, archer.ChangedData, archer.ChangedSize, archer.ChangedChanges, archer.ChangedMetrics)
-	changedDeps := changed(changes, archer.ChangedDependencies, archer.ChangedData)
-	changedDirs := changed(changes, archer.ChangedBasicInfo, archer.ChangedSize, archer.ChangedChanges, archer.ChangedMetrics)
-
+func (s *sqliteStorage) writeProjects(projs []*model.Project) error {
 	var sqlProjs []*sqlProject
-	if changedProjs {
-		for _, p := range projs {
-			sp := toSqlProject(p)
-			if prepareChange(&s.projs, sp.ID, sp) {
-				sqlProjs = append(sqlProjs, sp)
-			}
+	for _, p := range projs {
+		sp := toSqlProject(p)
+		if prepareChange(&s.projs, sp.ID, sp) {
+			sqlProjs = append(sqlProjs, sp)
 		}
 	}
 
 	var sqlDeps []*sqlProjectDependency
-	if changedDeps {
-		for _, p := range projs {
-			for _, d := range p.Dependencies {
-				sd := toSqlProjectDependency(d)
-				if prepareChange(&s.projDeps, sd.ID, sd) {
-					sqlDeps = append(sqlDeps, sd)
-				}
+	for _, p := range projs {
+		for _, d := range p.Dependencies {
+			sd := toSqlProjectDependency(d)
+			if prepareChange(&s.projDeps, sd.ID, sd) {
+				sqlDeps = append(sqlDeps, sd)
 			}
 		}
 	}
 
 	var sqlDirs []*sqlProjectDirectory
-	if changedDirs {
-		for _, p := range projs {
-			for _, d := range p.Dirs {
-				sd := toSqlProjectDirectory(d, p)
-				if prepareChange(&s.projDirs, sd.ID, sd) {
-					sqlDirs = append(sqlDirs, sd)
-				}
+	for _, p := range projs {
+		for _, d := range p.Dirs {
+			sd := toSqlProjectDirectory(d, p)
+			if prepareChange(&s.projDirs, sd.ID, sd) {
+				sqlDirs = append(sqlDirs, sd)
 			}
 		}
 	}
@@ -238,32 +230,26 @@ func (s *sqliteStorage) writeProjects(projs []*model.Project, changes archer.Sto
 		CreateBatchSize: 1000,
 	})
 
-	if changedProjs {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlProjs).Error
-		if err != nil {
-			return err
-		}
-
-		addList(&s.projs, sqlProjs, func(s *sqlProject) model.UUID { return s.ID })
+	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlProjs).Error
+	if err != nil {
+		return err
 	}
 
-	if changedDeps {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlDeps).Error
-		if err != nil {
-			return err
-		}
+	addList(&s.projs, sqlProjs, func(s *sqlProject) model.UUID { return s.ID })
 
-		addList(&s.projDeps, sqlDeps, func(s *sqlProjectDependency) model.UUID { return s.ID })
+	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlDeps).Error
+	if err != nil {
+		return err
 	}
 
-	if changedDirs {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlDirs).Error
-		if err != nil {
-			return err
-		}
+	addList(&s.projDeps, sqlDeps, func(s *sqlProjectDependency) model.UUID { return s.ID })
 
-		addList(&s.projDirs, sqlDirs, func(s *sqlProjectDirectory) model.UUID { return s.ID })
+	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlDirs).Error
+	if err != nil {
+		return err
 	}
+
+	addList(&s.projDirs, sqlDirs, func(s *sqlProjectDirectory) model.UUID { return s.ID })
 
 	// TODO delete
 
@@ -280,22 +266,19 @@ from projects p
                    on f.project_id = p.id
          left join repositories r
                    on r.id = p.repository_id
-         left join repository_commits c
-                   on c.repository_id = r.id
-         left join people pa
-                   on pa.id = c.author_id
-         left join people pc
-                   on pc.id = c.committer_id
-where (c.ignore is null or c.ignore = 0)
-  and (@proj = '' or p.name like @proj)
+         left join people_repositories pr
+                   on pr.repository_id = r.id
+         left join people pe
+                   on pe.id = pr.person_id
+where (@proj = '' or p.name like @proj)
   and (@file = '' or f.name like @file)
   and (@repo = '' or r.name like @repo)
-  and (@person = '' or pc.names like @person or pc.emails like @person or pa.names like @person or pa.emails like @person)
+  and (@person = '' or pe.names like @person or pe.emails like @person)
 		`,
-		sql.Named("proj", proj),
-		sql.Named("file", file),
-		sql.Named("repo", repo),
-		sql.Named("person", person),
+		sql.Named("proj", "%"+proj+"%"),
+		sql.Named("file", "%"+file+"%"),
+		sql.Named("repo", "%"+repo+"%"),
+		sql.Named("person", "%"+person+"%"),
 	).Scan(&result).Error
 	if err != nil {
 		return nil, err
@@ -335,7 +318,7 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 	return result, nil
 }
 
-func (s *sqliteStorage) WriteFiles(files *model.Files, _ archer.StorageChanges) error {
+func (s *sqliteStorage) WriteFiles(files *model.Files) error {
 	all := files.ListFiles()
 
 	err := s.writeFiles(all)
@@ -348,7 +331,7 @@ func (s *sqliteStorage) WriteFiles(files *model.Files, _ archer.StorageChanges) 
 	return nil
 }
 
-func (s *sqliteStorage) WriteFile(file *model.File, _ archer.StorageChanges) error {
+func (s *sqliteStorage) WriteFile(file *model.File) error {
 	return s.writeFiles([]*model.File{file})
 }
 
@@ -406,12 +389,7 @@ func (s *sqliteStorage) LoadFileContents(fileID model.UUID) (*model.FileContents
 	return result, nil
 }
 
-func (s *sqliteStorage) WriteFileContents(contents *model.FileContents, changes archer.StorageChanges) error {
-	changed := changed(changes, archer.ChangedBasicInfo, archer.ChangedChanges)
-	if !changed {
-		return nil
-	}
-
+func (s *sqliteStorage) WriteFileContents(contents *model.FileContents) error {
 	var sqlLines []*sqlFileLine
 	for _, f := range contents.Lines {
 		sf := toSqlFileLine(contents.FileID, f)
@@ -462,24 +440,19 @@ from files f
                    on p.id = f.project_id
          left join repositories r
                    on r.id = f.repository_id
-         left join repository_commits c
-                   on c.repository_id = r.id
-         left join repository_commit_files cf
-                   on cf.file_id = f.id and cf.commit_id = c.id
-         left join people pa
-                   on pa.id = c.author_id
-         left join people pc
-                   on pc.id = c.committer_id
-where (c.ignore is null or c.ignore = 0)
-  and (@proj = '' or p.name like @proj)
+         left join people_repositories pr
+                   on pr.repository_id = r.id
+         left join people pe
+                   on pe.id = pr.person_id
+where (@proj = '' or p.name like @proj)
   and (@file = '' or f.name like @file)
   and (@repo = '' or r.name like @repo)
-  and (@person = '' or pc.names like @person or pc.emails like @person or pa.names like @person or pa.emails like @person)
+  and (@person = '' or pe.names like @person or pe.emails like @person)
 		`,
-		sql.Named("proj", proj),
-		sql.Named("file", file),
-		sql.Named("repo", repo),
-		sql.Named("person", person),
+		sql.Named("proj", "%"+proj+"%"),
+		sql.Named("file", "%"+file+"%"),
+		sql.Named("repo", "%"+repo+"%"),
+		sql.Named("person", "%"+person+"%"),
 	).Scan(&result).Error
 	if err != nil {
 		return nil, err
@@ -537,28 +510,81 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 	return result, nil
 }
 
-func (s *sqliteStorage) WritePeople(peopleDB *model.People, changes archer.StorageChanges) error {
-	changedPeople := changed(changes, archer.ChangedBasicInfo, archer.ChangedData, archer.ChangedSize, archer.ChangedChanges, archer.ChangedMetrics)
-	changedAreas := changed(changes, archer.ChangedBasicInfo, archer.ChangedData, archer.ChangedSize, archer.ChangedChanges, archer.ChangedMetrics)
-
+func (s *sqliteStorage) WritePeople(peopleDB *model.People) error {
 	var sqlPeople []*sqlPerson
-	if changedPeople {
-		people := peopleDB.ListPeople()
-		for _, p := range people {
-			sp := toSqlPerson(p)
-			if prepareChange(&s.people, sp.ID, sp) {
-				sqlPeople = append(sqlPeople, sp)
-			}
+	people := peopleDB.ListPeople()
+	for _, p := range people {
+		sp := toSqlPerson(p)
+		if prepareChange(&s.people, sp.ID, sp) {
+			sqlPeople = append(sqlPeople, sp)
 		}
 	}
 
 	var sqlAreas []*sqlProductArea
-	if changedAreas {
-		area := peopleDB.ListProductAreas()
-		for _, p := range area {
-			sp := toSqlProductArea(p)
-			if prepareChange(&s.area, sp.ID, sp) {
-				sqlAreas = append(sqlAreas, sp)
+	area := peopleDB.ListProductAreas()
+	for _, p := range area {
+		sp := toSqlProductArea(p)
+		if prepareChange(&s.area, sp.ID, sp) {
+			sqlAreas = append(sqlAreas, sp)
+		}
+	}
+
+	now := time.Now().Local()
+	db := s.db.Session(&gorm.Session{
+		NowFunc:         func() time.Time { return now },
+		CreateBatchSize: 1000,
+	})
+
+	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlPeople).Error
+	if err != nil {
+		return err
+	}
+
+	addList(&s.people, sqlPeople, func(s *sqlPerson) model.UUID { return s.ID })
+
+	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlAreas).Error
+	if err != nil {
+		return err
+	}
+
+	addList(&s.area, sqlAreas, func(s *sqlProductArea) model.UUID { return s.ID })
+
+	// TODO delete
+
+	return nil
+}
+
+func (s *sqliteStorage) LoadPeopleRepositories() (*model.PeopleRepositories, error) {
+	result := model.NewPeopleRepositories()
+
+	var sprs []*sqlPeopleRepository
+	err := s.db.Find(&sprs).Error
+	if err != nil {
+		return nil, err
+	}
+
+	s.peopleRepos = lo.Associate(sprs, func(i *sqlPeopleRepository) (string, *sqlPeopleRepository) {
+		return string(i.PersonID) + "\n" + string(i.RepositoryID), i
+	})
+
+	for _, spr := range sprs {
+		pr := result.GetOrCreatePerson(spr.PersonID).GetOrCreateRepository(spr.RepositoryID)
+		pr.FirstSeen = spr.FirstSeen
+		pr.LastSeen = spr.LastSeen
+	}
+
+	return result, nil
+}
+
+func (s *sqliteStorage) WritePeopleRepositories(prs *model.PeopleRepositories) error {
+	key := func(pr *sqlPeopleRepository) string { return string(pr.PersonID) + "\n" + string(pr.RepositoryID) }
+
+	var sqlPeopleRepositories []*sqlPeopleRepository
+	for _, p := range prs.List() {
+		for _, r := range p.List() {
+			pr := toSqlPersonRepository(p, r)
+			if prepareChange(&s.peopleRepos, key(pr), pr) {
+				sqlPeopleRepositories = append(sqlPeopleRepositories, pr)
 			}
 		}
 	}
@@ -569,27 +595,53 @@ func (s *sqliteStorage) WritePeople(peopleDB *model.People, changes archer.Stora
 		CreateBatchSize: 1000,
 	})
 
-	if changedPeople {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlPeople).Error
-		if err != nil {
-			return err
-		}
-
-		addList(&s.people, sqlPeople, func(s *sqlPerson) model.UUID { return s.ID })
-	}
-
-	if changedAreas {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlAreas).Error
-		if err != nil {
-			return err
-		}
-
-		addList(&s.area, sqlAreas, func(s *sqlProductArea) model.UUID { return s.ID })
+	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlPeopleRepositories).Error
+	if err != nil {
+		return err
 	}
 
 	// TODO delete
 
+	addList(&s.peopleRepos, sqlPeopleRepositories, key)
+
 	return nil
+}
+
+func (s *sqliteStorage) QueryPeople(file string, proj string, repo string, person string) ([]model.UUID, error) {
+	var result []model.UUID
+
+	err := s.db.Raw(`
+select distinct pe.id
+from people pe
+         left join people_repositories pr
+                   on pr.person_id = pe.id
+         left join repositories r
+                   on r.id = pr.repository_id
+         left join repository_commits c
+                   on c.repository_id = r.id
+                       and (c.author_id = pe.id or c.committer_id = pe.id)
+         left join repository_commit_files cf
+                   on cf.commit_id = c.id
+         left join files f
+                   on f.id = cf.file_id
+         left join projects p
+                   on p.id = f.project_id
+where (c.ignore is null or c.ignore = 0)
+  and (@proj = '' or p.name like @proj)
+  and (@file = '' or f.name like @file)
+  and (@repo = '' or r.name like @repo)
+  and (@person = '' or pe.names like @person or pe.emails)
+		`,
+		sql.Named("proj", "%"+proj+"%"),
+		sql.Named("file", "%"+file+"%"),
+		sql.Named("repo", "%"+repo+"%"),
+		sql.Named("person", "%"+person+"%"),
+	).Scan(&result).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 func (s *sqliteStorage) LoadRepositories() (*model.Repositories, error) {
@@ -686,25 +738,29 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 	return result, nil
 }
 
-func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.StorageChanges) error {
-	changedRepos := changed(changes, archer.ChangedBasicInfo|archer.ChangedHistory)
-	changedCommits := changed(changes, archer.ChangedHistory|archer.ChangedChanges)
-
-	var sqlRepos []*sqlRepository
-	if changedRepos {
-		sr := toSqlRepository(repo)
-		if prepareChange(&s.repos, sr.ID, sr) {
-			sqlRepos = append(sqlRepos, sr)
+func (s *sqliteStorage) WriteRepositories(repos *model.Repositories) error {
+	for _, repo := range repos.List() {
+		err := s.WriteRepository(repo)
+		if err != nil {
+			return err
 		}
 	}
 
+	return nil
+}
+
+func (s *sqliteStorage) WriteRepository(repo *model.Repository) error {
+	var sqlRepos []*sqlRepository
+	sr := toSqlRepository(repo)
+	if prepareChange(&s.repos, sr.ID, sr) {
+		sqlRepos = append(sqlRepos, sr)
+	}
+
 	var sqlCommits []*sqlRepositoryCommit
-	if changedCommits {
-		for _, c := range repo.ListCommits() {
-			sc := toSqlRepositoryCommit(repo, c)
-			if prepareChange(&s.repoCommits, sc.ID, sc) {
-				sqlCommits = append(sqlCommits, sc)
-			}
+	for _, c := range repo.ListCommits() {
+		sc := toSqlRepositoryCommit(repo, c)
+		if prepareChange(&s.repoCommits, sc.ID, sc) {
+			sqlCommits = append(sqlCommits, sc)
 		}
 	}
 
@@ -714,30 +770,26 @@ func (s *sqliteStorage) WriteRepository(repo *model.Repository, changes archer.S
 		CreateBatchSize: 1000,
 	})
 
-	if changedRepos {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlRepos).Error
-		if err != nil {
-			return err
-		}
-
-		addList(&s.repos, sqlRepos, func(s *sqlRepository) model.UUID { return s.ID })
+	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlRepos).Error
+	if err != nil {
+		return err
 	}
 
-	if changedCommits {
-		err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommits).Error
-		if err != nil {
-			return err
-		}
+	addList(&s.repos, sqlRepos, func(s *sqlRepository) model.UUID { return s.ID })
 
-		addList(&s.repoCommits, sqlCommits, func(s *sqlRepositoryCommit) model.UUID { return s.ID })
+	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommits).Error
+	if err != nil {
+		return err
 	}
+
+	addList(&s.repoCommits, sqlCommits, func(s *sqlRepositoryCommit) model.UUID { return s.ID })
 
 	// TODO delete
 
 	return nil
 }
 
-func (s *sqliteStorage) WriteCommit(repo *model.Repository, commit *model.RepositoryCommit, _ archer.StorageChanges) error {
+func (s *sqliteStorage) WriteCommit(repo *model.Repository, commit *model.RepositoryCommit) error {
 	var sqlCommits []*sqlRepositoryCommit
 
 	sc := toSqlRepositoryCommit(repo, commit)
@@ -813,26 +865,23 @@ func (s *sqliteStorage) QueryRepositories(file string, proj string, repo string,
 	err := s.db.Raw(`
 select distinct r.id
 from repositories r
-         left join repository_commits c
-                   on c.repository_id = r.id
-         left join people pa
-                   on pa.id = c.author_id
-         left join people pc
-                   on pc.id = c.committer_id
+         left join people_repositories pr
+                   on pr.repository_id = r.id
+         left join people pe
+                   on pe.id = pr.person_id
          left join files f
                    on f.repository_id = r.id
          left join projects p
                    on p.repository_id = r.id
-where (c.ignore is null or c.ignore = 0)
-  and (@proj = '' or p.name like @proj)
+where (@proj = '' or p.name like @proj)
   and (@file = '' or f.name like @file)
   and (@repo = '' or r.name like @repo)
-  and (@person = '' or pc.names like @person or pc.emails like @person or pa.names like @person or pa.emails like @person)
+  and (@person = '' or pe.names like @person or pe.emails like @person)
 		`,
-		sql.Named("proj", proj),
-		sql.Named("file", file),
-		sql.Named("repo", repo),
-		sql.Named("person", person),
+		sql.Named("proj", "%"+proj+"%"),
+		sql.Named("file", "%"+file+"%"),
+		sql.Named("repo", "%"+repo+"%"),
+		sql.Named("person", "%"+person+"%"),
 	).Scan(&result).Error
 	if err != nil {
 		return nil, err
@@ -865,10 +914,10 @@ where c.ignore = 0
   and (@repo = '' or r.name like @repo)
   and (@person = '' or pc.names like @person or pc.emails like @person or pa.names like @person or pa.emails like @person)
 		`,
-		sql.Named("proj", proj),
-		sql.Named("file", file),
-		sql.Named("repo", repo),
-		sql.Named("person", person),
+		sql.Named("proj", "%"+proj+"%"),
+		sql.Named("file", "%"+file+"%"),
+		sql.Named("repo", "%"+repo+"%"),
+		sql.Named("person", "%"+person+"%"),
 	).Scan(&result).Error
 	if err != nil {
 		return nil, err
@@ -902,10 +951,10 @@ where c.ignore = 0
   and (@person = '' or pc.names like @person or pc.emails like @person or pa.names like @person or pa.emails like @person)
 group by 1, 2
 		`,
-		sql.Named("proj", proj),
-		sql.Named("file", file),
-		sql.Named("repo", repo),
-		sql.Named("person", person),
+		sql.Named("proj", "%"+proj+"%"),
+		sql.Named("file", "%"+file+"%"),
+		sql.Named("repo", "%"+repo+"%"),
+		sql.Named("person", "%"+person+"%"),
 	).Scan(&result).Error
 	if err != nil {
 		return nil, err
@@ -1193,6 +1242,15 @@ func toSqlPerson(p *model.Person) *sqlPerson {
 	return result
 }
 
+func toSqlPersonRepository(p *model.PersonRepositories, r *model.PersonRepository) *sqlPeopleRepository {
+	return &sqlPeopleRepository{
+		PersonID:     p.PersonID,
+		RepositoryID: r.RepositoryID,
+		FirstSeen:    r.FirstSeen,
+		LastSeen:     r.LastSeen,
+	}
+}
+
 func toSqlProductArea(a *model.ProductArea) *sqlProductArea {
 	return &sqlProductArea{
 		ID:      a.ID,
@@ -1310,16 +1368,6 @@ func prepareChange[K comparable, V any](byID *map[K]V, id K, n V) bool {
 		(*byID)[id] = n
 		return true
 	}
-}
-
-func changed(changes archer.StorageChanges, desired ...archer.StorageChanges) bool {
-	for _, d := range desired {
-		if changes&d != 0 {
-			return true
-		}
-	}
-
-	return false
 }
 
 type NamingStrategy struct {

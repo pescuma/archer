@@ -134,18 +134,18 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Writing results...\n")
 
-	err = storage.WriteFiles(filesDB, archer.ChangedData)
+	err = storage.WriteFiles(filesDB)
 	if err != nil {
 		return err
 	}
 
-	err = storage.WritePeople(peopleDB, archer.ChangedChanges)
+	err = storage.WritePeople(peopleDB)
 	if err != nil {
 		return err
 	}
 
 	for _, repo := range repos {
-		err = storage.WriteRepository(repo, archer.ChangedChanges)
+		err = storage.WriteRepository(repo)
 		if err != nil {
 			return err
 		}
@@ -225,7 +225,7 @@ func (g *gitBlameImporter) deleteFileBlame(storage archer.Storage, file *model.F
 
 	contents.Lines = nil
 
-	err = storage.WriteFileContents(contents, archer.ChangedBasicInfo|archer.ChangedChanges)
+	err = storage.WriteFileContents(contents)
 	if err != nil {
 		return err
 	}
@@ -459,12 +459,12 @@ func (g *gitBlameImporter) computeFileBlame(storage archer.Storage, w *blameWork
 		delete(w.file.Data, "blame:last_modified")
 	}
 
-	err = storage.WriteFileContents(fileLines, archer.ChangedBasicInfo|archer.ChangedChanges)
+	err = storage.WriteFileContents(fileLines)
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteFile(w.file, archer.ChangedChanges)
+	err = storage.WriteFile(w.file)
 	if err != nil {
 		return err
 	}

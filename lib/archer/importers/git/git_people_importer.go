@@ -38,7 +38,7 @@ func (g gitPeopleImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Writing results...\n")
 
-	err = storage.WritePeople(peopleDB, archer.ChangedBasicInfo)
+	err = storage.WritePeople(peopleDB)
 	if err != nil {
 		return err
 	}

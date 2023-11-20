@@ -145,7 +145,7 @@ func (s *server) commitPatch(params *CommitPatchParams) (any, error) {
 	}
 
 	if changed {
-		err := s.storage.WriteCommit(repo, commit, archer.ChangedBasicInfo)
+		err := s.storage.WriteCommit(repo, commit)
 		if err != nil {
 			return nil, err
 		}

@@ -70,6 +70,11 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
+	peopleRepositoriesDB, err := storage.LoadPeopleRepositories()
+	if err != nil {
+		return err
+	}
+
 	fmt.Printf("Importing and grouping authors...\n")
 
 	g.grouper, err = importPeople(peopleDB, g.rootDirs)
@@ -78,7 +83,7 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 	}
 
 	if g.options.SaveEvery != nil {
-		err = storage.WritePeople(peopleDB, archer.ChangedBasicInfo)
+		err = storage.WritePeople(peopleDB)
 		if err != nil {
 			return err
 		}
@@ -100,7 +105,7 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 		repo.Name = filepath.Base(rootDir)
 		repo.VCS = "git"
 
-		commitsImported, err := g.importCommits(peopleDB, repo, gitRepo)
+		commitsImported, err := g.importCommits(peopleDB, peopleRepositoriesDB, repo, gitRepo)
 		if err != nil {
 			return err
 		}
@@ -113,12 +118,17 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 		if g.options.SaveEvery != nil && commitsImported > 0 {
 			fmt.Printf("%v: Writing results...\n", repo.Name)
 
-			err = storage.WritePeople(peopleDB, archer.ChangedBasicInfo|archer.ChangedChanges)
+			err = storage.WritePeople(peopleDB)
 			if err != nil {
 				return err
 			}
 
-			err := storage.WriteRepository(repo, archer.ChangedBasicInfo|archer.ChangedHistory)
+			err := storage.WriteRepository(repo)
+			if err != nil {
+				return err
+			}
+
+			err = storage.WritePeopleRepositories(peopleRepositoriesDB)
 			if err != nil {
 				return err
 			}
@@ -139,17 +149,27 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Writing results...\n")
 
-	err = storage.WriteProjects(projectsDB, archer.ChangedChanges)
+	err = storage.WriteProjects(projectsDB)
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteFiles(filesDB, archer.ChangedChanges)
+	err = storage.WriteFiles(filesDB)
 	if err != nil {
 		return err
 	}
 
-	err = storage.WritePeople(peopleDB, archer.ChangedBasicInfo|archer.ChangedChanges)
+	err = storage.WritePeople(peopleDB)
+	if err != nil {
+		return err
+	}
+
+	err = storage.WriteRepositories(reposDB)
+	if err != nil {
+		return err
+	}
+
+	err = storage.WritePeopleRepositories(peopleRepositoriesDB)
 	if err != nil {
 		return err
 	}
@@ -214,7 +234,9 @@ func (g *gitHistoryImporter) countCommitsToImport(repo *model.Repository, gitRep
 	return imported, nil
 }
 
-func (g *gitHistoryImporter) importCommits(peopleDB *model.People, repo *model.Repository, gitRepo *git.Repository) (int, error) {
+func (g *gitHistoryImporter) importCommits(peopleDB *model.People, peopleRepositoriesDB *model.PeopleRepositories,
+	repo *model.Repository, gitRepo *git.Repository,
+) (int, error) {
 	imported, err := g.countCommitsToImport(repo, gitRepo)
 	if err != nil {
 		return 0, err
@@ -253,6 +275,12 @@ func (g *gitHistoryImporter) importCommits(peopleDB *model.People, repo *model.R
 		repo.SeenAt(commit.Date, commit.DateAuthored)
 		author.SeenAt(commit.Date, commit.DateAuthored)
 		committer.SeenAt(commit.Date, commit.DateAuthored)
+
+		pr := peopleRepositoriesDB.GetOrCreatePerson(author.ID).GetOrCreateRepository(repo.ID)
+		pr.SeenAt(commit.Date, commit.DateAuthored)
+
+		pr = peopleRepositoriesDB.GetOrCreatePerson(committer.ID).GetOrCreateRepository(repo.ID)
+		pr.SeenAt(commit.Date, commit.DateAuthored)
 
 		return nil
 	})
@@ -343,12 +371,12 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage, filesDB *mode
 	writeResults := func(commitFiles []*model.RepositoryCommitFiles) error {
 		fmt.Printf("%v: Writing results...\n", repo.Name)
 
-		err := storage.WriteFiles(filesDB, archer.ChangedBasicInfo)
+		err := storage.WriteFiles(filesDB)
 		if err != nil {
 			return nil
 		}
 
-		err = storage.WriteRepository(repo, archer.ChangedBasicInfo|archer.ChangedHistory)
+		err = storage.WriteRepository(repo)
 		if err != nil {
 			return err
 		}
@@ -805,13 +833,26 @@ func (g *gitHistoryImporter) propagateChangesToParents(storage archer.Storage, r
 	}
 
 	for _, p := range projectsDB.ListProjects(model.FilterExcludeExternal) {
-		p.Changes.Clear()
+		if p.RepositoryID == nil {
+			p.Changes.Reset()
+		} else {
+			p.Changes.Clear()
+		}
+
 		for _, d := range p.Dirs {
-			d.Changes.Clear()
+			if p.RepositoryID == nil {
+				d.Changes.Reset()
+			} else {
+				d.Changes.Clear()
+			}
 		}
 	}
 	for _, f := range filesDB.ListFiles() {
-		f.Changes.Clear()
+		if f.RepositoryID == nil {
+			f.Changes.Reset()
+		} else {
+			f.Changes.Clear()
+		}
 	}
 
 	for _, p := range peopleDB.ListPeople() {

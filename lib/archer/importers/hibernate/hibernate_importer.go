@@ -221,12 +221,12 @@ func (h *hibernateImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Writing results...\n")
 
-	err = storage.WriteProjects(projectsDB, archer.ChangedBasicInfo|archer.ChangedDependencies)
+	err = storage.WriteProjects(projectsDB)
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteFiles(filesDB, archer.ChangedBasicInfo|archer.ChangedData)
+	err = storage.WriteFiles(filesDB)
 	if err != nil {
 		return err
 	}

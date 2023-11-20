@@ -25,3 +25,11 @@ func (m *Changes) Clear() {
 	m.LinesAdded = 0
 	m.LinesDeleted = 0
 }
+
+func (m *Changes) Reset() {
+	m.In6Months = -1
+	m.Total = -1
+	m.LinesModified = -1
+	m.LinesAdded = -1
+	m.LinesDeleted = -1
+}

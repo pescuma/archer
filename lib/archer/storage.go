@@ -21,26 +21,30 @@ const (
 
 type Storage interface {
 	LoadProjects() (*model.Projects, error)
-	WriteProjects(projs *model.Projects, changes StorageChanges) error
-	WriteProject(proj *model.Project, changes StorageChanges) error
+	WriteProjects(projs *model.Projects) error
+	WriteProject(proj *model.Project) error
 	QueryProjects(file string, proj string, repo string, person string) ([]model.UUID, error)
 
 	LoadFiles() (*model.Files, error)
-	WriteFiles(files *model.Files, changes StorageChanges) error
-	WriteFile(file *model.File, changes StorageChanges) error
+	WriteFiles(files *model.Files) error
+	WriteFile(file *model.File) error
 
 	LoadFileContents(fileID model.UUID) (*model.FileContents, error)
-	WriteFileContents(contents *model.FileContents, changes StorageChanges) error
+	WriteFileContents(contents *model.FileContents) error
 	QueryBlamePerAuthor() ([]*BlamePerAuthor, error)
 	QueryFiles(file string, proj string, repo string, person string) ([]model.UUID, error)
 
 	LoadPeople() (*model.People, error)
-	WritePeople(people *model.People, changes StorageChanges) error
+	WritePeople(people *model.People) error
+	LoadPeopleRepositories() (*model.PeopleRepositories, error)
+	WritePeopleRepositories(prs *model.PeopleRepositories) error
+	QueryPeople(file string, proj string, repo string, person string) ([]model.UUID, error)
 
-	LoadRepositories() (repos *model.Repositories, err error)
+	LoadRepositories() (*model.Repositories, error)
 	LoadRepository(rootDir string) (*model.Repository, error)
-	WriteRepository(repo *model.Repository, changes StorageChanges) error
-	WriteCommit(repo *model.Repository, commit *model.RepositoryCommit, info StorageChanges) error
+	WriteRepositories(repos *model.Repositories) error
+	WriteRepository(repo *model.Repository) error
+	WriteCommit(repo *model.Repository, commit *model.RepositoryCommit) error
 	LoadRepositoryCommitFiles(repo *model.Repository, commit *model.RepositoryCommit) (*model.RepositoryCommitFiles, error)
 	WriteRepositoryCommitFiles(files []*model.RepositoryCommitFiles) error
 	QueryRepositories(file string, proj string, repo string, person string) ([]model.UUID, error)

@@ -1,11 +1,7 @@
 package server
 
 import (
-	"fmt"
-
 	"github.com/gin-gonic/gin"
-	"github.com/pescuma/archer/lib/archer/model"
-	"github.com/samber/lo"
 )
 
 type PeopleFilters struct {
@@ -25,28 +21,19 @@ type StatsPeopleParams struct {
 }
 
 func (s *server) initPeople(r *gin.Engine) {
-	r.GET("/api/people", getP[PeopleListParams](s.listPeople))
-	r.GET("/api/people/:id", get(s.getPerson))
-	r.GET("/api/stats/count/people", getP[StatsPeopleParams](s.countPeople))
-	r.GET("/api/stats/seen/people", getP[StatsPeopleParams](s.getPeopleSeenStats))
+	r.GET("/api/people", getP[PeopleListParams](s.peopleList))
+	r.GET("/api/people/:id", get(s.personGet))
+	r.GET("/api/stats/count/people", getP[StatsPeopleParams](s.statsCountPeople))
+	r.GET("/api/stats/seen/people", getP[StatsPeopleParams](s.statsSeenPeople))
 }
 
-func (s *server) countPeople(params *StatsPeopleParams) (any, error) {
-	people := s.people.ListPeople()
+func (s *server) peopleList(params *PeopleListParams) (any, error) {
+	people, err := s.listPeople(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	if err != nil {
+		return nil, err
+	}
 
-	people = s.filterPeople(people, params.FilterPerson)
-
-	return gin.H{
-		"total": len(people),
-	}, nil
-}
-
-func (s *server) listPeople(params *PeopleListParams) (any, error) {
-	people := s.people.ListPeople()
-
-	people = s.filterPeople(people, params.FilterPerson)
-
-	err := s.sortPeople(people, params.Sort, params.Asc)
+	err = s.sortPeople(people, params.Sort, params.Asc)
 	if err != nil {
 		return nil, err
 	}
@@ -66,23 +53,35 @@ func (s *server) listPeople(params *PeopleListParams) (any, error) {
 	}, nil
 }
 
-func (s *server) getPerson() (any, error) {
+func (s *server) statsCountPeople(params *StatsPeopleParams) (any, error) {
+	people, err := s.listPeople(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	if err != nil {
+		return nil, err
+	}
+
+	return gin.H{
+		"total": len(people),
+	}, nil
+}
+
+func (s *server) personGet() (any, error) {
 	return nil, nil
 }
 
-func (s *server) getPeopleSeenStats(params *StatsPeopleParams) (any, error) {
-	people := s.people.ListPeople()
+func (s *server) statsSeenPeople(params *StatsPeopleParams) (any, error) {
+	people, err := s.listPeople(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	if err != nil {
+		return nil, err
+	}
 
-	people = s.filterPeople(people, params.FilterPerson)
+	result := make(map[string]map[string]int)
+	for _, f := range people {
+		y, m, _ := f.FirstSeen.Date()
+		s.incSeenStats(result, y, m, "firstSeen")
 
-	s1 := lo.GroupBy(people, func(person *model.Person) string {
-		y, m, _ := person.FirstSeen.Date()
-		return fmt.Sprintf("%04d-%02d", y, m)
-	})
+		y, m, _ = f.LastSeen.Date()
+		s.incSeenStats(result, y, m, "lastSeen")
+	}
 
-	s2 := lo.MapValues(s1, func(people []*model.Person, _ string) int {
-		return len(people)
-	})
-
-	return s2, nil
+	return result, nil
 }
