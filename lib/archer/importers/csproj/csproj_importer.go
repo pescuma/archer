@@ -3,10 +3,12 @@ package csproj
 import (
 	"encoding/xml"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/gobwas/glob"
 	"github.com/hashicorp/go-set/v2"
 	"github.com/pescuma/archer/lib/archer"
 	"github.com/pescuma/archer/lib/archer/importers/common"
@@ -134,11 +136,6 @@ func (i *csprojImporter) process(projsDB *model.Projects, filesDB *model.Files, 
 		}
 
 		for _, f := range item.Nones {
-			err := i.addFile(filesDB, proj, dir, excludes, f.Include)
-			if err != nil {
-				return err
-			}
-
 			if f.Remove != "" {
 				remove, err := utils.PathAbs(proj.RootDir, f.Remove)
 				if err != nil {
@@ -148,26 +145,35 @@ func (i *csprojImporter) process(projsDB *model.Projects, filesDB *model.Files, 
 				excludes.Insert(remove)
 			}
 		}
+	}
+
+	for _, item := range xmlProj.ItemGroups {
+		for _, f := range item.Nones {
+			err := i.addFiles(filesDB, proj, dir, excludes, f.Include)
+			if err != nil {
+				return err
+			}
+		}
 		for _, f := range item.EmbeddedResources {
-			err := i.addFile(filesDB, proj, dir, excludes, f.Include)
+			err := i.addFiles(filesDB, proj, dir, excludes, f.Include)
 			if err != nil {
 				return err
 			}
 		}
 		for _, f := range item.Compiles {
-			err := i.addFile(filesDB, proj, dir, excludes, f.Include)
+			err := i.addFiles(filesDB, proj, dir, excludes, f.Include)
 			if err != nil {
 				return err
 			}
 		}
 		for _, f := range item.ClCompiles {
-			err := i.addFile(filesDB, proj, dir, excludes, f.Include)
+			err := i.addFiles(filesDB, proj, dir, excludes, f.Include)
 			if err != nil {
 				return err
 			}
 		}
 		for _, f := range item.ClIncludes {
-			err := i.addFile(filesDB, proj, dir, excludes, f.Include)
+			err := i.addFiles(filesDB, proj, dir, excludes, f.Include)
 			if err != nil {
 				return err
 			}
@@ -214,21 +220,57 @@ func (i *csprojImporter) addProjDep(projsDB *model.Projects, proj *model.Project
 	return nil
 }
 
-func (i *csprojImporter) addFile(filesDB *model.Files, proj *model.Project, dir *model.ProjectDirectory, excludes *set.Set[string], path string) error {
+func (i *csprojImporter) addFiles(filesDB *model.Files, proj *model.Project, dir *model.ProjectDirectory, excludes *set.Set[string], path string) error {
 	if path == "" {
 		return nil
 	}
 
-	path, err := utils.PathAbs(proj.RootDir, path)
-	if err != nil {
-		return err
+	if strings.Contains(path, "*") || strings.Contains(path, "?") || strings.Contains(path, "[") {
+		// '\\' is an escape char
+		if filepath.Separator == '\\' {
+			path = strings.ReplaceAll(path, "\\", "\\\\")
+		}
+
+		g, err := glob.Compile(path, filepath.Separator)
+		if err != nil {
+			return err
+		}
+
+		return filepath.WalkDir(proj.RootDir, func(file string, entry fs.DirEntry, err error) error {
+			switch {
+			case err != nil:
+				return nil
+
+			case entry.IsDir():
+				return nil
+
+			default:
+				file, err := utils.PathAbs(file)
+				if err != nil {
+					return err
+				}
+
+				end := file[len(proj.RootDir)+1:]
+
+				if g.Match(end) && !excludes.Contains(file) {
+					file := filesDB.GetOrCreateFile(file)
+					file.ProjectID = &proj.ID
+					file.ProjectDirectoryID = &dir.ID
+				}
+				return nil
+			}
+		})
+
+	} else {
+		path, err := utils.PathAbs(proj.RootDir, path)
+		if err != nil {
+			return err
+		}
+
+		file := filesDB.GetOrCreateFile(path)
+		file.ProjectID = &proj.ID
+		file.ProjectDirectoryID = &dir.ID
 	}
-
-	file := filesDB.GetOrCreateFile(path)
-	file.ProjectID = &proj.ID
-	file.ProjectDirectoryID = &dir.ID
-
-	excludes.Remove(path)
 
 	return nil
 }

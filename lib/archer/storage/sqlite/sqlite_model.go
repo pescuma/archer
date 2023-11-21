@@ -209,10 +209,9 @@ type sqlRepository struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	Commits     []sqlRepositoryCommit     `gorm:"foreignKey:RepositoryID"`
-	CommitFiles []sqlRepositoryCommitFile `gorm:"foreignKey:RepositoryID"`
-	Files       []sqlFile                 `gorm:"foreignKey:RepositoryID"`
-	People      []sqlPersonRepository     `gorm:"foreignKey:RepositoryID"`
+	Commits []sqlRepositoryCommit `gorm:"foreignKey:RepositoryID"`
+	Files   []sqlFile             `gorm:"foreignKey:RepositoryID"`
+	People  []sqlPersonRepository `gorm:"foreignKey:RepositoryID"`
 }
 
 type sqlRepositoryCommit struct {
@@ -247,14 +246,10 @@ type sqlRepositoryCommitFile struct {
 	CommitID      model.UUID `gorm:"primaryKey"`
 	FileID        model.UUID `gorm:"primaryKey"`
 	OldFileIDs    string
-	RepositoryID  model.UUID
 	Change        model.FileChangeType
 	LinesModified *int
 	LinesAdded    *int
 	LinesDeleted  *int
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
 }
 
 type sqlSize struct {

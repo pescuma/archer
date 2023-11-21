@@ -247,7 +247,7 @@ func (s *sqliteStorage) writeProjects(projs []*model.Project) error {
 	now := time.Now().Local()
 	db := s.mainDB.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
-		CreateBatchSize: 1000,
+		CreateBatchSize: 300,
 	})
 
 	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlProjs).Error
@@ -336,7 +336,7 @@ func (s *sqliteStorage) writeFiles(all []*model.File) error {
 	now := time.Now().Local()
 	db := s.mainDB.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
-		CreateBatchSize: 1000,
+		CreateBatchSize: 300,
 	})
 
 	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlFiles).Error
@@ -392,7 +392,7 @@ func (s *sqliteStorage) WriteFileContents(contents *model.FileContents) error {
 	now := time.Now().Local()
 	db := s.fileLinesDB.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
-		CreateBatchSize: 1000,
+		CreateBatchSize: 300,
 	})
 
 	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlLines).Error
@@ -494,7 +494,7 @@ func (s *sqliteStorage) WritePeople(peopleDB *model.People) error {
 	now := time.Now().Local()
 	db := s.mainDB.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
-		CreateBatchSize: 1000,
+		CreateBatchSize: 300,
 	})
 
 	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlPeople).Error
@@ -578,7 +578,7 @@ func (s *sqliteStorage) WritePeopleRelations(prs *model.PeopleRelations) error {
 	now := time.Now().Local()
 	db := s.mainDB.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
-		CreateBatchSize: 1000,
+		CreateBatchSize: 300,
 	})
 
 	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&rs).Error
@@ -722,7 +722,7 @@ func (s *sqliteStorage) WriteRepository(repo *model.Repository) error {
 	now := time.Now().Local()
 	db := s.mainDB.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
-		CreateBatchSize: 1000,
+		CreateBatchSize: 300,
 	})
 
 	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlRepos).Error
@@ -755,7 +755,7 @@ func (s *sqliteStorage) WriteCommit(repo *model.Repository, commit *model.Reposi
 	now := time.Now().Local()
 	db := s.mainDB.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
-		CreateBatchSize: 1000,
+		CreateBatchSize: 300,
 	})
 
 	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommits).Error
@@ -793,7 +793,7 @@ func (s *sqliteStorage) WriteRepositoryCommitFiles(files []*model.RepositoryComm
 	var sqlCommitFiles []*sqlRepositoryCommitFile
 	for _, fs := range files {
 		for _, f := range fs.List() {
-			sf := toSqlRepositoryCommitFile(fs.RepositoryID, fs.CommitID, f)
+			sf := toSqlRepositoryCommitFile(fs.CommitID, f)
 			sqlCommitFiles = append(sqlCommitFiles, sf)
 		}
 	}
@@ -801,7 +801,7 @@ func (s *sqliteStorage) WriteRepositoryCommitFiles(files []*model.RepositoryComm
 	now := time.Now().Local()
 	db := s.mainDB.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
-		CreateBatchSize: 1000,
+		CreateBatchSize: 300,
 	})
 
 	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommitFiles).Error
@@ -885,7 +885,7 @@ func (s *sqliteStorage) WriteMonthlyStats(stats *model.MonthlyStats) error {
 	now := time.Now().Local()
 	db := s.mainDB.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
-		CreateBatchSize: 1000,
+		CreateBatchSize: 300,
 	})
 
 	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlLines).Error
@@ -932,7 +932,7 @@ func (s *sqliteStorage) WriteConfig(configs *map[string]string) error {
 	now := time.Now().Local()
 	db := s.mainDB.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
-		CreateBatchSize: 1000,
+		CreateBatchSize: 300,
 	})
 
 	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlConfigs).Error
@@ -1277,12 +1277,11 @@ func toSqlRepositoryCommit(r *model.Repository, c *model.RepositoryCommit) *sqlR
 	}
 }
 
-func toSqlRepositoryCommitFile(r model.UUID, c model.UUID, f *model.RepositoryCommitFile) *sqlRepositoryCommitFile {
+func toSqlRepositoryCommitFile(c model.UUID, f *model.RepositoryCommitFile) *sqlRepositoryCommitFile {
 	return &sqlRepositoryCommitFile{
 		CommitID:      c,
 		FileID:        f.FileID,
 		OldFileIDs:    encodeOldFileIDs(f.OldFileIDs),
-		RepositoryID:  r,
 		Change:        f.Change,
 		LinesModified: encodeMetric(f.LinesModified),
 		LinesAdded:    encodeMetric(f.LinesAdded),

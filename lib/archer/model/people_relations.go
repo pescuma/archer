@@ -44,7 +44,7 @@ func (p *PeopleRelations) GetOrCreatePersonFile(personID UUID, fileID UUID) *Per
 }
 
 func (p *PeopleRelations) ListFiles() []*PersonFile {
-	result := make([]*PersonFile, 100)
+	var result []*PersonFile
 	for _, files := range p.personFile {
 		for _, file := range files {
 			result = append(result, file)
@@ -98,7 +98,7 @@ func (p *PeopleRelations) GetOrCreatePersonRepo(personID UUID, repoID UUID) *Per
 }
 
 func (p *PeopleRelations) ListRepositories() []*PersonRepository {
-	result := make([]*PersonRepository, 100)
+	var result []*PersonRepository
 	for _, repos := range p.personRepo {
 		for _, repo := range repos {
 			result = append(result, repo)

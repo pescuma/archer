@@ -148,7 +148,7 @@ func MarkDeletedFilesAndUnmarkExistingOnes(filesDB *model.Files, proj *model.Pro
 }
 
 func AddFiles(filesDB *model.Files, proj *model.Project, dir *model.ProjectDirectory, filter func(path string, isDir bool) bool) error {
-	err := filepath.WalkDir(proj.RootDir, func(path string, entry fs.DirEntry, err error) error {
+	return filepath.WalkDir(proj.RootDir, func(path string, entry fs.DirEntry, err error) error {
 		switch {
 		case err != nil:
 			return nil
@@ -170,8 +170,4 @@ func AddFiles(filesDB *model.Files, proj *model.Project, dir *model.ProjectDirec
 			return nil
 		}
 	})
-	if err != nil {
-		return err
-	}
-	return nil
 }
