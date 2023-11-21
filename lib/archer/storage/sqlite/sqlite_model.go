@@ -98,7 +98,6 @@ type sqlFile struct {
 	UpdatedAt time.Time
 
 	CommitFiles []sqlRepositoryCommitFile `gorm:"foreignKey:FileID"`
-	Lines       []sqlFileLine             `gorm:"foreignKey:FileID"`
 	People      []sqlPersonFile           `gorm:"foreignKey:FileID"`
 }
 
@@ -115,9 +114,6 @@ type sqlFileLine struct {
 
 	Type model.FileLineType
 	Text string
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
 }
 
 type sqlMonthLines struct {
@@ -153,7 +149,6 @@ type sqlPerson struct {
 
 	CommitAuthors    []sqlRepositoryCommit `gorm:"foreignKey:AuthorID"`
 	CommitCommitters []sqlRepositoryCommit `gorm:"foreignKey:CommitterID"`
-	FileLineAuthors  []sqlFileLine         `gorm:"foreignKey:AuthorID"`
 	Repositories     []sqlPersonRepository `gorm:"foreignKey:PersonID"`
 }
 
@@ -239,7 +234,6 @@ type sqlRepositoryCommit struct {
 	UpdatedAt time.Time
 
 	CommitFiles []sqlRepositoryCommitFile `gorm:"foreignKey:CommitID"`
-	Lines       []sqlFileLine             `gorm:"foreignKey:CommitID"`
 }
 
 type sqlRepositoryCommitFile struct {

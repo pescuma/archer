@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/pescuma/archer/lib/archer"
 	"github.com/pescuma/archer/lib/archer/importers/common"
@@ -92,15 +93,20 @@ func (i *gomodImporter) process(projsDB *model.Projects, filesDB *model.Files, p
 	proj.RootDir = filepath.Dir(path)
 	proj.ProjectFile = path
 	proj.Dependencies = make(map[string]*model.ProjectDependency)
+	proj.SeenAt(time.Now())
 
 	dir := proj.GetDirectory(".")
 	dir.Type = model.SourceDir
+	dir.SeenAt(time.Now())
 
 	projFile := filesDB.GetOrCreateFile(path)
 	projFile.ProjectID = &proj.ID
 	projFile.ProjectDirectoryID = &dir.ID
+	projFile.SeenAt(time.Now())
 
-	proj.RepositoryID = projFile.RepositoryID
+	if projFile.RepositoryID == nil {
+		proj.RepositoryID = projFile.RepositoryID
+	}
 
 	for _, req := range ast.Require {
 		i.addDep(projsDB, proj, req.Mod)

@@ -140,7 +140,7 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 			}
 		}
 
-		err = g.importChanges(storage, filesDB, peopleRelationsDB, repo, gitRepo)
+		err = g.importChanges(storage, filesDB, projectsDB, peopleRelationsDB, repo, gitRepo)
 		if err != nil {
 			return err
 		}
@@ -357,7 +357,8 @@ func (g *gitHistoryImporter) countChangesToImport(repo *model.Repository, gitRep
 	return imported, nil
 }
 
-func (g *gitHistoryImporter) importChanges(storage archer.Storage, filesDB *model.Files, peopleRelationsDB *model.PeopleRelations,
+func (g *gitHistoryImporter) importChanges(storage archer.Storage,
+	filesDB *model.Files, projsDB *model.Projects, peopleRelationsDB *model.PeopleRelations,
 	repo *model.Repository, gitRepo *git.Repository,
 ) error {
 	imported, err := g.countChangesToImport(repo, gitRepo)
@@ -380,6 +381,11 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage, filesDB *mode
 		fmt.Printf("%v: Writing results...\n", repo.Name)
 
 		err := storage.WriteFiles(filesDB)
+		if err != nil {
+			return nil
+		}
+
+		err = storage.WriteProjects(projsDB)
 		if err != nil {
 			return nil
 		}
@@ -480,6 +486,12 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage, filesDB *mode
 			file.RepositoryID = &repo.ID
 			file.SeenAt(commit.Date, commit.DateAuthored)
 
+			if file.ProjectID != nil {
+				proj := projsDB.GetByID(*file.ProjectID)
+				proj.SeenAt(commit.Date, commit.DateAuthored)
+				proj.RepositoryID = &repo.ID
+			}
+
 			peopleRelationsDB.GetOrCreatePersonFile(commit.AuthorID, file.ID).SeenAt(commit.Date, commit.DateAuthored)
 			peopleRelationsDB.GetOrCreatePersonFile(commit.CommitterID, file.ID).SeenAt(commit.Date, commit.DateAuthored)
 
@@ -487,6 +499,12 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage, filesDB *mode
 				oldFile := filesDB.GetFileByID(of)
 				oldFile.RepositoryID = &repo.ID
 				oldFile.SeenAt(commit.Date, commit.DateAuthored)
+
+				if oldFile.ProjectID != nil {
+					proj := projsDB.GetByID(*oldFile.ProjectID)
+					proj.SeenAt(commit.Date, commit.DateAuthored)
+					proj.RepositoryID = &repo.ID
+				}
 
 				peopleRelationsDB.GetOrCreatePersonFile(commit.AuthorID, oldFile.ID).SeenAt(commit.Date, commit.DateAuthored)
 				peopleRelationsDB.GetOrCreatePersonFile(commit.CommitterID, oldFile.ID).SeenAt(commit.Date, commit.DateAuthored)
@@ -931,16 +949,6 @@ func (g *gitHistoryImporter) propagateChangesToParents(storage archer.Storage, r
 		}
 
 		repo.FilesTotal = len(files)
-	}
-
-	for _, p := range projectsDB.ListProjects(model.FilterExcludeExternal) {
-		projFile := filesDB.GetFile(p.ProjectFile)
-		if projFile != nil {
-			p.RepositoryID = projFile.RepositoryID
-			p.SeenAt(projFile.FirstSeen, projFile.LastSeen)
-		} else {
-			p.RepositoryID = nil
-		}
 	}
 
 	return nil

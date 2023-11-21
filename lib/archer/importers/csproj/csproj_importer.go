@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gobwas/glob"
 	"github.com/hashicorp/go-set/v2"
@@ -95,15 +96,20 @@ func (i *csprojImporter) process(projsDB *model.Projects, filesDB *model.Files, 
 	proj.RootDir = filepath.Dir(path)
 	proj.ProjectFile = path
 	proj.Dependencies = make(map[string]*model.ProjectDependency)
+	proj.SeenAt(time.Now())
 
 	dir := proj.GetDirectory(".")
 	dir.Type = model.SourceDir
+	dir.SeenAt(time.Now())
 
 	projFile := filesDB.GetOrCreateFile(path)
 	projFile.ProjectID = &proj.ID
 	projFile.ProjectDirectoryID = &dir.ID
+	projFile.SeenAt(time.Now())
 
-	proj.RepositoryID = projFile.RepositoryID
+	if projFile.RepositoryID != nil {
+		proj.RepositoryID = projFile.RepositoryID
+	}
 
 	excludes := set.New[string](10)
 
@@ -256,6 +262,7 @@ func (i *csprojImporter) addFiles(filesDB *model.Files, proj *model.Project, dir
 					file := filesDB.GetOrCreateFile(file)
 					file.ProjectID = &proj.ID
 					file.ProjectDirectoryID = &dir.ID
+					file.SeenAt(time.Now())
 				}
 				return nil
 			}
@@ -270,6 +277,7 @@ func (i *csprojImporter) addFiles(filesDB *model.Files, proj *model.Project, dir
 		file := filesDB.GetOrCreateFile(path)
 		file.ProjectID = &proj.ID
 		file.ProjectDirectoryID = &dir.ID
+		file.SeenAt(time.Now())
 	}
 
 	return nil

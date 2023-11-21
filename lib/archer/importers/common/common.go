@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/pescuma/archer/lib/archer/model"
 	"github.com/pescuma/archer/lib/archer/utils"
@@ -166,6 +167,7 @@ func AddFiles(filesDB *model.Files, proj *model.Project, dir *model.ProjectDirec
 				file := filesDB.GetOrCreateFile(path)
 				file.ProjectID = &proj.ID
 				file.ProjectDirectoryID = &dir.ID
+				file.SeenAt(time.Now())
 			}
 			return nil
 		}

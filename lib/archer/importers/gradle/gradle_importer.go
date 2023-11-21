@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/samber/lo"
 
@@ -144,11 +145,15 @@ func (g *gradleImporter) importBasicInfo(projsDB *model.Projects, filesDB *model
 	proj.Type = model.CodeType
 	proj.RootDir = projDir
 	proj.ProjectFile = projFileName
+	proj.SeenAt(time.Now())
 
 	projFile := filesDB.GetOrCreateFile(projFileName)
 	projFile.ProjectID = &proj.ID
+	projFile.SeenAt(time.Now())
 
-	proj.RepositoryID = projFile.RepositoryID
+	if projFile.RepositoryID != nil {
+		proj.RepositoryID = projFile.RepositoryID
+	}
 
 	return nil
 }
@@ -218,11 +223,13 @@ func (g *gradleImporter) importDirectory(files *model.Files, proj *model.Project
 
 			dir = proj.GetDirectory(rootRel)
 			dir.Type = dirType
+			dir.SeenAt(time.Now())
 		}
 
 		file := files.GetOrCreateFile(path)
 		file.ProjectID = &proj.ID
 		file.ProjectDirectoryID = &dir.ID
+		file.SeenAt(time.Now())
 
 		return nil
 	})
