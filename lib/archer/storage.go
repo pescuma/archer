@@ -23,7 +23,6 @@ type Storage interface {
 	LoadProjects() (*model.Projects, error)
 	WriteProjects(projs *model.Projects) error
 	WriteProject(proj *model.Project) error
-	QueryProjects(file string, proj string, repo string, person string) ([]model.UUID, error)
 
 	LoadFiles() (*model.Files, error)
 	WriteFiles(files *model.Files) error
@@ -32,13 +31,11 @@ type Storage interface {
 	LoadFileContents(fileID model.UUID) (*model.FileContents, error)
 	WriteFileContents(contents *model.FileContents) error
 	QueryBlamePerAuthor() ([]*BlamePerAuthor, error)
-	QueryFiles(file string, proj string, repo string, person string) ([]model.UUID, error)
 
 	LoadPeople() (*model.People, error)
 	WritePeople(people *model.People) error
-	LoadPeopleRepositories() (*model.PeopleRepositories, error)
-	WritePeopleRepositories(prs *model.PeopleRepositories) error
-	QueryPeople(file string, proj string, repo string, person string) ([]model.UUID, error)
+	LoadPeopleRelations() (*model.PeopleRelations, error)
+	WritePeopleRelations(prs *model.PeopleRelations) error
 
 	LoadRepositories() (*model.Repositories, error)
 	LoadRepository(rootDir string) (*model.Repository, error)
@@ -47,10 +44,10 @@ type Storage interface {
 	WriteCommit(repo *model.Repository, commit *model.RepositoryCommit) error
 	LoadRepositoryCommitFiles(repo *model.Repository, commit *model.RepositoryCommit) (*model.RepositoryCommitFiles, error)
 	WriteRepositoryCommitFiles(files []*model.RepositoryCommitFiles) error
-	QueryRepositories(file string, proj string, repo string, person string) ([]model.UUID, error)
 	QueryCommits(file string, proj string, repo string, person string) ([]model.UUID, error)
-	QuerySurvivedLines(file string, proj string, repo string, person string) ([]*SurvivedLineCount, error)
-	WriteSurvivedLinesCache() error
+
+	LoadMonthlyStats() (*model.MonthlyStats, error)
+	WriteMonthlyStats(stats *model.MonthlyStats) error
 
 	LoadConfig() (*map[string]string, error)
 	WriteConfig(*map[string]string) error
@@ -59,15 +56,11 @@ type Storage interface {
 type StorageFactory = func(path string) (Storage, error)
 
 type BlamePerAuthor struct {
-	AuthorID model.UUID
-	CommitID model.UUID
-	FileID   model.UUID
-	LineType model.FileLineType
-	Lines    int
-}
-
-type SurvivedLineCount struct {
-	Month    string
-	LineType model.FileLineType
-	Lines    int
+	AuthorID     model.UUID
+	CommitterID  model.UUID
+	RepositoryID model.UUID
+	CommitID     model.UUID
+	FileID       model.UUID
+	LineType     model.FileLineType
+	Lines        int
 }

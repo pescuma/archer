@@ -5,28 +5,47 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hashicorp/go-set/v2"
 	"github.com/pescuma/archer/lib/archer/model"
+	"github.com/pescuma/archer/lib/archer/utils"
 	"github.com/samber/lo"
 )
+
+func (s *server) createPersonFilter(person string) (map[model.UUID]bool, error) {
+	person = prepareToSearch(person)
+	if person == "" {
+		return nil, nil
+	}
+
+	people, err := s.listProjects("", "", "", person)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[model.UUID]bool, len(people))
+	for _, p := range people {
+		result[p.ID] = true
+	}
+	return result, nil
+}
 
 func (s *server) listPeople(file string, proj string, repo string, person string) ([]*model.Person, error) {
 	return s.filterPeople(s.people.ListPeople(), file, proj, repo, person)
 }
 
 func (s *server) filterPeople(col []*model.Person, file string, proj string, repo string, person string) ([]*model.Person, error) {
-	file = prepareToSearch(file)
-	proj = prepareToSearch(proj)
-	repo = prepareToSearch(repo)
 	person = prepareToSearch(person)
 
-	var ids *set.Set[model.UUID]
-	if file != "" || proj != "" || repo != "" {
-		r, err := s.storage.QueryPeople(file, proj, repo, person)
-		if err != nil {
-			return nil, err
-		}
-		ids = set.From(r)
+	fileIDs, err := s.createFileFilter(file)
+	if err != nil {
+		return nil, err
+	}
+	projIDs, err := s.createProjectFilter(proj)
+	if err != nil {
+		return nil, err
+	}
+	repoIDs, err := s.createRepoFilter(repo)
+	if err != nil {
+		return nil, err
 	}
 
 	return lo.Filter(col, func(i *model.Person, index int) bool {
@@ -42,8 +61,33 @@ func (s *server) filterPeople(col []*model.Person, file string, proj string, rep
 			}
 		}
 
-		if ids != nil && !ids.Contains(i.ID) {
-			return false
+		if fileIDs != nil {
+			fs := s.peopleRelations.ListFilesByPerson(i.ID)
+			if !utils.MapKeysHaveIntersection(fs, fileIDs) {
+				return false
+			}
+		}
+
+		if projIDs != nil {
+			fs := s.peopleRelations.ListFilesByPerson(i.ID)
+			found := false
+			for _, pf := range fs {
+				f := s.files.GetFileByID(pf.FileID)
+				if f != nil && f.ProjectID != nil && projIDs[*f.ProjectID] {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return false
+			}
+		}
+
+		if repoIDs != nil {
+			rs := s.peopleRelations.ListReposByPerson(i.ID)
+			if !utils.MapKeysHaveIntersection(rs, repoIDs) {
+				return false
+			}
 		}
 
 		return true
@@ -66,12 +110,8 @@ func (s *server) sortPeople(col []*model.Person, field string, asc *bool) error 
 		return sortBy(col, func(r *model.Person) string { return r.ListNames()[0] }, *asc)
 	case "emails":
 		return sortBy(col, func(r *model.Person) string { return r.ListEmails()[0] }, *asc)
-	case "blame.lines":
-		return sortBy(col, func(r *model.Person) int { return r.Blame.Lines }, *asc)
-	case "blame.files":
-		return sortBy(col, func(r *model.Person) int { return r.Blame.Files }, *asc)
-	case "blame.bytes":
-		return sortBy(col, func(r *model.Person) int { return r.Blame.Bytes }, *asc)
+	case "blame":
+		return sortBy(col, func(r *model.Person) int { return r.Blame.Total() }, *asc)
 	case "changes.total":
 		return sortBy(col, func(r *model.Person) int { return r.Changes.Total }, *asc)
 	case "changes.in6Months":
@@ -97,7 +137,7 @@ func (s *server) toPerson(p *model.Person) gin.H {
 		"name":      p.Name,
 		"names":     p.ListNames(),
 		"emails":    p.ListEmails(),
-		"blame":     s.toSize(p.Blame),
+		"blame":     encodeMetric(p.Blame.Total()),
 		"changes":   s.toChanges(p.Changes),
 		"firstSeen": encodeDate(p.FirstSeen),
 		"lastSeen":  encodeDate(p.LastSeen),

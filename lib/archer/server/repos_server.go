@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
-	"github.com/pescuma/archer/lib/archer"
 	"github.com/pescuma/archer/lib/archer/model"
 	"github.com/samber/lo"
 )
@@ -205,40 +204,44 @@ func (s *server) statsChangedLines(params *StatsLinesParams) (any, error) {
 }
 
 func (s *server) statsSurvivedLines(params *StatsLinesParams) (any, error) {
-	file := prepareToSearch(params.FilterFile)
-	proj := prepareToSearch(params.FilterProject)
-	repo := prepareToSearch(params.FilterRepo)
-	person := prepareToSearch(params.FilterPerson)
+	//fileIDs, err := s.createFileFilter(params.FilterFile)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//projIDs, err := s.createProjectFilter(params.FilterProject)
+	//if err != nil {
+	//	return nil, err
+	//}
 
-	s1, err := s.storage.QuerySurvivedLines(file, proj, repo, person)
+	repoIDs, err := s.createRepoFilter(params.FilterRepo)
 	if err != nil {
 		return nil, err
 	}
 
-	s2 := lo.GroupBy(s1, func(i *archer.SurvivedLineCount) string {
-		return i.Month
-	})
-	s3 := lo.MapValues(s2, func(is []*archer.SurvivedLineCount, _ string) gin.H {
-		blank := 0
-		comment := 0
-		code := 0
-		for _, i := range is {
-			switch i.LineType {
-			case model.BlankFileLine:
-				blank += i.Lines
-			case model.CommentFileLine:
-				comment += i.Lines
-			case model.CodeFileLine:
-				code += i.Lines
+	personIDs, err := s.createPersonFilter(params.FilterPerson)
 
-			}
+	result := make(map[string]map[string]int)
+	for _, l := range s.stats.ListLines() {
+		if repoIDs != nil && !repoIDs[l.RepositoryID] {
+			continue
 		}
-		return gin.H{
-			"blank":   blank,
-			"comment": comment,
-			"code":    code,
+		if personIDs != nil && !personIDs[l.AuthorID] && !personIDs[l.CommitterID] {
+			continue
 		}
-	})
 
-	return s3, nil
+		m, ok := result[l.Month]
+		if !ok {
+			m = make(map[string]int, 3)
+			m["blank"] = 0
+			m["comment"] = 0
+			m["code"] = 0
+			result[l.Month] = m
+		}
+
+		m["blank"] += l.Blame.Blank
+		m["comment"] += l.Blame.Comment
+		m["code"] += l.Blame.Code
+	}
+	return result, nil
 }

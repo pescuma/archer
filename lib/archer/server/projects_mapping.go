@@ -5,29 +5,64 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hashicorp/go-set/v2"
 	"github.com/pescuma/archer/lib/archer/model"
 	"github.com/pescuma/archer/lib/archer/utils"
 	"github.com/samber/lo"
 )
+
+func (s *server) createProjectFilter(proj string) (map[model.UUID]bool, error) {
+	proj = prepareToSearch(proj)
+	if proj == "" {
+		return nil, nil
+	}
+
+	projects, err := s.listProjects("", proj, "", "")
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[model.UUID]bool, len(projects))
+	for _, p := range projects {
+		result[p.ID] = true
+	}
+	return result, nil
+}
 
 func (s *server) listProjects(file string, proj string, repo string, person string) ([]*model.Project, error) {
 	return s.filterProjects(proj, s.projects.ListProjects(model.FilterExcludeExternal), file, repo, person)
 }
 
 func (s *server) filterProjects(proj string, col []*model.Project, file string, repo string, person string) ([]*model.Project, error) {
-	file = prepareToSearch(file)
 	proj = prepareToSearch(proj)
-	repo = prepareToSearch(repo)
-	person = prepareToSearch(person)
 
-	var ids *set.Set[model.UUID]
-	if file != "" || repo != "" || person != "" {
-		r, err := s.storage.QueryProjects(file, proj, repo, person)
-		if err != nil {
-			return nil, err
+	fileIDs, err := s.createFileFilter(file)
+	if err != nil {
+		return nil, err
+	}
+	repoIDs, err := s.createRepoFilter(repo)
+	if err != nil {
+		return nil, err
+	}
+	personIDs, err := s.createPersonFilter(proj)
+	if err != nil {
+		return nil, err
+	}
+
+	filesPerProject := make(map[model.UUID]map[model.UUID]bool)
+	for _, f := range s.files.ListFiles() {
+		if f.ProjectID == nil {
+			continue
 		}
-		ids = set.From(r)
+
+		projID := *f.ProjectID
+
+		fs, ok := filesPerProject[projID]
+		if !ok {
+			fs = make(map[model.UUID]bool)
+			filesPerProject[projID] = fs
+		}
+
+		fs[f.ID] = true
 	}
 
 	return lo.Filter(col, func(i *model.Project, index int) bool {
@@ -35,8 +70,38 @@ func (s *server) filterProjects(proj string, col []*model.Project, file string, 
 			return false
 		}
 
-		if ids != nil && !ids.Contains(i.ID) {
+		if fileIDs != nil {
+			fs, ok := filesPerProject[i.ID]
+			if !ok {
+				return false
+			}
+
+			if !utils.MapKeysHaveIntersection(fs, fileIDs) {
+				return false
+			}
+		}
+
+		if repoIDs != nil && (i.RepositoryID == nil || !repoIDs[*i.RepositoryID]) {
 			return false
+		}
+
+		if personIDs != nil {
+			files, ok := filesPerProject[i.ID]
+			if !ok {
+				return false
+			}
+
+			found := false
+			for fileID := range files {
+				people := s.peopleRelations.ListPeopleByFile(fileID)
+				if utils.MapKeysHaveIntersection(people, personIDs) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return false
+			}
 		}
 
 		return true

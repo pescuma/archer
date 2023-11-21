@@ -276,3 +276,13 @@ func FirstUpper(str string) string {
 
 	return strings.ToUpper(str[0:1]) + str[1:]
 }
+
+func MapKeysHaveIntersection[K comparable, V1 any, V2 any](m1 map[K]V1, m2 map[K]V2) bool {
+	for k, _ := range m1 {
+		if _, ok := m2[k]; ok {
+			return true
+		}
+	}
+
+	return false
+}

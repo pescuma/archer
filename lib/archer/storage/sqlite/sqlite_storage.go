@@ -25,7 +25,8 @@ import (
 )
 
 type sqliteStorage struct {
-	db *gorm.DB
+	mainDB      *gorm.DB
+	fileLinesDB *gorm.DB
 
 	configs     map[string]*sqlConfig
 	projs       map[model.UUID]*sqlProject
@@ -33,34 +34,34 @@ type sqliteStorage struct {
 	projDirs    map[model.UUID]*sqlProjectDirectory
 	files       map[model.UUID]*sqlFile
 	people      map[model.UUID]*sqlPerson
-	peopleRepos map[string]*sqlPeopleRepository
+	peopleRepos map[string]*sqlPersonRepository
+	peopleFiles map[string]*sqlPersonFile
 	area        map[model.UUID]*sqlProductArea
 	repos       map[model.UUID]*sqlRepository
 	repoCommits map[model.UUID]*sqlRepositoryCommit
+	monthLines  map[model.UUID]*sqlMonthLines
 }
 
-func NewSqliteStorage(file string) (archer.Storage, error) {
-	if strings.HasSuffix(file, string(filepath.Separator)) {
-		file = file + "archer.db"
-	}
-
-	if _, err := os.Stat(file); err != nil {
-		fmt.Printf("Creating workspace at %v\n", file)
-		root := filepath.Dir(file)
-		err = os.MkdirAll(root, 0o700)
+func NewSqliteStorage(path string) (archer.Storage, error) {
+	if _, err := os.Stat(path); err != nil {
+		fmt.Printf("Creating workspace at %v\n", path)
+		err = os.MkdirAll(path, 0o700)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return newFrom(file + "?_pragma=journal_mode(WAL)")
+	mainFile := filepath.Join(path, "archer_main.db")
+	fileLinesFile := filepath.Join(path, "archer_file_lines.db")
+
+	return newFrom(mainFile+"?_pragma=journal_mode(WAL)", fileLinesFile+"?_pragma=journal_mode(WAL)")
 }
 
 func NewSqliteMemoryStorage(_ string) (archer.Storage, error) {
-	return newFrom(":memory:")
+	return newFrom(":memory:", ":memory:")
 }
 
-func newFrom(dsn string) (archer.Storage, error) {
+func newFrom(mainDSN string, fileLinesDSN string) (archer.Storage, error) {
 	newLogger := logger.New(
 		log.New(os.Stdout, "\r\n", log.LstdFlags),
 		logger.Config{
@@ -71,7 +72,7 @@ func newFrom(dsn string) (archer.Storage, error) {
 		},
 	)
 
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
+	mainDB, err := gorm.Open(sqlite.Open(mainDSN), &gorm.Config{
 		NamingStrategy: &NamingStrategy{},
 		Logger:         newLogger,
 	})
@@ -79,26 +80,44 @@ func newFrom(dsn string) (archer.Storage, error) {
 		return nil, err
 	}
 
-	err = db.AutoMigrate(
+	err = mainDB.AutoMigrate(
 		&sqlConfig{},
 		&sqlProject{}, &sqlProjectDependency{}, &sqlProjectDirectory{},
-		&sqlFile{}, &sqlFileLine{},
-		&sqlPerson{}, &sqlPeopleRepository{}, &sqlProductArea{},
+		&sqlFile{},
+		&sqlPerson{}, &sqlPersonRepository{}, &sqlPersonFile{}, &sqlProductArea{},
 		&sqlRepository{}, &sqlRepositoryCommit{}, &sqlRepositoryCommitFile{},
+		&sqlMonthLines{},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	fileLinesDB, err := gorm.Open(sqlite.Open(fileLinesDSN), &gorm.Config{
+		NamingStrategy: &NamingStrategy{},
+		Logger:         newLogger,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	err = fileLinesDB.AutoMigrate(
+		&sqlFileLine{},
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	return &sqliteStorage{
-		db:          db,
+		mainDB:      mainDB,
+		fileLinesDB: fileLinesDB,
 		configs:     map[string]*sqlConfig{},
 		projs:       map[model.UUID]*sqlProject{},
 		projDeps:    map[model.UUID]*sqlProjectDependency{},
 		projDirs:    map[model.UUID]*sqlProjectDirectory{},
 		files:       map[model.UUID]*sqlFile{},
 		people:      map[model.UUID]*sqlPerson{},
-		peopleRepos: map[string]*sqlPeopleRepository{},
+		peopleRepos: map[string]*sqlPersonRepository{},
+		peopleFiles: map[string]*sqlPersonFile{},
 		repos:       map[model.UUID]*sqlRepository{},
 		repoCommits: map[model.UUID]*sqlRepositoryCommit{},
 	}, nil
@@ -108,7 +127,7 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 	result := model.NewProjects()
 
 	var projs []*sqlProject
-	err := s.db.Find(&projs).Error
+	err := s.mainDB.Find(&projs).Error
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +137,7 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 	})
 
 	var deps []*sqlProjectDependency
-	err = s.db.Find(&deps).Error
+	err = s.mainDB.Find(&deps).Error
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +147,7 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 	})
 
 	var dirs []*sqlProjectDirectory
-	err = s.db.Find(&dirs).Error
+	err = s.mainDB.Find(&dirs).Error
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +245,7 @@ func (s *sqliteStorage) writeProjects(projs []*model.Project) error {
 	}
 
 	now := time.Now().Local()
-	db := s.db.Session(&gorm.Session{
+	db := s.mainDB.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
 		CreateBatchSize: 1000,
 	})
@@ -257,42 +276,11 @@ func (s *sqliteStorage) writeProjects(projs []*model.Project) error {
 	return nil
 }
 
-func (s *sqliteStorage) QueryProjects(file string, proj string, repo string, person string) ([]model.UUID, error) {
-	var result []model.UUID
-
-	err := s.db.Raw(`
-select distinct p.id
-from projects p
-         left join files f
-                   on f.project_id = p.id
-         left join repositories r
-                   on r.id = p.repository_id
-         left join people_repositories pr
-                   on pr.repository_id = r.id
-         left join people pe
-                   on pe.id = pr.person_id
-where (@proj = '' or p.name like @proj)
-  and (@file = '' or f.name like @file)
-  and (@repo = '' or r.name like @repo)
-  and (@person = '' or pe.names like @person or pe.emails like @person)
-		`,
-		sql.Named("proj", "%"+proj+"%"),
-		sql.Named("file", "%"+file+"%"),
-		sql.Named("repo", "%"+repo+"%"),
-		sql.Named("person", "%"+person+"%"),
-	).Scan(&result).Error
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
 func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 	result := model.NewFiles()
 
 	var files []*sqlFile
-	err := s.db.Find(&files).Error
+	err := s.mainDB.Find(&files).Error
 	if err != nil {
 		return nil, err
 	}
@@ -346,7 +334,7 @@ func (s *sqliteStorage) writeFiles(all []*model.File) error {
 	}
 
 	now := time.Now().Local()
-	db := s.db.Session(&gorm.Session{
+	db := s.mainDB.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
 		CreateBatchSize: 1000,
 	})
@@ -365,7 +353,7 @@ func (s *sqliteStorage) LoadFileContents(fileID model.UUID) (*model.FileContents
 	result := model.NewFileContents(fileID)
 
 	var lines []*sqlFileLine
-	err := s.db.Where("file_id = ?", fileID).Find(&lines).Error
+	err := s.fileLinesDB.Where("file_id = ?", fileID).Find(&lines).Error
 	if err != nil {
 		return nil, err
 	}
@@ -381,8 +369,12 @@ func (s *sqliteStorage) LoadFileContents(fileID model.UUID) (*model.FileContents
 			return nil, fmt.Errorf("invalid line number: %v (should be %v)", line.Line, sf.Line)
 		}
 
-		line.AuthorID = sf.AuthorID
+		line.ProjectID = sf.ProjectID
+		line.RepositoryID = sf.RepositoryID
 		line.CommitID = sf.CommitID
+		line.AuthorID = sf.AuthorID
+		line.CommitterID = sf.CommitterID
+		line.Date = sf.Date
 		line.Type = sf.Type
 		line.Text = sf.Text
 	}
@@ -398,7 +390,7 @@ func (s *sqliteStorage) WriteFileContents(contents *model.FileContents) error {
 	}
 
 	now := time.Now().Local()
-	db := s.db.Session(&gorm.Session{
+	db := s.fileLinesDB.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
 		CreateBatchSize: 1000,
 	})
@@ -419,42 +411,11 @@ func (s *sqliteStorage) WriteFileContents(contents *model.FileContents) error {
 func (s *sqliteStorage) QueryBlamePerAuthor() ([]*archer.BlamePerAuthor, error) {
 	var result []*archer.BlamePerAuthor
 
-	err := s.db.Raw(`
-select author_id, commit_id, file_id, type line_type, count(*) lines
+	err := s.fileLinesDB.Raw(`
+select author_id, committer_id, repository_id, commit_id, file_id, type line_type, count(*) lines
 from file_lines l
-group by author_id, commit_id, file_id, type
+group by author_id, committer_id, repository_id, commit_id, file_id, type
 	`).Scan(&result).Error
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-func (s *sqliteStorage) QueryFiles(file string, proj string, repo string, person string) ([]model.UUID, error) {
-	var result []model.UUID
-
-	err := s.db.Raw(`
-select distinct f.id
-from files f
-         left join projects p
-                   on p.id = f.project_id
-         left join repositories r
-                   on r.id = f.repository_id
-         left join people_repositories pr
-                   on pr.repository_id = r.id
-         left join people pe
-                   on pe.id = pr.person_id
-where (@proj = '' or p.name like @proj)
-  and (@file = '' or f.name like @file)
-  and (@repo = '' or r.name like @repo)
-  and (@person = '' or pe.names like @person or pe.emails like @person)
-		`,
-		sql.Named("proj", "%"+proj+"%"),
-		sql.Named("file", "%"+file+"%"),
-		sql.Named("repo", "%"+repo+"%"),
-		sql.Named("person", "%"+person+"%"),
-	).Scan(&result).Error
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +427,7 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 	result := model.NewPeople()
 
 	var people []*sqlPerson
-	err := s.db.Find(&people).Error
+	err := s.mainDB.Find(&people).Error
 	if err != nil {
 		return nil, err
 	}
@@ -476,7 +437,7 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 	})
 
 	var areas []*sqlProductArea
-	err = s.db.Find(&areas).Error
+	err = s.mainDB.Find(&areas).Error
 	if err != nil {
 		return nil, err
 	}
@@ -493,7 +454,7 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 		for _, email := range sp.Emails {
 			p.AddEmail(email)
 		}
-		p.Blame = toModelSize(sp.Blame)
+		p.Blame = toModelBlame(sp.Blame)
 		p.Changes = toModelChanges(sp.Changes)
 		p.Data = decodeMap(sp.Data)
 		p.FirstSeen = sp.FirstSeen
@@ -531,7 +492,7 @@ func (s *sqliteStorage) WritePeople(peopleDB *model.People) error {
 	}
 
 	now := time.Now().Local()
-	db := s.db.Session(&gorm.Session{
+	db := s.mainDB.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
 		CreateBatchSize: 1000,
 	})
@@ -555,94 +516,87 @@ func (s *sqliteStorage) WritePeople(peopleDB *model.People) error {
 	return nil
 }
 
-func (s *sqliteStorage) LoadPeopleRepositories() (*model.PeopleRepositories, error) {
-	result := model.NewPeopleRepositories()
+func compositeKey(ids ...model.UUID) string {
+	return strings.Join(lo.Map(ids, func(i model.UUID, _ int) string { return string(i) }), "\n")
+}
 
-	var sprs []*sqlPeopleRepository
-	err := s.db.Find(&sprs).Error
+func (s *sqliteStorage) LoadPeopleRelations() (*model.PeopleRelations, error) {
+	result := model.NewPeopleRelations()
+
+	var rs []*sqlPersonRepository
+	err := s.mainDB.Find(&rs).Error
 	if err != nil {
 		return nil, err
 	}
 
-	s.peopleRepos = lo.Associate(sprs, func(i *sqlPeopleRepository) (string, *sqlPeopleRepository) {
-		return string(i.PersonID) + "\n" + string(i.RepositoryID), i
+	s.peopleRepos = lo.Associate(rs, func(i *sqlPersonRepository) (string, *sqlPersonRepository) {
+		return compositeKey(i.PersonID, i.RepositoryID), i
 	})
 
-	for _, spr := range sprs {
-		pr := result.GetOrCreatePerson(spr.PersonID).GetOrCreateRepository(spr.RepositoryID)
-		pr.FirstSeen = spr.FirstSeen
-		pr.LastSeen = spr.LastSeen
+	var fs []*sqlPersonFile
+	err = s.mainDB.Find(&rs).Error
+	if err != nil {
+		return nil, err
+	}
+
+	s.peopleFiles = lo.Associate(fs, func(i *sqlPersonFile) (string, *sqlPersonFile) {
+		return compositeKey(i.PersonID, i.FileID), i
+	})
+
+	for _, r := range rs {
+		pr := result.GetOrCreatePersonRepo(r.PersonID, r.RepositoryID)
+		pr.FirstSeen = r.FirstSeen
+		pr.LastSeen = r.LastSeen
+	}
+
+	for _, f := range fs {
+		pr := result.GetOrCreatePersonFile(f.PersonID, f.FileID)
+		pr.FirstSeen = f.FirstSeen
+		pr.LastSeen = f.LastSeen
 	}
 
 	return result, nil
 }
 
-func (s *sqliteStorage) WritePeopleRepositories(prs *model.PeopleRepositories) error {
-	key := func(pr *sqlPeopleRepository) string { return string(pr.PersonID) + "\n" + string(pr.RepositoryID) }
+func (s *sqliteStorage) WritePeopleRelations(prs *model.PeopleRelations) error {
+	var rs []*sqlPersonRepository
+	for _, r := range prs.ListRepositories() {
+		pr := toSqlPersonRepository(r)
+		if prepareChange(&s.peopleRepos, compositeKey(r.PersonID, r.RepositoryID), pr) {
+			rs = append(rs, pr)
+		}
+	}
 
-	var sqlPeopleRepositories []*sqlPeopleRepository
-	for _, p := range prs.List() {
-		for _, r := range p.List() {
-			pr := toSqlPersonRepository(p, r)
-			if prepareChange(&s.peopleRepos, key(pr), pr) {
-				sqlPeopleRepositories = append(sqlPeopleRepositories, pr)
-			}
+	var fs []*sqlPersonFile
+	for _, f := range prs.ListFiles() {
+		pf := toSqlPersonFile(f)
+		if prepareChange(&s.peopleFiles, compositeKey(f.PersonID, f.FileID), pf) {
+			fs = append(fs, pf)
 		}
 	}
 
 	now := time.Now().Local()
-	db := s.db.Session(&gorm.Session{
+	db := s.mainDB.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
 		CreateBatchSize: 1000,
 	})
 
-	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlPeopleRepositories).Error
+	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&rs).Error
+	if err != nil {
+		return err
+	}
+
+	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&fs).Error
 	if err != nil {
 		return err
 	}
 
 	// TODO delete
 
-	addList(&s.peopleRepos, sqlPeopleRepositories, key)
+	addList(&s.peopleRepos, rs, func(pr *sqlPersonRepository) string { return compositeKey(pr.PersonID, pr.RepositoryID) })
+	addList(&s.peopleFiles, fs, func(pr *sqlPersonFile) string { return compositeKey(pr.PersonID, pr.FileID) })
 
 	return nil
-}
-
-func (s *sqliteStorage) QueryPeople(file string, proj string, repo string, person string) ([]model.UUID, error) {
-	var result []model.UUID
-
-	err := s.db.Raw(`
-select distinct pe.id
-from people pe
-         left join people_repositories pr
-                   on pr.person_id = pe.id
-         left join repositories r
-                   on r.id = pr.repository_id
-         left join repository_commits c
-                   on c.repository_id = r.id
-                       and (c.author_id = pe.id or c.committer_id = pe.id)
-         left join repository_commit_files cf
-                   on cf.commit_id = c.id
-         left join files f
-                   on f.id = cf.file_id
-         left join projects p
-                   on p.id = f.project_id
-where (c.ignore is null or c.ignore = 0)
-  and (@proj = '' or p.name like @proj)
-  and (@file = '' or f.name like @file)
-  and (@repo = '' or r.name like @repo)
-  and (@person = '' or pe.names like @person or pe.emails)
-		`,
-		sql.Named("proj", "%"+proj+"%"),
-		sql.Named("file", "%"+file+"%"),
-		sql.Named("repo", "%"+repo+"%"),
-		sql.Named("person", "%"+person+"%"),
-	).Scan(&result).Error
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
 }
 
 func (s *sqliteStorage) LoadRepositories() (*model.Repositories, error) {
@@ -678,7 +632,7 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 	result := model.NewRepositories()
 
 	var repos []*sqlRepository
-	err := s.db.Scopes(scope(repos)).Find(&repos).Error
+	err := s.mainDB.Scopes(scope(repos)).Find(&repos).Error
 	if err != nil {
 		return nil, err
 	}
@@ -692,7 +646,7 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 	}
 
 	var commits []*sqlRepositoryCommit
-	err = s.db.Scopes(scope(repos)).Find(&commits).Error
+	err = s.mainDB.Scopes(scope(repos)).Find(&commits).Error
 	if err != nil {
 		return nil, err
 	}
@@ -724,14 +678,14 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 		c.CommitterID = sc.CommitterID
 		c.DateAuthored = sc.DateAuthored
 		c.AuthorID = sc.AuthorID
+		c.Ignore = sc.Ignore
 		c.FilesModified = decodeMetric(sc.FilesModified)
 		c.FilesCreated = decodeMetric(sc.FilesCreated)
 		c.FilesDeleted = decodeMetric(sc.FilesDeleted)
 		c.LinesModified = decodeMetric(sc.LinesModified)
 		c.LinesAdded = decodeMetric(sc.LinesAdded)
 		c.LinesDeleted = decodeMetric(sc.LinesDeleted)
-		c.LinesSurvived = decodeMetric(sc.LinesSurvived)
-		c.Ignore = sc.Ignore
+		c.Blame = toModelBlame(sc.Blame)
 
 		commitsById[c.ID] = c
 	}
@@ -766,7 +720,7 @@ func (s *sqliteStorage) WriteRepository(repo *model.Repository) error {
 	}
 
 	now := time.Now().Local()
-	db := s.db.Session(&gorm.Session{
+	db := s.mainDB.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
 		CreateBatchSize: 1000,
 	})
@@ -799,7 +753,7 @@ func (s *sqliteStorage) WriteCommit(repo *model.Repository, commit *model.Reposi
 	}
 
 	now := time.Now().Local()
-	db := s.db.Session(&gorm.Session{
+	db := s.mainDB.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
 		CreateBatchSize: 1000,
 	})
@@ -818,7 +772,7 @@ func (s *sqliteStorage) WriteCommit(repo *model.Repository, commit *model.Reposi
 
 func (s *sqliteStorage) LoadRepositoryCommitFiles(repo *model.Repository, commit *model.RepositoryCommit) (*model.RepositoryCommitFiles, error) {
 	var commitFiles []*sqlRepositoryCommitFile
-	err := s.db.Where("commit_id = ?", commit.ID).Find(&commitFiles).Error
+	err := s.mainDB.Where("commit_id = ?", commit.ID).Find(&commitFiles).Error
 	if err != nil {
 		return nil, err
 	}
@@ -827,10 +781,10 @@ func (s *sqliteStorage) LoadRepositoryCommitFiles(repo *model.Repository, commit
 	for _, sf := range commitFiles {
 		file := result.GetOrCreate(sf.FileID)
 		file.OldFileIDs = decodeOldFileIDs(sf.OldFileIDs)
+		file.Change = sf.Change
 		file.LinesModified = decodeMetric(sf.LinesModified)
 		file.LinesAdded = decodeMetric(sf.LinesAdded)
 		file.LinesDeleted = decodeMetric(sf.LinesDeleted)
-		file.LinesSurvived = decodeMetric(sf.LinesSurvived)
 	}
 	return result, nil
 }
@@ -845,7 +799,7 @@ func (s *sqliteStorage) WriteRepositoryCommitFiles(files []*model.RepositoryComm
 	}
 
 	now := time.Now().Local()
-	db := s.db.Session(&gorm.Session{
+	db := s.mainDB.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
 		CreateBatchSize: 1000,
 	})
@@ -860,41 +814,10 @@ func (s *sqliteStorage) WriteRepositoryCommitFiles(files []*model.RepositoryComm
 	return nil
 }
 
-func (s *sqliteStorage) QueryRepositories(file string, proj string, repo string, person string) ([]model.UUID, error) {
-	var result []model.UUID
-
-	err := s.db.Raw(`
-select distinct r.id
-from repositories r
-         left join people_repositories pr
-                   on pr.repository_id = r.id
-         left join people pe
-                   on pe.id = pr.person_id
-         left join files f
-                   on f.repository_id = r.id
-         left join projects p
-                   on p.repository_id = r.id
-where (@proj = '' or p.name like @proj)
-  and (@file = '' or f.name like @file)
-  and (@repo = '' or r.name like @repo)
-  and (@person = '' or pe.names like @person or pe.emails like @person)
-		`,
-		sql.Named("proj", "%"+proj+"%"),
-		sql.Named("file", "%"+file+"%"),
-		sql.Named("repo", "%"+repo+"%"),
-		sql.Named("person", "%"+person+"%"),
-	).Scan(&result).Error
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
 func (s *sqliteStorage) QueryCommits(file string, proj string, repo string, person string) ([]model.UUID, error) {
 	var result []model.UUID
 
-	err := s.db.Raw(`
+	err := s.mainDB.Raw(`
 select distinct c.id
 from repository_commits c
          join repositories r
@@ -927,109 +850,52 @@ where c.ignore = 0
 	return result, nil
 }
 
-func (s *sqliteStorage) QuerySurvivedLines(file string, proj string, repo string, person string) ([]*archer.SurvivedLineCount, error) {
-	var result []*archer.SurvivedLineCount
+func (s *sqliteStorage) LoadMonthlyStats() (*model.MonthlyStats, error) {
+	result := model.NewMonthlyStats()
 
-	if file == "" {
-		err := s.db.Raw(`
-select l.month, l.type line_type, sum(l.lines) lines
-from file_lines_month l
-         join repositories r
-              on r.id = l.repository_id
-         join people pa
-              on pa.id = l.author_id
-         join people pc
-              on pc.id = l.committer_id
-         left join projects p
-                   on p.id = l.project_id
-where (@proj = '' or p.name like @proj)
-  and (@repo = '' or r.name like @repo)
-  and (@person = '' or pc.names like @person or pc.emails like @person or pa.names like @person or pa.emails like @person)
-group by 1, 2
-		`,
-			sql.Named("proj", "%"+proj+"%"),
-			sql.Named("repo", "%"+repo+"%"),
-			sql.Named("person", "%"+person+"%"),
-		).Scan(&result).Error
-		if err != nil {
-			return nil, err
-		}
+	var sqlLines []*sqlMonthLines
+	err := s.mainDB.Find(&sqlLines).Error
+	if err != nil {
+		return nil, err
+	}
 
-	} else {
-		err := s.db.Raw(`
-select strftime('%Y-%m', c.date) month, l.type line_type, count(1) lines
-from files f
-         join file_lines l
-              on l.file_id = f.id
-         left join projects p
-                   on p.id = f.project_id
-         join repository_commits c
-              on c.id = l.commit_id
-         join repositories r
-              on r.id = c.repository_id
-         join people pa
-              on pa.id = c.author_id
-         join people pc
-              on pc.id = c.committer_id
-where c.ignore = 0
-  and f.name like @file
-  and (@proj = '' or p.name like @proj)
-  and (@repo = '' or r.name like @repo)
-  and (@person = '' or pc.names like @person or pc.emails like @person or pa.names like @person or pa.emails like @person)
-group by 1, 2
-		`,
-			sql.Named("proj", "%"+proj+"%"),
-			sql.Named("file", "%"+file+"%"),
-			sql.Named("repo", "%"+repo+"%"),
-			sql.Named("person", "%"+person+"%"),
-		).Scan(&result).Error
-		if err != nil {
-			return nil, err
-		}
+	s.monthLines = lo.Associate(sqlLines, func(i *sqlMonthLines) (model.UUID, *sqlMonthLines) {
+		return i.ID, i
+	})
+
+	for _, sl := range sqlLines {
+		l := result.GetOrCreateLines(sl.Month, sl.RepositoryID, sl.AuthorID, sl.CommitterID, sl.ProjectID)
+		l.ID = sl.ID
+		l.Changes = toModelChanges(sl.Changes)
+		l.Blame = toModelBlame(sl.Blame)
 	}
 
 	return result, nil
 }
 
-func (s *sqliteStorage) WriteSurvivedLinesCache() error {
-	err := s.db.Exec(`drop table file_lines_month`).Error
+func (s *sqliteStorage) WriteMonthlyStats(stats *model.MonthlyStats) error {
+	var sqlLines []*sqlMonthLines
+	for _, f := range stats.ListLines() {
+		sf := toSqlMonthLines(f)
+		if prepareChange(&s.monthLines, sf.ID, sf) {
+			sqlLines = append(sqlLines, sf)
+		}
+	}
+
+	now := time.Now().Local()
+	db := s.mainDB.Session(&gorm.Session{
+		NowFunc:         func() time.Time { return now },
+		CreateBatchSize: 1000,
+	})
+
+	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlLines).Error
 	if err != nil {
 		return err
 	}
 
-	err = s.db.Exec(`
-create table file_lines_month as
-select strftime('%Y-%m', c.date) month,
-       p.id                      project_id,
-       r.id                      repository_id,
-       pa.id                     author_id,
-       pc.id                     committer_id,
-       l.type                    ,
-       count(1)                  lines
-from file_lines l
-         join repository_commits c
-              on c.id = l.commit_id
-         join repositories r
-              on r.id = c.repository_id
-         join people pa
-              on pa.id = c.author_id
-         join people pc
-              on pc.id = c.committer_id
-         join files f
-              on f.id = l.file_id
-         left join projects p
-                   on p.id = f.project_id
-where c.ignore = 0
-group by 1,
-         p.id,
-         r.id,
-         pa.id,
-         pc.id,
-         l.type
-`).Error
-	if err != nil {
-		return err
-	}
+	addList(&s.monthLines, sqlLines, func(s *sqlMonthLines) model.UUID { return s.ID })
+
+	// TODO delete
 
 	return nil
 }
@@ -1038,7 +904,7 @@ func (s *sqliteStorage) LoadConfig() (*map[string]string, error) {
 	result := map[string]string{}
 
 	var sqlConfigs []*sqlConfig
-	err := s.db.Find(&sqlConfigs).Error
+	err := s.mainDB.Find(&sqlConfigs).Error
 	if err != nil {
 		return nil, err
 	}
@@ -1064,7 +930,7 @@ func (s *sqliteStorage) WriteConfig(configs *map[string]string) error {
 	}
 
 	now := time.Now().Local()
-	db := s.db.Session(&gorm.Session{
+	db := s.mainDB.Session(&gorm.Session{
 		NowFunc:         func() time.Time { return now },
 		CreateBatchSize: 1000,
 	})
@@ -1079,6 +945,19 @@ func (s *sqliteStorage) WriteConfig(configs *map[string]string) error {
 	// TODO delete
 
 	return nil
+}
+
+func toSqlMonthLines(l *model.MonthlyStatsLine) *sqlMonthLines {
+	return &sqlMonthLines{
+		ID:           l.ID,
+		Month:        l.Month,
+		RepositoryID: l.RepositoryID,
+		AuthorID:     l.AuthorID,
+		CommitterID:  l.CommitterID,
+		ProjectID:    l.ProjectID,
+		Changes:      toSqlChanges(l.Changes),
+		Blame:        toSqlBlame(l.Blame),
+	}
 }
 
 func toSqlConfig(k string, v string) *sqlConfig {
@@ -1103,6 +982,22 @@ func toModelSize(size *sqlSize) *model.Size {
 		Files: decodeMetric(size.Files),
 		Bytes: decodeMetric(size.Bytes),
 		Other: decodeMap(size.Other),
+	}
+}
+
+func toSqlBlame(blame *model.Blame) *sqlBlame {
+	return &sqlBlame{
+		Code:    encodeMetric(blame.Code),
+		Comment: encodeMetric(blame.Comment),
+		Blank:   encodeMetric(blame.Blank),
+	}
+}
+
+func toModelBlame(blame *sqlBlame) *model.Blame {
+	return &model.Blame{
+		Code:    decodeMetric(blame.Code),
+		Comment: decodeMetric(blame.Comment),
+		Blank:   decodeMetric(blame.Blank),
 	}
 }
 
@@ -1286,12 +1181,16 @@ func toSqlFile(f *model.File) *sqlFile {
 
 func toSqlFileLine(fileID model.UUID, f *model.FileLine) *sqlFileLine {
 	return &sqlFileLine{
-		FileID:   fileID,
-		Line:     f.Line,
-		AuthorID: f.AuthorID,
-		CommitID: f.CommitID,
-		Type:     f.Type,
-		Text:     f.Text,
+		FileID:       fileID,
+		Line:         f.Line,
+		ProjectID:    f.ProjectID,
+		RepositoryID: f.RepositoryID,
+		CommitID:     f.CommitID,
+		AuthorID:     f.AuthorID,
+		Date:         f.Date,
+		CommitterID:  f.CommitterID,
+		Type:         f.Type,
+		Text:         f.Text,
 	}
 }
 
@@ -1301,8 +1200,8 @@ func toSqlPerson(p *model.Person) *sqlPerson {
 		Name:      p.Name,
 		Names:     p.ListNames(),
 		Emails:    p.ListEmails(),
-		Blame:     toSqlSize(p.Blame),
 		Changes:   toSqlChanges(p.Changes),
+		Blame:     toSqlBlame(p.Blame),
 		Data:      encodeMap(p.Data),
 		FirstSeen: p.FirstSeen,
 		LastSeen:  p.LastSeen,
@@ -1311,12 +1210,21 @@ func toSqlPerson(p *model.Person) *sqlPerson {
 	return result
 }
 
-func toSqlPersonRepository(p *model.PersonRepositories, r *model.PersonRepository) *sqlPeopleRepository {
-	return &sqlPeopleRepository{
-		PersonID:     p.PersonID,
+func toSqlPersonRepository(r *model.PersonRepository) *sqlPersonRepository {
+	return &sqlPersonRepository{
+		PersonID:     r.PersonID,
 		RepositoryID: r.RepositoryID,
 		FirstSeen:    r.FirstSeen,
 		LastSeen:     r.LastSeen,
+	}
+}
+
+func toSqlPersonFile(f *model.PersonFile) *sqlPersonFile {
+	return &sqlPersonFile{
+		PersonID:  f.PersonID,
+		FileID:    f.FileID,
+		FirstSeen: f.FirstSeen,
+		LastSeen:  f.LastSeen,
 	}
 }
 
@@ -1358,14 +1266,14 @@ func toSqlRepositoryCommit(r *model.Repository, c *model.RepositoryCommit) *sqlR
 		CommitterID:   c.CommitterID,
 		DateAuthored:  c.DateAuthored,
 		AuthorID:      c.AuthorID,
+		Ignore:        c.Ignore,
 		FilesModified: encodeMetric(c.FilesModified),
 		FilesCreated:  encodeMetric(c.FilesCreated),
 		FilesDeleted:  encodeMetric(c.FilesDeleted),
 		LinesModified: encodeMetric(c.LinesModified),
 		LinesAdded:    encodeMetric(c.LinesAdded),
 		LinesDeleted:  encodeMetric(c.LinesDeleted),
-		LinesSurvived: encodeMetric(c.LinesSurvived),
-		Ignore:        c.Ignore,
+		Blame:         toSqlBlame(c.Blame),
 	}
 }
 
@@ -1375,10 +1283,10 @@ func toSqlRepositoryCommitFile(r model.UUID, c model.UUID, f *model.RepositoryCo
 		FileID:        f.FileID,
 		OldFileIDs:    encodeOldFileIDs(f.OldFileIDs),
 		RepositoryID:  r,
+		Change:        f.Change,
 		LinesModified: encodeMetric(f.LinesModified),
 		LinesAdded:    encodeMetric(f.LinesAdded),
 		LinesDeleted:  encodeMetric(f.LinesDeleted),
-		LinesSurvived: encodeMetric(f.LinesSurvived),
 	}
 }
 

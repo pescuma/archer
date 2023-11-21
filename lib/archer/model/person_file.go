@@ -2,22 +2,22 @@ package model
 
 import "time"
 
-type PersonRepository struct {
-	PersonID     UUID
-	RepositoryID UUID
+type PersonFile struct {
+	PersonID UUID
+	FileID   UUID
 
 	FirstSeen time.Time
 	LastSeen  time.Time
 }
 
-func NewPersonRepository(personID UUID, repositoryID UUID) *PersonRepository {
-	return &PersonRepository{
-		PersonID:     personID,
-		RepositoryID: repositoryID,
+func NewPersonFile(personID UUID, fileID UUID) *PersonFile {
+	return &PersonFile{
+		PersonID: personID,
+		FileID:   fileID,
 	}
 }
 
-func (p *PersonRepository) SeenAt(ts ...time.Time) {
+func (p *PersonFile) SeenAt(ts ...time.Time) {
 	empty := time.Time{}
 
 	for _, t := range ts {

@@ -7,26 +7,46 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/hashicorp/go-set/v2"
 	"github.com/pescuma/archer/lib/archer/model"
+	"github.com/pescuma/archer/lib/archer/utils"
 	"github.com/samber/lo"
 )
+
+func (s *server) createRepoFilter(repo string) (map[model.UUID]bool, error) {
+	repo = prepareToSearch(repo)
+	if repo == "" {
+		return nil, nil
+	}
+
+	repos, err := s.listProjects("", "", repo, "")
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[model.UUID]bool, len(repos))
+	for _, p := range repos {
+		result[p.ID] = true
+	}
+	return result, nil
+}
 
 func (s *server) listRepos(file string, proj string, repo string, person string) ([]*model.Repository, error) {
 	return s.filterRepos(s.repos.List(), file, proj, repo, person)
 }
 
 func (s *server) filterRepos(col []*model.Repository, file string, proj string, repo string, person string) ([]*model.Repository, error) {
-	file = prepareToSearch(file)
-	proj = prepareToSearch(proj)
 	repo = prepareToSearch(repo)
-	person = prepareToSearch(person)
 
-	var ids *set.Set[model.UUID]
-	if file != "" || proj != "" || person != "" {
-		r, err := s.storage.QueryRepositories(file, proj, repo, person)
-		if err != nil {
-			return nil, err
-		}
-		ids = set.From(r)
+	projIDs, err := s.createProjectFilter(proj)
+	if err != nil {
+		return nil, err
+	}
+	fileIDs, err := s.createFileFilter(file)
+	if err != nil {
+		return nil, err
+	}
+	personIDs, err := s.createPersonFilter(person)
+	if err != nil {
+		return nil, err
 	}
 
 	return lo.Filter(col, func(i *model.Repository, index int) bool {
@@ -34,8 +54,46 @@ func (s *server) filterRepos(col []*model.Repository, file string, proj string, 
 			return false
 		}
 
-		if ids != nil && !ids.Contains(i.ID) {
-			return false
+		if projIDs != nil {
+			found := false
+			for _, f := range s.files.ListFiles() {
+				if f.RepositoryID != nil && *f.RepositoryID == i.ID && f.ProjectID != nil && projIDs[*f.ProjectID] {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return false
+			}
+		}
+
+		if fileIDs != nil {
+			found := false
+			for _, f := range s.files.ListFiles() {
+				if f.RepositoryID != nil && *f.RepositoryID == i.ID && fileIDs[f.ID] {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return false
+			}
+		}
+
+		if personIDs != nil {
+			found := false
+			for _, f := range s.files.ListFiles() {
+				if f.RepositoryID != nil && *f.RepositoryID == i.ID {
+					ps := s.peopleRelations.ListPeopleByFile(f.ID)
+					if utils.MapKeysHaveIntersection(ps, personIDs) {
+						found = true
+						break
+					}
+				}
+			}
+			if !found {
+				return false
+			}
 		}
 
 		return true
@@ -176,8 +234,8 @@ func (s *server) sortCommits(col []RepoAndCommit, field string, asc *bool) error
 		return sortBy(col, func(r RepoAndCommit) int { return r.Commit.LinesAdded }, *asc)
 	case "deletedLines":
 		return sortBy(col, func(r RepoAndCommit) int { return r.Commit.LinesDeleted }, *asc)
-	case "survivedLines":
-		return sortBy(col, func(r RepoAndCommit) int { return r.Commit.LinesSurvived }, *asc)
+	case "blame":
+		return sortBy(col, func(r RepoAndCommit) int { return r.Commit.Blame.Total() }, *asc)
 	default:
 		return fmt.Errorf("unknown sort field: %s", field)
 	}
@@ -198,6 +256,6 @@ func (s *server) toCommit(commit *model.RepositoryCommit, repo *model.Repository
 		"modifiedLines": encodeMetric(commit.LinesModified),
 		"addedLines":    encodeMetric(commit.LinesAdded),
 		"deletedLines":  encodeMetric(commit.LinesDeleted),
-		"survivedLines": encodeMetric(commit.LinesSurvived),
+		"blame":         encodeMetric(commit.Blame.Total()),
 	}
 }

@@ -23,7 +23,8 @@ type RepositoryCommit struct {
 	LinesModified int
 	LinesAdded    int
 	LinesDeleted  int
-	LinesSurvived int
+
+	Blame *Blame
 
 	Ignore bool
 }
@@ -45,7 +46,7 @@ func NewRepositoryCommit(hash string, id *UUID) *RepositoryCommit {
 		LinesModified: -1,
 		LinesAdded:    -1,
 		LinesDeleted:  -1,
-		LinesSurvived: -1,
+		Blame:         NewBlame(),
 	}
 
 	return result

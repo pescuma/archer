@@ -5,11 +5,28 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hashicorp/go-set/v2"
 	"github.com/pescuma/archer/lib/archer/model"
 	"github.com/pescuma/archer/lib/archer/utils"
 	"github.com/samber/lo"
 )
+
+func (s *server) createFileFilter(file string) (map[model.UUID]bool, error) {
+	file = prepareToSearch(file)
+	if file == "" {
+		return nil, nil
+	}
+
+	files, err := s.listProjects(file, "", "", "")
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[model.UUID]bool, len(files))
+	for _, p := range files {
+		result[p.ID] = true
+	}
+	return result, nil
+}
 
 func (s *server) listFiles(file string, proj string, repo string, person string) ([]*model.File, error) {
 	return s.filterFiles(s.files.ListFiles(), file, proj, repo, person)
@@ -17,17 +34,18 @@ func (s *server) listFiles(file string, proj string, repo string, person string)
 
 func (s *server) filterFiles(col []*model.File, file string, proj string, repo string, person string) ([]*model.File, error) {
 	file = prepareToSearch(file)
-	proj = prepareToSearch(proj)
-	repo = prepareToSearch(repo)
-	person = prepareToSearch(person)
 
-	var ids *set.Set[model.UUID]
-	if proj != "" || repo != "" || person != "" {
-		r, err := s.storage.QueryFiles(file, proj, repo, person)
-		if err != nil {
-			return nil, err
-		}
-		ids = set.From(r)
+	projIDs, err := s.createProjectFilter(proj)
+	if err != nil {
+		return nil, err
+	}
+	repoIDs, err := s.createRepoFilter(repo)
+	if err != nil {
+		return nil, err
+	}
+	personIDs, err := s.createPersonFilter(person)
+	if err != nil {
+		return nil, err
 	}
 
 	return lo.Filter(col, func(i *model.File, index int) bool {
@@ -35,8 +53,17 @@ func (s *server) filterFiles(col []*model.File, file string, proj string, repo s
 			return false
 		}
 
-		if ids != nil && !ids.Contains(i.ID) {
+		if projIDs != nil && (i.ProjectID == nil || !projIDs[*i.ProjectID]) {
 			return false
+		}
+		if repoIDs != nil && (i.RepositoryID == nil || !repoIDs[*i.RepositoryID]) {
+			return false
+		}
+		if personIDs != nil {
+			ps := s.peopleRelations.ListPeopleByFile(i.ID)
+			if !utils.MapKeysHaveIntersection(ps, personIDs) {
+				return false
+			}
 		}
 
 		return true

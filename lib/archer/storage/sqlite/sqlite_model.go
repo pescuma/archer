@@ -99,16 +99,38 @@ type sqlFile struct {
 
 	CommitFiles []sqlRepositoryCommitFile `gorm:"foreignKey:FileID"`
 	Lines       []sqlFileLine             `gorm:"foreignKey:FileID"`
+	People      []sqlPersonFile           `gorm:"foreignKey:FileID"`
 }
 
 type sqlFileLine struct {
-	FileID model.UUID `gorm:"primaryKey;index:idx_blame"`
+	FileID model.UUID `gorm:"primaryKey"`
 	Line   int        `gorm:"primaryKey"`
 
-	AuthorID *model.UUID        `gorm:"index;index:idx_blame"`
-	CommitID *model.UUID        `gorm:"index;index:idx_blame"`
-	Type     model.FileLineType `gorm:"index:idx_blame"`
-	Text     string
+	ProjectID    *model.UUID
+	RepositoryID *model.UUID
+	CommitID     *model.UUID
+	AuthorID     *model.UUID
+	CommitterID  *model.UUID
+	Date         time.Time
+
+	Type model.FileLineType
+	Text string
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type sqlMonthLines struct {
+	ID model.UUID `gorm:"primaryKey"`
+
+	Month        string      `gorm:"index"`
+	RepositoryID model.UUID  `gorm:"index"`
+	AuthorID     model.UUID  `gorm:"index"`
+	CommitterID  model.UUID  `gorm:"index"`
+	ProjectID    *model.UUID `gorm:"index"`
+
+	Changes *sqlChanges `gorm:"embedded;embeddedPrefix:changes_"`
+	Blame   *sqlBlame   `gorm:"embedded;embeddedPrefix:blame_"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -120,8 +142,8 @@ type sqlPerson struct {
 
 	Names     []string          `gorm:"serializer:json"`
 	Emails    []string          `gorm:"serializer:json"`
-	Blame     *sqlSize          `gorm:"embedded;embeddedPrefix:blame_"`
 	Changes   *sqlChanges       `gorm:"embedded;embeddedPrefix:changes_"`
+	Blame     *sqlBlame         `gorm:"embedded;embeddedPrefix:blame_"`
 	Data      map[string]string `gorm:"serializer:json"`
 	FirstSeen time.Time
 	LastSeen  time.Time
@@ -132,12 +154,23 @@ type sqlPerson struct {
 	CommitAuthors    []sqlRepositoryCommit `gorm:"foreignKey:AuthorID"`
 	CommitCommitters []sqlRepositoryCommit `gorm:"foreignKey:CommitterID"`
 	FileLineAuthors  []sqlFileLine         `gorm:"foreignKey:AuthorID"`
-	Repositories     []sqlPeopleRepository `gorm:"foreignKey:PersonID"`
+	Repositories     []sqlPersonRepository `gorm:"foreignKey:PersonID"`
 }
 
-type sqlPeopleRepository struct {
+type sqlPersonRepository struct {
 	PersonID     model.UUID `gorm:"primaryKey"`
 	RepositoryID model.UUID `gorm:"primaryKey"`
+
+	FirstSeen time.Time
+	LastSeen  time.Time
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type sqlPersonFile struct {
+	PersonID model.UUID `gorm:"primaryKey"`
+	FileID   model.UUID `gorm:"primaryKey"`
 
 	FirstSeen time.Time
 	LastSeen  time.Time
@@ -179,28 +212,29 @@ type sqlRepository struct {
 	Commits     []sqlRepositoryCommit     `gorm:"foreignKey:RepositoryID"`
 	CommitFiles []sqlRepositoryCommitFile `gorm:"foreignKey:RepositoryID"`
 	Files       []sqlFile                 `gorm:"foreignKey:RepositoryID"`
-	People      []sqlPeopleRepository     `gorm:"foreignKey:RepositoryID"`
+	People      []sqlPersonRepository     `gorm:"foreignKey:RepositoryID"`
 }
 
 type sqlRepositoryCommit struct {
-	ID            model.UUID
-	RepositoryID  model.UUID `gorm:"index"`
-	Name          string
-	Message       string
-	Parents       []model.UUID `gorm:"serializer:json"`
-	Children      []model.UUID `gorm:"serializer:json"`
-	Date          time.Time    `gorm:"index"`
-	CommitterID   model.UUID   `gorm:"index"`
-	DateAuthored  time.Time
-	AuthorID      model.UUID
+	ID           model.UUID
+	RepositoryID model.UUID `gorm:"index"`
+	Name         string
+	Message      string
+	Parents      []model.UUID `gorm:"serializer:json"`
+	Children     []model.UUID `gorm:"serializer:json"`
+	Date         time.Time    `gorm:"index"`
+	CommitterID  model.UUID   `gorm:"index"`
+	DateAuthored time.Time
+	AuthorID     model.UUID
+	Ignore       bool
+
 	FilesModified *int
 	FilesCreated  *int
 	FilesDeleted  *int
 	LinesModified *int
 	LinesAdded    *int
 	LinesDeleted  *int
-	LinesSurvived *int
-	Ignore        bool
+	Blame         *sqlBlame `gorm:"embedded;embeddedPrefix:blame_"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -213,11 +247,11 @@ type sqlRepositoryCommitFile struct {
 	CommitID      model.UUID `gorm:"primaryKey"`
 	FileID        model.UUID `gorm:"primaryKey"`
 	OldFileIDs    string
-	RepositoryID  model.UUID `gorm:"index"`
-	LinesAdded    *int
+	RepositoryID  model.UUID
+	Change        model.FileChangeType
 	LinesModified *int
+	LinesAdded    *int
 	LinesDeleted  *int
-	LinesSurvived *int
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -255,4 +289,10 @@ type sqlChanges struct {
 	LinesModified *int
 	LinesAdded    *int
 	LinesDeleted  *int
+}
+
+type sqlBlame struct {
+	Code    *int
+	Comment *int
+	Blank   *int
 }

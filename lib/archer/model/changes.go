@@ -18,6 +18,10 @@ func NewChanges() *Changes {
 	}
 }
 
+func (s *Changes) IsEmpty() bool {
+	return s.In6Months == -1 && s.Total == -1 && s.LinesModified == -1 && s.LinesAdded == -1 && s.LinesDeleted == -1
+}
+
 func (m *Changes) Clear() {
 	m.In6Months = 0
 	m.Total = 0

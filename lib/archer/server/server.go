@@ -26,12 +26,14 @@ func Run(storage archer.Storage, opts *Options) error {
 type server struct {
 	opts *Options
 
-	storage  archer.Storage
-	people   *model.People
-	files    *model.Files
-	projects *model.Projects
-	repos    *model.Repositories
-	commits  map[model.UUID]*model.RepositoryCommit
+	storage         archer.Storage
+	people          *model.People
+	peopleRelations *model.PeopleRelations
+	files           *model.Files
+	projects        *model.Projects
+	repos           *model.Repositories
+	commits         map[model.UUID]*model.RepositoryCommit
+	stats           *model.MonthlyStats
 }
 
 func newServer(opts *Options) *server {
@@ -57,6 +59,11 @@ func (s *server) load(storage archer.Storage) error {
 		return err
 	}
 
+	s.peopleRelations, err = storage.LoadPeopleRelations()
+	if err != nil {
+		return err
+	}
+
 	s.files, err = storage.LoadFiles()
 	if err != nil {
 		return err
@@ -77,6 +84,11 @@ func (s *server) load(storage archer.Storage) error {
 		for _, commit := range repo.ListCommits() {
 			s.commits[commit.ID] = commit
 		}
+	}
+
+	s.stats, err = storage.LoadMonthlyStats()
+	if err != nil {
+		return err
 	}
 
 	return nil

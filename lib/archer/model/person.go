@@ -13,7 +13,7 @@ type Person struct {
 
 	names     map[string]bool
 	emails    map[string]bool
-	Blame     *Size
+	Blame     *Blame
 	Changes   *Changes
 	Data      map[string]string
 	FirstSeen time.Time
@@ -33,7 +33,7 @@ func NewPerson(name string, id *UUID) *Person {
 		ID:      uuid,
 		names:   map[string]bool{},
 		emails:  map[string]bool{},
-		Blame:   NewSize(),
+		Blame:   NewBlame(),
 		Changes: NewChanges(),
 		Data:    map[string]string{},
 	}

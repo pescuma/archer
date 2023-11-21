@@ -68,6 +68,11 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
+	statsDB, err := storage.LoadMonthlyStats()
+	if err != nil {
+		return err
+	}
+
 	fmt.Printf("Finding out which files to process...\n")
 
 	imported := 0
@@ -118,7 +123,7 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 
 		repo.SeenAt(time.Now())
 
-		imported, err = g.computeBlame(storage, filesDB, peopleDB, reposDB, repo, gitRepo, gitTree, gitCommit, imported)
+		imported, err = g.computeBlame(storage, filesDB, peopleDB, reposDB, statsDB, repo, gitRepo, gitTree, gitCommit, imported)
 		if err != nil {
 			return err
 		}
@@ -130,7 +135,7 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 
 	}
 
-	err = g.writeResults(storage, err, peopleDB, reposDB)
+	err = g.writeResults(storage, filesDB, peopleDB, reposDB, statsDB)
 	if err != nil {
 		return err
 	}
@@ -138,10 +143,13 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 	return nil
 }
 
-func (g *gitBlameImporter) writeResults(storage archer.Storage, err error, peopleDB *model.People, reposDB *model.Repositories) error {
+func (g *gitBlameImporter) writeResults(storage archer.Storage,
+	filesDB *model.Files, peopleDB *model.People, reposDB *model.Repositories, statsDB *model.MonthlyStats,
+) error {
+
 	fmt.Printf("Propagating changes to parents...\n")
 
-	err = g.propagateChangesToParents(storage, peopleDB, reposDB)
+	err := g.propagateChangesToParents(storage, filesDB, peopleDB, reposDB, statsDB)
 	if err != nil {
 		return err
 	}
@@ -158,10 +166,11 @@ func (g *gitBlameImporter) writeResults(storage archer.Storage, err error, peopl
 		return err
 	}
 
-	err = storage.WriteSurvivedLinesCache()
+	err = storage.WriteMonthlyStats(statsDB)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -244,11 +253,7 @@ func (g *gitBlameImporter) deleteFileBlame(storage archer.Storage, file *model.F
 	return nil
 }
 
-func (g *gitBlameImporter) computeBlame(storage archer.Storage,
-	filesDB *model.Files, peopleDB *model.People, reposDB *model.Repositories,
-	repo *model.Repository, gitRepo *git.Repository, gitTree *object.Tree, gitCommit *object.Commit,
-	imported int,
-) (int, error) {
+func (g *gitBlameImporter) computeBlame(storage archer.Storage, filesDB *model.Files, peopleDB *model.People, reposDB *model.Repositories, statsDB *model.MonthlyStats, repo *model.Repository, gitRepo *git.Repository, gitTree *object.Tree, gitCommit *object.Commit, imported int) (int, error) {
 	toProcess, err := g.listToCompute(filesDB, repo, gitRepo, gitTree, gitCommit)
 	if err != nil {
 		return 0, err
@@ -278,7 +283,7 @@ func (g *gitBlameImporter) computeBlame(storage archer.Storage,
 		if g.options.SaveEvery != nil && imported%*g.options.SaveEvery == 0 {
 			_ = bar.Clear()
 
-			err = g.writeResults(storage, err, peopleDB, reposDB)
+			err = g.writeResults(storage, filesDB, peopleDB, reposDB, statsDB)
 			if err != nil {
 				return 0, err
 			}
@@ -443,6 +448,7 @@ func (g *gitBlameImporter) listToCompute(filesDB *model.Files, repo *model.Repos
 
 	return result, nil
 }
+
 func (g *gitBlameImporter) computeFileBlame(storage archer.Storage, w *blameWork, cache BlameCache) error {
 	blame, err := Blame(w.gitCommit, w.relativePath, cache)
 	if err != nil {
@@ -485,8 +491,12 @@ func (g *gitBlameImporter) computeFileBlame(storage archer.Storage, w *blameWork
 
 		commit := w.repo.GetCommit(commitHash)
 
+		fileLine.ProjectID = w.file.ProjectID
+		fileLine.RepositoryID = &w.repo.ID
 		fileLine.CommitID = &commit.ID
 		fileLine.AuthorID = &commit.AuthorID
+		fileLine.CommitterID = &commit.CommitterID
+		fileLine.Date = commit.Date
 		fileLine.Type = lt
 		fileLine.Text = blameLine.Text
 	}
@@ -554,68 +564,56 @@ func (g *gitBlameImporter) computeLOC(name string, contents string) ([]model.Fil
 	return result, nil
 }
 
-func (g *gitBlameImporter) propagateChangesToParents(storage archer.Storage, peopleDB *model.People, repos *model.Repositories) error {
+func (g *gitBlameImporter) propagateChangesToParents(storage archer.Storage,
+	filesDB *model.Files, peopleDB *model.People, reposDB *model.Repositories, statsDB *model.MonthlyStats,
+) error {
 	blames, err := storage.QueryBlamePerAuthor()
 	if err != nil {
 		return err
 	}
 
 	commits := make(map[model.UUID]*model.RepositoryCommit)
-	for _, r := range repos.List() {
+	for _, r := range reposDB.List() {
 		for _, c := range r.ListCommits() {
 			commits[c.ID] = c
-			c.LinesSurvived = 0
-
-			//for _, f := range c.Files {
-			//	f.LinesSurvived = 0
-			//}
+			c.Blame.Clear()
 		}
 	}
 
-	filesPerPerson := make(map[model.UUID]*set.Set[model.UUID])
-
 	for _, p := range peopleDB.ListPeople() {
 		p.Blame.Clear()
-		filesPerPerson[p.ID] = set.New[model.UUID](10)
+	}
+
+	for _, s := range statsDB.ListLines() {
+		s.Blame.Clear()
 	}
 
 	for _, blame := range blames {
 		c := commits[blame.CommitID]
-		c.LinesSurvived += blame.Lines
+		pa := peopleDB.GetPersonByID(blame.AuthorID)
+		file := filesDB.GetFileByID(blame.FileID)
 
-		// TODO Blame code is creating strange commit references
-		//if file, ok := c.Files[blame.FileID]; ok {
-		//	file.LinesSurvived += blame.Lines
-		//}
-
-		p := peopleDB.GetPersonByID(blame.AuthorID)
-
-		filesPerPerson[p.ID].Insert(blame.FileID)
-
-		add := func(t string, l int) {
-			p.Blame.Lines += l
-
-			if _, ok := p.Blame.Other[t]; !ok {
-				p.Blame.Other[t] = l
-			} else {
-				p.Blame.Other[t] += l
-			}
+		s := statsDB.GetOrCreateLines(c.Date.Format("2006-01"), blame.RepositoryID, blame.AuthorID, blame.CommitterID, file.ProjectID)
+		if s.Blame.IsEmpty() {
+			s.Blame.Clear()
 		}
 
 		switch blame.LineType {
 		case model.CodeFileLine:
-			add("Code", blame.Lines)
+			c.Blame.Code += blame.Lines
+			pa.Blame.Code += blame.Lines
+			s.Blame.Code += blame.Lines
 		case model.CommentFileLine:
-			add("Comment", blame.Lines)
+			c.Blame.Comment += blame.Lines
+			pa.Blame.Comment += blame.Lines
+			s.Blame.Comment += blame.Lines
 		case model.BlankFileLine:
-			add("Blank", blame.Lines)
+			c.Blame.Blank += blame.Lines
+			pa.Blame.Blank += blame.Lines
+			s.Blame.Blank += blame.Lines
 		default:
 			panic(blame.LineType)
 		}
-	}
-
-	for _, p := range peopleDB.ListPeople() {
-		p.Blame.Files = filesPerPerson[p.ID].Size()
 	}
 
 	return nil

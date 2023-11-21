@@ -448,7 +448,7 @@ func cleanTypeName(t string) string {
 		t1 := matches[1]
 		t2 := matches[2]
 
-		if t1 == "MutableList" || t1 == "List" || t1 == "MutableSet" || t1 == "Set" {
+		if t1 == "MutableList" || t1 == "ListRepositories" || t1 == "MutableSet" || t1 == "Set" {
 			t = t2
 
 		} else {

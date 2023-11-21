@@ -1,5 +1,7 @@
 package model
 
+import "time"
+
 type FileLineType int
 
 const (
@@ -9,9 +11,13 @@ const (
 )
 
 type FileLine struct {
-	Line     int
-	AuthorID *UUID
-	CommitID *UUID
-	Type     FileLineType
-	Text     string
+	Line         int
+	ProjectID    *UUID
+	RepositoryID *UUID
+	CommitID     *UUID
+	AuthorID     *UUID
+	CommitterID  *UUID
+	Date         time.Time
+	Type         FileLineType
+	Text         string
 }

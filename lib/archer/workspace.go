@@ -2,8 +2,6 @@ package archer
 
 import (
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/pescuma/archer/lib/archer/model"
 	"github.com/pescuma/archer/lib/archer/utils"
@@ -22,15 +20,9 @@ func NewWorkspace(factory StorageFactory, root string) (*Workspace, error) {
 		}
 	}
 
-	isDir := strings.HasSuffix(root, "/") || strings.HasSuffix(root, "\\")
-
 	root, err := utils.PathAbs(root)
 	if err != nil {
 		return nil, err
-	}
-
-	if isDir {
-		root += string(filepath.Separator)
 	}
 
 	storage, err := factory(root)
