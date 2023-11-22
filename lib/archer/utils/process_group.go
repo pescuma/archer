@@ -5,6 +5,20 @@ import (
 	"sync"
 )
 
+func ParallelFor[T, O any](col []T, proc func(T) (O, error)) *ProcessGroup[T, O] {
+	group := NewProcessGroup(1, 10, proc)
+
+	go func() {
+		for _, w := range col {
+			group.Input <- w
+		}
+
+		group.FinishedInput()
+	}()
+
+	return group
+}
+
 type ProcessGroup[I, O any] struct {
 	proc  func(I) (O, error)
 	abort chan struct{}
@@ -15,7 +29,7 @@ type ProcessGroup[I, O any] struct {
 	Err    chan error
 }
 
-func NewProcessGroup[I, O any](inputFactor, outputFactor int, proc func(I) (O, error)) ProcessGroup[I, O] {
+func NewProcessGroup[I, O any](inputFactor, outputFactor int, proc func(I) (O, error)) *ProcessGroup[I, O] {
 	routines := Max(Min(runtime.GOMAXPROCS(-1), runtime.NumCPU())-2, 1)
 
 	group := ProcessGroup[I, O]{
@@ -38,7 +52,7 @@ func NewProcessGroup[I, O any](inputFactor, outputFactor int, proc func(I) (O, e
 		close(group.Err)
 	}()
 
-	return group
+	return &group
 }
 
 func (g *ProcessGroup[I, O]) runProcessor() {
@@ -81,6 +95,10 @@ func (g *ProcessGroup[I, O]) Aborted() bool {
 	default:
 		return false
 	}
+}
+
+func (g *ProcessGroup[I, O]) Error() error {
+	return <-g.Err
 }
 
 func (g *ProcessGroup[I, O]) Close() {

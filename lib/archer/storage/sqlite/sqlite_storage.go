@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/glebarez/sqlite"
@@ -25,8 +26,10 @@ import (
 )
 
 type sqliteStorage struct {
-	mainDB      *gorm.DB
-	fileLinesDB *gorm.DB
+	mainMutex      sync.RWMutex
+	mainDB         *gorm.DB
+	fileLinesMutex sync.RWMutex
+	fileLinesDB    *gorm.DB
 
 	configs     map[string]*sqlConfig
 	projs       map[model.UUID]*sqlProject
@@ -124,6 +127,9 @@ func newFrom(mainDSN string, fileLinesDSN string) (archer.Storage, error) {
 }
 
 func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
+	s.mainMutex.RLock()
+	defer s.mainMutex.RUnlock()
+
 	result := model.NewProjects()
 
 	var projs []*sqlProject
@@ -204,12 +210,18 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 }
 
 func (s *sqliteStorage) WriteProjects(projs *model.Projects) error {
+	s.mainMutex.Lock()
+	defer s.mainMutex.Unlock()
+
 	all := projs.ListProjects(model.FilterAll)
 
 	return s.writeProjects(all)
 }
 
 func (s *sqliteStorage) WriteProject(proj *model.Project) error {
+	s.mainMutex.Lock()
+	defer s.mainMutex.Unlock()
+
 	projs := []*model.Project{proj}
 
 	return s.writeProjects(projs)
@@ -277,6 +289,9 @@ func (s *sqliteStorage) writeProjects(projs []*model.Project) error {
 }
 
 func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
+	s.mainMutex.RLock()
+	defer s.mainMutex.RUnlock()
+
 	result := model.NewFiles()
 
 	var files []*sqlFile
@@ -308,6 +323,9 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 }
 
 func (s *sqliteStorage) WriteFiles(files *model.Files) error {
+	s.mainMutex.Lock()
+	defer s.mainMutex.Unlock()
+
 	all := files.ListFiles()
 
 	err := s.writeFiles(all)
@@ -321,6 +339,9 @@ func (s *sqliteStorage) WriteFiles(files *model.Files) error {
 }
 
 func (s *sqliteStorage) WriteFile(file *model.File) error {
+	s.mainMutex.Lock()
+	defer s.mainMutex.Unlock()
+
 	return s.writeFiles([]*model.File{file})
 }
 
@@ -350,6 +371,9 @@ func (s *sqliteStorage) writeFiles(all []*model.File) error {
 }
 
 func (s *sqliteStorage) LoadFileContents(fileID model.UUID) (*model.FileContents, error) {
+	s.fileLinesMutex.RLock()
+	defer s.fileLinesMutex.RUnlock()
+
 	result := model.NewFileContents(fileID)
 
 	var lines []*sqlFileLine
@@ -383,6 +407,9 @@ func (s *sqliteStorage) LoadFileContents(fileID model.UUID) (*model.FileContents
 }
 
 func (s *sqliteStorage) WriteFileContents(contents *model.FileContents) error {
+	s.fileLinesMutex.Lock()
+	defer s.fileLinesMutex.Unlock()
+
 	var sqlLines []*sqlFileLine
 	for _, f := range contents.Lines {
 		sf := toSqlFileLine(contents.FileID, f)
@@ -409,6 +436,9 @@ func (s *sqliteStorage) WriteFileContents(contents *model.FileContents) error {
 }
 
 func (s *sqliteStorage) QueryBlamePerAuthor() ([]*archer.BlamePerAuthor, error) {
+	s.fileLinesMutex.RLock()
+	defer s.fileLinesMutex.RUnlock()
+
 	var result []*archer.BlamePerAuthor
 
 	err := s.fileLinesDB.Raw(`
@@ -424,6 +454,9 @@ group by author_id, committer_id, repository_id, commit_id, file_id, type
 }
 
 func (s *sqliteStorage) LoadPeople() (*model.People, error) {
+	s.mainMutex.RLock()
+	defer s.mainMutex.RUnlock()
+
 	result := model.NewPeople()
 
 	var people []*sqlPerson
@@ -473,6 +506,9 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 }
 
 func (s *sqliteStorage) WritePeople(peopleDB *model.People) error {
+	s.mainMutex.Lock()
+	defer s.mainMutex.Unlock()
+
 	var sqlPeople []*sqlPerson
 	people := peopleDB.ListPeople()
 	for _, p := range people {
@@ -521,6 +557,9 @@ func compositeKey(ids ...model.UUID) string {
 }
 
 func (s *sqliteStorage) LoadPeopleRelations() (*model.PeopleRelations, error) {
+	s.mainMutex.RLock()
+	defer s.mainMutex.RUnlock()
+
 	result := model.NewPeopleRelations()
 
 	var rs []*sqlPersonRepository
@@ -559,6 +598,9 @@ func (s *sqliteStorage) LoadPeopleRelations() (*model.PeopleRelations, error) {
 }
 
 func (s *sqliteStorage) WritePeopleRelations(prs *model.PeopleRelations) error {
+	s.mainMutex.Lock()
+	defer s.mainMutex.Unlock()
+
 	var rs []*sqlPersonRepository
 	for _, r := range prs.ListRepositories() {
 		pr := toSqlPersonRepository(r)
@@ -600,6 +642,9 @@ func (s *sqliteStorage) WritePeopleRelations(prs *model.PeopleRelations) error {
 }
 
 func (s *sqliteStorage) LoadRepositories() (*model.Repositories, error) {
+	s.mainMutex.RLock()
+	defer s.mainMutex.RUnlock()
+
 	return s.loadRepositories(
 		func([]*sqlRepository) func(db *gorm.DB) *gorm.DB {
 			return func(db *gorm.DB) *gorm.DB {
@@ -609,6 +654,9 @@ func (s *sqliteStorage) LoadRepositories() (*model.Repositories, error) {
 }
 
 func (s *sqliteStorage) LoadRepository(rootDir string) (*model.Repository, error) {
+	s.mainMutex.RLock()
+	defer s.mainMutex.RUnlock()
+
 	reposDB, err := s.loadRepositories(
 		func(repos []*sqlRepository) func(db *gorm.DB) *gorm.DB {
 			if repos == nil {
@@ -705,6 +753,9 @@ func (s *sqliteStorage) WriteRepositories(repos *model.Repositories) error {
 }
 
 func (s *sqliteStorage) WriteRepository(repo *model.Repository) error {
+	s.mainMutex.Lock()
+	defer s.mainMutex.Unlock()
+
 	var sqlRepos []*sqlRepository
 	sr := toSqlRepository(repo)
 	if prepareChange(&s.repos, sr.ID, sr) {
@@ -745,6 +796,9 @@ func (s *sqliteStorage) WriteRepository(repo *model.Repository) error {
 }
 
 func (s *sqliteStorage) WriteCommit(repo *model.Repository, commit *model.RepositoryCommit) error {
+	s.mainMutex.Lock()
+	defer s.mainMutex.Unlock()
+
 	var sqlCommits []*sqlRepositoryCommit
 
 	sc := toSqlRepositoryCommit(repo, commit)
@@ -771,6 +825,9 @@ func (s *sqliteStorage) WriteCommit(repo *model.Repository, commit *model.Reposi
 }
 
 func (s *sqliteStorage) LoadRepositoryCommitFiles(repo *model.Repository, commit *model.RepositoryCommit) (*model.RepositoryCommitFiles, error) {
+	s.mainMutex.RLock()
+	defer s.mainMutex.RUnlock()
+
 	var commitFiles []*sqlRepositoryCommitFile
 	err := s.mainDB.Where("commit_id = ?", commit.ID).Find(&commitFiles).Error
 	if err != nil {
@@ -780,6 +837,7 @@ func (s *sqliteStorage) LoadRepositoryCommitFiles(repo *model.Repository, commit
 	result := model.NewRepositoryCommitFiles(repo.ID, commit.ID)
 	for _, sf := range commitFiles {
 		file := result.GetOrCreate(sf.FileID)
+		file.Hash = sf.Hash
 		file.OldFileIDs = decodeOldFileIDs(sf.OldFileIDs)
 		file.Change = sf.Change
 		file.LinesModified = decodeMetric(sf.LinesModified)
@@ -790,6 +848,9 @@ func (s *sqliteStorage) LoadRepositoryCommitFiles(repo *model.Repository, commit
 }
 
 func (s *sqliteStorage) WriteRepositoryCommitFiles(files []*model.RepositoryCommitFiles) error {
+	s.mainMutex.Lock()
+	defer s.mainMutex.Unlock()
+
 	var sqlCommitFiles []*sqlRepositoryCommitFile
 	for _, fs := range files {
 		for _, f := range fs.List() {
@@ -815,6 +876,9 @@ func (s *sqliteStorage) WriteRepositoryCommitFiles(files []*model.RepositoryComm
 }
 
 func (s *sqliteStorage) QueryCommits(file string, proj string, repo string, person string) ([]model.UUID, error) {
+	s.mainMutex.RLock()
+	defer s.mainMutex.RUnlock()
+
 	var result []model.UUID
 
 	err := s.mainDB.Raw(`
@@ -851,6 +915,9 @@ where c.ignore = 0
 }
 
 func (s *sqliteStorage) LoadMonthlyStats() (*model.MonthlyStats, error) {
+	s.mainMutex.RLock()
+	defer s.mainMutex.RUnlock()
+
 	result := model.NewMonthlyStats()
 
 	var sqlLines []*sqlMonthLines
@@ -874,6 +941,9 @@ func (s *sqliteStorage) LoadMonthlyStats() (*model.MonthlyStats, error) {
 }
 
 func (s *sqliteStorage) WriteMonthlyStats(stats *model.MonthlyStats) error {
+	s.mainMutex.Lock()
+	defer s.mainMutex.Unlock()
+
 	var sqlLines []*sqlMonthLines
 	for _, f := range stats.ListLines() {
 		sf := toSqlMonthLines(f)
@@ -901,6 +971,9 @@ func (s *sqliteStorage) WriteMonthlyStats(stats *model.MonthlyStats) error {
 }
 
 func (s *sqliteStorage) LoadConfig() (*map[string]string, error) {
+	s.mainMutex.RLock()
+	defer s.mainMutex.RUnlock()
+
 	result := map[string]string{}
 
 	var sqlConfigs []*sqlConfig
@@ -921,6 +994,9 @@ func (s *sqliteStorage) LoadConfig() (*map[string]string, error) {
 }
 
 func (s *sqliteStorage) WriteConfig(configs *map[string]string) error {
+	s.mainMutex.Lock()
+	defer s.mainMutex.Unlock()
+
 	var sqlConfigs []*sqlConfig
 	for k, v := range *configs {
 		sc := toSqlConfig(k, v)
@@ -1281,8 +1357,9 @@ func toSqlRepositoryCommitFile(c model.UUID, f *model.RepositoryCommitFile) *sql
 	return &sqlRepositoryCommitFile{
 		CommitID:      c,
 		FileID:        f.FileID,
-		OldFileIDs:    encodeOldFileIDs(f.OldFileIDs),
+		Hash:          f.Hash,
 		Change:        f.Change,
+		OldFileIDs:    encodeOldFileIDs(f.OldFileIDs),
 		LinesModified: encodeMetric(f.LinesModified),
 		LinesAdded:    encodeMetric(f.LinesAdded),
 		LinesDeleted:  encodeMetric(f.LinesDeleted),

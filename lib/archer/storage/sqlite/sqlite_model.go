@@ -239,8 +239,9 @@ type sqlRepositoryCommit struct {
 type sqlRepositoryCommitFile struct {
 	CommitID      model.UUID `gorm:"primaryKey"`
 	FileID        model.UUID `gorm:"primaryKey"`
-	OldFileIDs    string
+	Hash          string
 	Change        model.FileChangeType
+	OldFileIDs    string
 	LinesModified *int
 	LinesAdded    *int
 	LinesDeleted  *int

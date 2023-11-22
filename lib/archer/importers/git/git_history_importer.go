@@ -37,7 +37,7 @@ type HistoryOptions struct {
 	MaxCommits         *int
 	After              *time.Time
 	Before             *time.Time
-	SaveEvery          *int
+	SaveEvery          *time.Duration
 }
 
 func NewHistoryImporter(rootDirs []string, options HistoryOptions) archer.Importer {
@@ -412,6 +412,7 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage,
 
 	bar := utils.NewProgressBar(imported)
 	imported = 0
+	start := time.Now()
 	err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
 		if !g.options.ShouldContinue(g.commitsTotal, g.commitsImported, gitCommit.Committer.When) {
 			return g.abort
@@ -466,13 +467,13 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage,
 
 		for _, cf := range commitFiles.List() {
 			switch cf.Change {
-			case model.Modified:
+			case model.FileModified:
 				commit.FilesModified++
-			case model.Renamed:
+			case model.FileRenamed:
 				commit.FilesModified++
-			case model.Created:
+			case model.FileCreated:
 				commit.FilesCreated++
-			case model.Deleted:
+			case model.FileDeleted:
 				commit.FilesDeleted++
 			}
 
@@ -513,14 +514,16 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage,
 
 		commitFilesToWrite = append(commitFilesToWrite, commitFiles)
 
-		if g.options.SaveEvery != nil && imported%*g.options.SaveEvery == 0 {
+		if g.options.SaveEvery != nil && time.Since(start) >= *g.options.SaveEvery {
 			_ = bar.Clear()
+
 			err = writeResults(commitFilesToWrite)
 			if err != nil {
 				return err
 			}
 
 			commitFilesToWrite = nil
+			start = time.Now()
 		}
 
 		_ = bar.Add(1)
@@ -558,7 +561,9 @@ func (g *gitHistoryImporter) computeChangesMergeCommit(filesDB *model.Files, rep
 			}
 
 			file := filesDB.GetOrCreateFile(filePath)
+
 			cf := commitFiles.GetOrCreate(file.ID)
+			cf.Hash = utils.IIf(gitFile.File != nil, gitFile.File, gitFile.OldFile).Hash.String()
 
 			if gitFile.Name != gitFile.OldName {
 				oldFilePath, err := utils.PathAbs(repo.RootDir, gitFile.OldName)
@@ -571,10 +576,10 @@ func (g *gitHistoryImporter) computeChangesMergeCommit(filesDB *model.Files, rep
 				cf.OldFileIDs[repoParent.ID] = oldFile.ID
 			}
 
-			if cf.Change == model.Unknown {
+			if cf.Change == model.FileChangeUnknown {
 				cf.Change = gitFile.Type
 			} else {
-				cf.Change = model.Modified
+				cf.Change = model.FileModified
 			}
 		}
 
@@ -602,6 +607,7 @@ func (g *gitHistoryImporter) computeChangesSimpleCommit(filesDB *model.Files, re
 			file := filesDB.GetOrCreateFile(filePath)
 
 			cf := commitFiles.GetOrCreate(file.ID)
+			cf.Hash = utils.IIf(gitFile.File != nil, gitFile.File, gitFile.OldFile).Hash.String()
 			cf.Change = gitFile.Type
 			cf.LinesModified = utils.Max(cf.LinesModified, gitFile.Modified)
 			cf.LinesAdded = utils.Max(cf.LinesAdded, gitFile.Added)
@@ -645,7 +651,8 @@ func (g *gitHistoryImporter) computeChangesRootCommit(filesDB *model.Files, repo
 		}
 
 		cf := commitFiles.GetOrCreate(file.ID)
-		cf.Change = model.Created
+		cf.Hash = gitFile.Hash.String()
+		cf.Change = model.FileCreated
 		cf.LinesModified = 0
 		cf.LinesAdded = len(gitLines)
 		cf.LinesDeleted = 0
@@ -683,13 +690,13 @@ func (g *gitHistoryImporter) computeChangesNoLines(commit *object.Commit, parent
 		gitChange := gitFileChange{}
 
 		if commitFile != nil && parentFile != nil && commitFile.Name != parentFile.Name {
-			gitChange.Type = model.Renamed
+			gitChange.Type = model.FileRenamed
 		} else if commitFile != nil && parentFile != nil {
-			gitChange.Type = model.Modified
+			gitChange.Type = model.FileModified
 		} else if commitFile == nil {
-			gitChange.Type = model.Deleted
+			gitChange.Type = model.FileDeleted
 		} else {
-			gitChange.Type = model.Created
+			gitChange.Type = model.FileCreated
 		}
 
 		gitChange.File = commitFile

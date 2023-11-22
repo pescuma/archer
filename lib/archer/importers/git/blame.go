@@ -15,7 +15,6 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/utils/diff"
-	"github.com/hashicorp/go-set/v2"
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
@@ -31,10 +30,22 @@ type BlameResult struct {
 
 type BlameCache interface {
 	GetCommit(hash plumbing.Hash) (*BlameCommitCache, error)
+	GetCommitTreeEntry(commit *object.Commit, path string) (*object.Tree, *object.TreeEntry, error)
 }
+
 type BlameCommitCache struct {
 	Parents map[plumbing.Hash]*BlameParentCache
-	Touched *set.Set[string]
+	Files   map[string]*BlameFileCache
+}
+
+func (c *BlameCommitCache) Touched(file string) bool {
+	_, ok := c.Files[file]
+	return ok
+}
+
+type BlameFileCache struct {
+	Hash    plumbing.Hash
+	Created bool
 }
 type BlameParentCache struct {
 	Commit  *object.Commit
@@ -88,6 +99,7 @@ func Blame(c *object.Commit, path string, cache BlameCache) (*BlameResult, error
 		nil,
 		c,
 		path,
+		file.Hash,
 		contents,
 		needsMap,
 		0,
@@ -269,21 +281,21 @@ func (b *blame) addBlames(curItems []*queueItem, cache BlameCache) (bool, error)
 
 	anyPushed := false
 	for parnetNo, prev := range parents {
-		currentHash, err := blobHash(curItem.path, curItem.Commit)
-		if err != nil {
-			return false, err
+		if prev.Hash == plumbing.ZeroHash {
+			prev.Hash, err = blobHash(prev.Path, prev.Commit, cache)
+			if err != nil {
+				return false, err
+			}
 		}
-		prevHash, err := blobHash(prev.Path, prev.Commit)
-		if err != nil {
-			return false, err
-		}
-		if currentHash == prevHash {
+
+		if curItem.hash == prev.Hash {
 			if len(parents) == 1 && curItem.MergedChildren == nil && curItem.IdenticalToChild {
 				// commit that has 1 parent and 1 child and is the same as both, bypass it completely
 				b.q.Push(&queueItem{
 					Child:            curItem.Child,
 					Commit:           prev.Commit,
 					path:             prev.Path,
+					hash:             prev.Hash,
 					Contents:         curItem.Contents,
 					NeedsMap:         curItem.NeedsMap, // reuse the NeedsMap as we are throwing away this item
 					IdenticalToChild: true,
@@ -294,6 +306,7 @@ func (b *blame) addBlames(curItems []*queueItem, cache BlameCache) (bool, error)
 					Child:            curItem,
 					Commit:           prev.Commit,
 					path:             prev.Path,
+					hash:             prev.Hash,
 					Contents:         curItem.Contents,
 					NeedsMap:         append([]lineMap(nil), curItem.NeedsMap...), // create new slice and copy
 					IdenticalToChild: true,
@@ -306,7 +319,11 @@ func (b *blame) addBlames(curItems []*queueItem, cache BlameCache) (bool, error)
 		}
 
 		// get the contents of the file
-		file, err := prev.Commit.File(prev.Path)
+		prevTree, prevEntry, err := cache.GetCommitTreeEntry(prev.Commit, prev.Path)
+		if err != nil {
+			return false, err
+		}
+		file, err := prevTree.TreeEntryFile(prevEntry)
 		if err != nil {
 			return false, err
 		}
@@ -361,6 +378,7 @@ func (b *blame) addBlames(curItems []*queueItem, cache BlameCache) (bool, error)
 				nil,
 				prev.Commit,
 				prev.Path,
+				prev.Hash,
 				prevContents,
 				getFromParent,
 				0,
@@ -516,6 +534,7 @@ type queueItem struct {
 	MergedChildren          []childToNeedsMap
 	Commit                  *object.Commit
 	path                    string
+	hash                    plumbing.Hash
 	Contents                string
 	NeedsMap                []lineMap
 	numParentsNeedResolving int
@@ -561,6 +580,7 @@ func (pq *priorityQueue) Peek() *object.Commit { return (*priorityQueueImp)(pq).
 type parentCommit struct {
 	Commit *object.Commit
 	Path   string
+	Hash   plumbing.Hash
 }
 
 func parentsContainingPath(path string, c *object.Commit, cache BlameCache) ([]parentCommit, error) {
@@ -569,7 +589,7 @@ func parentsContainingPath(path string, c *object.Commit, cache BlameCache) ([]p
 		return nil, err
 	}
 
-	for len(commitCache.Parents) == 1 && !commitCache.Touched.Contains(path) {
+	for len(commitCache.Parents) == 1 && !commitCache.Touched(path) {
 		for _, p := range commitCache.Parents {
 			c = p.Commit
 			commitCache, err = cache.GetCommit(c.Hash)
@@ -583,25 +603,31 @@ func parentsContainingPath(path string, c *object.Commit, cache BlameCache) ([]p
 	for _, parentCache := range commitCache.Parents {
 		parent := parentCache.Commit
 
-		if !commitCache.Touched.Contains(path) {
-			result = append(result, parentCommit{parent, path})
+		file, ok := commitCache.Files[path]
+
+		if !ok {
+			result = append(result, parentCommit{parent, path, plumbing.ZeroHash})
 
 		} else if oldPath, ok := parentCache.Renames[path]; ok {
-			result = append(result, parentCommit{parent, oldPath})
+			result = append(result, parentCommit{parent, oldPath, plumbing.ZeroHash})
 
-		} else if _, err := parent.File(path); err == nil {
-			result = append(result, parentCommit{parent, path})
+		} else if file.Created {
+			// If the file was created in this commit, it's not in the parent
+
+		} else if parentHash, err := blobHash(path, parent, cache); err == nil { // It may be in one parent and not in the other
+			result = append(result, parentCommit{parent, path, parentHash})
 		}
 	}
 	return result, nil
 }
 
-func blobHash(path string, commit *object.Commit) (plumbing.Hash, error) {
-	file, err := commit.File(path)
+func blobHash(path string, commit *object.Commit, cache BlameCache) (plumbing.Hash, error) {
+	_, e, err := cache.GetCommitTreeEntry(commit, path)
 	if err != nil {
 		return plumbing.ZeroHash, err
 	}
-	return file.Hash, nil
+
+	return e.Hash, nil
 }
 
 // countLines returns the number of lines in a string à la git, this is

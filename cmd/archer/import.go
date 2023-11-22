@@ -124,14 +124,14 @@ func (c *ImportGitPeopleCmd) Run(ctx *context) error {
 }
 
 type ImportGitHistoryCmd struct {
-	Paths         []string      `arg:"" help:"Paths with the roots of git repositories." type:"existingpath"`
-	Incremental   bool          `default:"true" negatable:"" help:"Don't import commits already imported."`
-	LimitImported int           `help:"Limit the number of imported commits. Can be used to incrementally import data. Counted from the latest commit."`
-	LimitCommits  int           `help:"Limit the number of commits to be imported. Counted from the latest commit."`
-	LimitDuration time.Duration `help:"Import commits only in this duration. Counted from current time."`
-	After         time.Time     `help:"Import commits after this date (inclusive)."`
-	Before        time.Time     `help:"Import commits before this date (exclusive)."`
-	SaveEvery     int           `help:"Save results after some number of commits."`
+	Paths         []string       `arg:"" help:"Paths with the roots of git repositories." type:"existingpath"`
+	Incremental   bool           `default:"true" negatable:"" help:"Don't import commits already imported."`
+	LimitImported int            `help:"Limit the number of imported commits. Can be used to incrementally import data. Counted from the latest commit."`
+	LimitCommits  int            `help:"Limit the number of commits to be imported. Counted from the latest commit."`
+	LimitDuration time.Duration  `help:"Import commits only in this duration. Counted from current time."`
+	After         time.Time      `help:"Import commits after this date (inclusive)."`
+	Before        time.Time      `help:"Import commits before this date (exclusive)."`
+	SaveEvery     *time.Duration `default:"10m" help:"Save results while processing to avoid losing work."`
 }
 
 func (c *ImportGitHistoryCmd) Run(ctx *context) error {
@@ -166,8 +166,8 @@ func (c *ImportGitHistoryCmd) Run(ctx *context) error {
 		}
 	}
 
-	if c.SaveEvery != 0 {
-		options.SaveEvery = &c.SaveEvery
+	if c.SaveEvery != nil {
+		options.SaveEvery = c.SaveEvery
 	}
 
 	g := git.NewHistoryImporter(c.Paths, options)
@@ -176,10 +176,10 @@ func (c *ImportGitHistoryCmd) Run(ctx *context) error {
 }
 
 type ImportGitBlameCmd struct {
-	Paths         []string `arg:"" help:"Paths with the roots of git repositories." type:"existingpath"`
-	Incremental   bool     `default:"true" negatable:"" help:"Don't import files already imported."`
-	LimitImported int      `help:"Limit the number of imported files. Can be used to incrementally import data. Counted by file name."`
-	SaveEvery     int      `help:"Save results after some number of files."`
+	Paths         []string       `arg:"" help:"Paths with the roots of git repositories." type:"existingpath"`
+	Incremental   bool           `default:"true" negatable:"" help:"Don't import files already imported."`
+	LimitImported int            `help:"Limit the number of imported files. Can be used to incrementally import data. Counted by file name."`
+	SaveEvery     *time.Duration `default:"10m" help:"Save results while processing to avoid losing work."`
 }
 
 func (c *ImportGitBlameCmd) Run(ctx *context) error {
@@ -189,8 +189,8 @@ func (c *ImportGitBlameCmd) Run(ctx *context) error {
 	if c.LimitImported != 0 {
 		options.MaxImportedFiles = &c.LimitImported
 	}
-	if c.SaveEvery != 0 {
-		options.SaveEvery = &c.SaveEvery
+	if c.SaveEvery != nil {
+		options.SaveEvery = c.SaveEvery
 	}
 
 	g := git.NewBlameImporter(c.Paths, options)

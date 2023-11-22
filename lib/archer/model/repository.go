@@ -12,7 +12,8 @@ type Repository struct {
 	VCS     string
 	ID      UUID
 
-	Data      map[string]string
+	Data map[string]string
+
 	FirstSeen time.Time
 	LastSeen  time.Time
 

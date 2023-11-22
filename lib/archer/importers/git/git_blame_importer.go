@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-git/go-git/v5"
@@ -30,7 +31,7 @@ type gitBlameImporter struct {
 type BlameOptions struct {
 	Incremental      bool
 	MaxImportedFiles *int
-	SaveEvery        *int
+	SaveEvery        *time.Duration
 }
 
 func NewBlameImporter(rootDirs []string, options BlameOptions) archer.Importer {
@@ -253,7 +254,11 @@ func (g *gitBlameImporter) deleteFileBlame(storage archer.Storage, file *model.F
 	return nil
 }
 
-func (g *gitBlameImporter) computeBlame(storage archer.Storage, filesDB *model.Files, peopleDB *model.People, reposDB *model.Repositories, statsDB *model.MonthlyStats, repo *model.Repository, gitRepo *git.Repository, gitTree *object.Tree, gitCommit *object.Commit, imported int) (int, error) {
+func (g *gitBlameImporter) computeBlame(storage archer.Storage,
+	filesDB *model.Files, peopleDB *model.People, reposDB *model.Repositories, statsDB *model.MonthlyStats,
+	repo *model.Repository, gitRepo *git.Repository, gitTree *object.Tree, gitCommit *object.Commit,
+	imported int,
+) (int, error) {
 	toProcess, err := g.listToCompute(filesDB, repo, gitRepo, gitTree, gitCommit)
 	if err != nil {
 		return 0, err
@@ -270,61 +275,114 @@ func (g *gitBlameImporter) computeBlame(storage archer.Storage, filesDB *model.F
 		return 0, err
 	}
 
+	writeMutex := sync.RWMutex{}
+
 	bar := utils.NewProgressBar(len(toProcess))
-	for _, w := range toProcess {
-		bar.Describe(utils.TruncateFilename(w.relativePath))
+	start := time.Now()
 
-		err = g.computeFileBlame(storage, w, cache)
-		if err != nil {
-			return 0, err
-		}
+	group := utils.ParallelFor(toProcess,
+		func(w *blameWork) (*blameWork, error) {
+			writeMutex.RLock()
+			defer writeMutex.RUnlock()
 
+			err = g.computeFileBlame(storage, w, cache)
+			return w, err
+		})
+
+	for w := range group.Output {
 		imported++
-		if g.options.SaveEvery != nil && imported%*g.options.SaveEvery == 0 {
+
+		if g.options.SaveEvery != nil && time.Since(start) >= *g.options.SaveEvery {
 			_ = bar.Clear()
 
+			writeMutex.Lock()
 			err = g.writeResults(storage, filesDB, peopleDB, reposDB, statsDB)
+			writeMutex.Unlock()
+
 			if err != nil {
 				return 0, err
 			}
+
+			start = time.Now()
 		}
 
+		bar.Describe(utils.TruncateFilename(w.relativePath))
 		_ = bar.Add(1)
+	}
+
+	if err = group.Error(); err != nil {
+		return imported, err
 	}
 
 	return imported, nil
 }
 
 type blameCacheImpl struct {
-	commits map[plumbing.Hash]*BlameCommitCache
+	repo    *git.Repository
+	trees   *utils.Cache[plumbing.Hash, *object.Tree]
+	commits *utils.Cache[plumbing.Hash, *BlameCommitCache]
 	load    func(plumbing.Hash) (*BlameCommitCache, error)
 }
 
-func (b *blameCacheImpl) GetCommit(hash plumbing.Hash) (*BlameCommitCache, error) {
-	result, ok := b.commits[hash]
-
-	if !ok {
-		var err error
-		result, err = b.load(hash)
+func (c *blameCacheImpl) GetCommitTreeEntry(commit *object.Commit, path string) (*object.Tree, *object.TreeEntry, error) {
+	loader := func(hash plumbing.Hash) (*object.Tree, error) {
+		tree, err := object.GetTree(c.repo.Storer, hash)
 		if err != nil {
 			return nil, err
 		}
 
-		b.commits[hash] = result
+		// Load internal caches
+		_, _ = tree.FindEntry("")
+
+		return tree, nil
 	}
 
-	return result, nil
+	tc, err := c.trees.Get(commit.TreeHash, loader)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	paths := strings.Split(path, "/")
+	t := tc
+	for i := 0; i < len(paths)-1; i++ {
+		ce, err := t.FindEntry(paths[i])
+		if err != nil {
+			return nil, nil, err
+		}
+
+		ct, err := c.trees.Get(ce.Hash, loader)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		t = ct
+	}
+
+	e, err := t.FindEntry(paths[len(paths)-1])
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return tc, e, err
+}
+
+func (c *blameCacheImpl) GetCommit(hash plumbing.Hash) (*BlameCommitCache, error) {
+	return c.commits.Get(hash, func(hash plumbing.Hash) (*BlameCommitCache, error) {
+		return c.load(hash)
+	})
 }
 
 func (g *gitBlameImporter) createCache(storage archer.Storage, filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository) (BlameCache, error) {
 	cache := &blameCacheImpl{
-		commits: make(map[plumbing.Hash]*BlameCommitCache),
+		repo:    gitRepo,
+		commits: utils.NewCache[plumbing.Hash, *BlameCommitCache](),
+		trees:   utils.NewCache[plumbing.Hash, *object.Tree](),
 	}
 
 	cache.load = func(hash plumbing.Hash) (*BlameCommitCache, error) {
 		result := &BlameCommitCache{
 			Parents: make(map[plumbing.Hash]*BlameParentCache),
-			Touched: set.New[string](10),
+			Files:   make(map[string]*BlameFileCache),
 		}
 
 		repoCommit := repo.GetCommit(hash.String())
@@ -366,7 +424,10 @@ func (g *gitBlameImporter) createCache(storage archer.Storage, filesDB *model.Fi
 				return nil, err
 			}
 
-			result.Touched.Insert(filename)
+			result.Files[filename] = &BlameFileCache{
+				Hash:    plumbing.NewHash(commitFile.Hash),
+				Created: commitFile.Change == model.FileCreated,
+			}
 
 			for repoParentID, oldFileID := range commitFile.OldFileIDs {
 				oldFilename, err := getFilename(oldFileID)
@@ -483,13 +544,10 @@ func (g *gitBlameImporter) computeFileBlame(storage archer.Storage, w *blameWork
 			fileLine = fileLines.Lines[i]
 		}
 
-		commitHash := blameLine.Hash.String()
-
-		if !w.repo.ContainsCommit(commitHash) {
-			return fmt.Errorf("missing commit '%v':'%v'. run 'import git history' before importing blame", w.repo.Name, commitHash)
+		commit := w.repo.GetCommit(blameLine.Hash.String())
+		if commit == nil {
+			return fmt.Errorf("missing commit '%v':'%v'. run 'import git history' before importing blame", w.repo.Name, blameLine.Hash.String())
 		}
-
-		commit := w.repo.GetCommit(commitHash)
 
 		fileLine.ProjectID = w.file.ProjectID
 		fileLine.RepositoryID = &w.repo.ID

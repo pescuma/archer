@@ -1,10 +1,11 @@
 package model
 
 type RepositoryCommitFile struct {
-	FileID     UUID
-	OldFileIDs map[UUID]UUID
+	FileID UUID
+	Hash   string
 
-	Change FileChangeType
+	Change     FileChangeType
+	OldFileIDs map[UUID]UUID
 
 	LinesModified int
 	LinesAdded    int
@@ -14,18 +15,18 @@ type RepositoryCommitFile struct {
 type FileChangeType int
 
 const (
-	Unknown  FileChangeType = -1
-	Modified FileChangeType = iota
-	Renamed
-	Created
-	Deleted
+	FileChangeUnknown FileChangeType = -1
+	FileModified      FileChangeType = iota
+	FileRenamed
+	FileCreated
+	FileDeleted
 )
 
 func NewRepositoryCommitFile(fileID UUID) *RepositoryCommitFile {
 	return &RepositoryCommitFile{
 		FileID:        fileID,
 		OldFileIDs:    make(map[UUID]UUID),
-		Change:        Unknown,
+		Change:        FileChangeUnknown,
 		LinesModified: -1,
 		LinesAdded:    -1,
 		LinesDeleted:  -1,
