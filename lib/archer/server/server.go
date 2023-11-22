@@ -15,10 +15,14 @@ type Options struct {
 func Run(storage archer.Storage, opts *Options) error {
 	s := newServer(opts)
 
+	fmt.Printf("Loading existing data...\n")
+
 	err := s.load(storage)
 	if err != nil {
 		return err
 	}
+
+	fmt.Printf("Starting server on port %v...\n", s.opts.Port)
 
 	return s.run()
 }
@@ -95,6 +99,7 @@ func (s *server) load(storage archer.Storage) error {
 }
 
 func (s *server) run() error {
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 
 	s.initFiles(r)

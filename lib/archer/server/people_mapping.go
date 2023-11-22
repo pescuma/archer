@@ -16,7 +16,7 @@ func (s *server) createPersonFilter(person string) (map[model.UUID]bool, error) 
 		return nil, nil
 	}
 
-	people, err := s.listProjects("", "", "", person)
+	people, err := s.listPeople("", "", "", person)
 	if err != nil {
 		return nil, err
 	}

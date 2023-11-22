@@ -193,6 +193,9 @@ func (s *server) statsChangedLines(params *StatsLinesParams) (any, error) {
 		return fmt.Sprintf("%04d-%02d", y, m)
 	})
 	s2 := lo.MapValues(s1, func(i []RepoAndCommit, _ string) gin.H {
+		i = lo.Filter(i, func(j RepoAndCommit, _ int) bool {
+			return j.Commit.LinesModified != -1
+		})
 		return gin.H{
 			"modified": lo.SumBy(i, func(j RepoAndCommit) int { return j.Commit.LinesModified }),
 			"added":    lo.SumBy(i, func(j RepoAndCommit) int { return j.Commit.LinesAdded }),
@@ -230,6 +233,10 @@ func (s *server) statsSurvivedLines(params *StatsLinesParams) (any, error) {
 			continue
 		}
 
+		if l.Blame.Code == -1 {
+			continue
+		}
+
 		m, ok := result[l.Month]
 		if !ok {
 			m = make(map[string]int, 3)
@@ -239,9 +246,9 @@ func (s *server) statsSurvivedLines(params *StatsLinesParams) (any, error) {
 			result[l.Month] = m
 		}
 
-		m["blank"] += l.Blame.Blank
-		m["comment"] += l.Blame.Comment
-		m["code"] += l.Blame.Code
+		m["blank"] = l.Blame.Blank
+		m["comment"] = l.Blame.Comment
+		m["code"] = l.Blame.Code
 	}
 	return result, nil
 }

@@ -108,7 +108,7 @@ fui.count = computed(() => {
                               (event) => {
                                 _.debounce(() => {
                                   fui.filters.file = event.target.value
-                                }, 1000)()
+                                }, 2000)()
                               }
                             "
                           />
@@ -131,7 +131,7 @@ fui.count = computed(() => {
                               (event) => {
                                 _.debounce(() => {
                                   fui.filters.proj = event.target.value
-                                }, 1000)()
+                                }, 2000)()
                               }
                             "
                           />
@@ -154,7 +154,7 @@ fui.count = computed(() => {
                               (event) => {
                                 _.debounce(() => {
                                   fui.filters.repo = event.target.value
-                                }, 1000)()
+                                }, 2000)()
                               }
                             "
                           />
@@ -177,7 +177,7 @@ fui.count = computed(() => {
                               (event) => {
                                 _.debounce(() => {
                                   fui.filters.person = event.target.value
-                                }, 1000)()
+                                }, 2000)()
                               }
                             "
                           />

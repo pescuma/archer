@@ -534,7 +534,7 @@ func (s *sqliteStorage) LoadPeopleRelations() (*model.PeopleRelations, error) {
 	})
 
 	var fs []*sqlPersonFile
-	err = s.mainDB.Find(&rs).Error
+	err = s.mainDB.Find(&fs).Error
 	if err != nil {
 		return nil, err
 	}

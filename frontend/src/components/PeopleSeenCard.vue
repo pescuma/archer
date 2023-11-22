@@ -1,7 +1,7 @@
 <script setup>
 import _ from 'lodash'
 import moment from 'moment'
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
 import { filters } from '@/utils/filters'
 
@@ -12,7 +12,7 @@ const data = reactive({
   series: [],
 })
 
-onMounted(function () {
+function refresh() {
   let f = filters.toQueryString()
   card.value.request(`/api/stats/seen/people?${f}`, function (response) {
     const labels = []
@@ -111,7 +111,11 @@ onMounted(function () {
       },
     ]
   })
-})
+}
+
+onMounted(refresh)
+
+watch(() => filters.data, refresh, { deep: true })
 </script>
 
 <template>

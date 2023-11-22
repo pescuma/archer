@@ -29,10 +29,10 @@ func (s *server) createProjectFilter(proj string) (map[model.UUID]bool, error) {
 }
 
 func (s *server) listProjects(file string, proj string, repo string, person string) ([]*model.Project, error) {
-	return s.filterProjects(proj, s.projects.ListProjects(model.FilterExcludeExternal), file, repo, person)
+	return s.filterProjects(s.projects.ListProjects(model.FilterExcludeExternal), file, proj, repo, person)
 }
 
-func (s *server) filterProjects(proj string, col []*model.Project, file string, repo string, person string) ([]*model.Project, error) {
+func (s *server) filterProjects(col []*model.Project, file string, proj string, repo string, person string) ([]*model.Project, error) {
 	proj = prepareToSearch(proj)
 
 	fileIDs, err := s.createFileFilter(file)
@@ -43,7 +43,7 @@ func (s *server) filterProjects(proj string, col []*model.Project, file string, 
 	if err != nil {
 		return nil, err
 	}
-	personIDs, err := s.createPersonFilter(proj)
+	personIDs, err := s.createPersonFilter(person)
 	if err != nil {
 		return nil, err
 	}

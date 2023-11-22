@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import { IconFolders } from '@tabler/icons-vue'
 import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
 import { filters } from '@/utils/filters'
@@ -11,13 +11,17 @@ const data = reactive({
   details: '',
 })
 
-onMounted(function () {
+function refresh() {
   let f = filters.toQueryString()
   card.value.request(`/api/stats/count/projects?${f}`, function (response) {
     data.text = response.total.toLocaleString() + ' Projects'
     data.details = response.external.toLocaleString() + ' external'
   })
-})
+}
+
+onMounted(refresh)
+
+watch(() => filters.data, refresh, { deep: true })
 </script>
 
 <template>

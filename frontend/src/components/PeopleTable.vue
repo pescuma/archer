@@ -74,7 +74,7 @@ const columns = [
   },
   {
     name: 'Survived lines',
-    field: 'blame.lines',
+    field: 'blame',
     type: 'int',
   },
   {

@@ -17,7 +17,7 @@ func (s *server) createRepoFilter(repo string) (map[model.UUID]bool, error) {
 		return nil, nil
 	}
 
-	repos, err := s.listProjects("", "", repo, "")
+	repos, err := s.listRepos("", "", repo, "")
 	if err != nil {
 		return nil, err
 	}

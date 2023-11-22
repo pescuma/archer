@@ -16,7 +16,7 @@ func (s *server) createFileFilter(file string) (map[model.UUID]bool, error) {
 		return nil, nil
 	}
 
-	files, err := s.listProjects(file, "", "", "")
+	files, err := s.listFiles(file, "", "", "")
 	if err != nil {
 		return nil, err
 	}
