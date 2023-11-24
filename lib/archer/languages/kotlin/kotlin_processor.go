@@ -26,7 +26,7 @@ func ProcessFiles(paths []string,
 	onProcessed func(bar *progressbar.ProgressBar, index int, file string) error,
 	onError func(bar *progressbar.ProgressBar, index int, file string, err error) error,
 ) error {
-	group := utils.NewProcessGroup(1, 1000,
+	group := utils.NewProcessGroup(
 		func(w *work) (*work, error) {
 			contents := string(w.contents)
 			w.contents = nil

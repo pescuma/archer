@@ -6,30 +6,14 @@ import (
 	"github.com/samber/lo"
 )
 
-type ProjectsFilters struct {
-	FilterFile    string `form:"file"`
-	FilterProject string `form:"proj"`
-	FilterRepo    string `form:"repo"`
-	FilterPerson  string `form:"person"`
-}
-
-type ProjectsListParams struct {
-	GridParams
-	ProjectsFilters
-}
-
-type StatsProjectsParams struct {
-	ProjectsFilters
-}
-
 func (s *server) initProjects(r *gin.Engine) {
-	r.GET("/api/projects", getP[ProjectsListParams](s.projectsList))
+	r.GET("/api/projects", getP[ListParams](s.projectsList))
 	r.GET("/api/projects/:id", get(s.projectGet))
-	r.GET("/api/stats/count/projects", getP[StatsProjectsParams](s.statsCountProjects))
-	r.GET("/api/stats/seen/projects", getP[StatsProjectsParams](s.statsProjectsSeen))
+	r.GET("/api/stats/count/projects", getP[StatsParams](s.statsCountProjects))
+	r.GET("/api/stats/seen/projects", getP[StatsParams](s.statsProjectsSeen))
 }
 
-func (s *server) projectsList(params *ProjectsListParams) (any, error) {
+func (s *server) projectsList(params *ListParams) (any, error) {
 	projs, err := s.listProjects(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
 	if err != nil {
 		return nil, err
@@ -55,7 +39,7 @@ func (s *server) projectsList(params *ProjectsListParams) (any, error) {
 	}, nil
 }
 
-func (s *server) statsCountProjects(params *StatsProjectsParams) (any, error) {
+func (s *server) statsCountProjects(params *StatsParams) (any, error) {
 	projs, err := s.listProjects(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
 	if err != nil {
 		return nil, err
@@ -75,7 +59,7 @@ func (s *server) projectGet() (any, error) {
 	return nil, nil
 }
 
-func (s *server) statsProjectsSeen(params *StatsProjectsParams) (any, error) {
+func (s *server) statsProjectsSeen(params *StatsParams) (any, error) {
 	projs, err := s.listProjects(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
 	if err != nil {
 		return nil, err

@@ -5,8 +5,14 @@ import (
 	"sync"
 )
 
-func ParallelFor[T, O any](col []T, proc func(T) (O, error)) *ProcessGroup[T, O] {
-	group := NewProcessGroup(1, 10, proc)
+type ParallelOptions struct {
+	Routines     int
+	InputFactor  int
+	OutputFactor int
+}
+
+func ParallelFor[T, O any](col []T, proc func(T) (O, error), opts ...ParallelOptions) *ProcessGroup[T, O] {
+	group := NewProcessGroup(proc, opts...)
 
 	go func() {
 		for _, w := range col {
@@ -29,19 +35,34 @@ type ProcessGroup[I, O any] struct {
 	Err    chan error
 }
 
-func NewProcessGroup[I, O any](inputFactor, outputFactor int, proc func(I) (O, error)) *ProcessGroup[I, O] {
-	routines := Max(Min(runtime.GOMAXPROCS(-1), runtime.NumCPU())-2, 1)
+func NewProcessGroup[I, O any](proc func(I) (O, error), opts ...ParallelOptions) *ProcessGroup[I, O] {
+	o := ParallelOptions{
+		Routines:     Max(Min(runtime.GOMAXPROCS(-1), runtime.NumCPU())/2-1, 1),
+		InputFactor:  2,
+		OutputFactor: 2,
+	}
+	for _, oi := range opts {
+		if oi.Routines > 0 {
+			o.Routines = oi.Routines
+		}
+		if oi.InputFactor > 0 {
+			o.InputFactor = oi.InputFactor
+		}
+		if oi.OutputFactor > 0 {
+			o.OutputFactor = oi.OutputFactor
+		}
+	}
 
 	group := ProcessGroup[I, O]{
 		proc:  proc,
 		abort: make(chan struct{}),
 
-		Input:  make(chan I, inputFactor*routines),
-		Output: make(chan O, outputFactor*routines),
+		Input:  make(chan I, o.InputFactor*o.Routines),
+		Output: make(chan O, o.OutputFactor*o.Routines),
 		Err:    make(chan error),
 	}
 
-	for i := 0; i < routines; i++ {
+	for i := 0; i < o.Routines; i++ {
 		group.wg.Add(1)
 		go group.runProcessor()
 	}

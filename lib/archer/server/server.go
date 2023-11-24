@@ -106,6 +106,7 @@ func (s *server) run() error {
 	s.initProjects(r)
 	s.initRepos(r)
 	s.initPeople(r)
+	s.initArch(r)
 
 	return r.Run(fmt.Sprintf(":%v", s.opts.Port))
 }

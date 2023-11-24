@@ -6,30 +6,14 @@ import (
 	"github.com/samber/lo"
 )
 
-type FilesFilters struct {
-	FilterFile    string `form:"file"`
-	FilterProject string `form:"proj"`
-	FilterRepo    string `form:"repo"`
-	FilterPerson  string `form:"person"`
-}
-
-type FilesListParams struct {
-	GridParams
-	FilesFilters
-}
-
-type StatsFilesParams struct {
-	FilesFilters
-}
-
 func (s *server) initFiles(r *gin.Engine) {
-	r.GET("/api/files", getP[FilesListParams](s.filesList))
+	r.GET("/api/files", getP[ListParams](s.filesList))
 	r.GET("/api/files/:id", get(s.fileGet))
-	r.GET("/api/stats/count/files", getP[StatsFilesParams](s.statsCountFiles))
-	r.GET("/api/stats/seen/files", getP[StatsFilesParams](s.statsSeenFiles))
+	r.GET("/api/stats/count/files", getP[StatsParams](s.statsCountFiles))
+	r.GET("/api/stats/seen/files", getP[StatsParams](s.statsSeenFiles))
 }
 
-func (s *server) filesList(params *FilesListParams) (any, error) {
+func (s *server) filesList(params *ListParams) (any, error) {
 	files, err := s.listFiles(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
 	if err != nil {
 		return nil, err
@@ -55,7 +39,7 @@ func (s *server) filesList(params *FilesListParams) (any, error) {
 	}, nil
 }
 
-func (s *server) statsCountFiles(params *StatsFilesParams) (any, error) {
+func (s *server) statsCountFiles(params *StatsParams) (any, error) {
 	files, err := s.listFiles(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
 	if err != nil {
 		return nil, err
@@ -71,7 +55,7 @@ func (s *server) fileGet() (any, error) {
 	return nil, nil
 }
 
-func (s *server) statsSeenFiles(params *StatsFilesParams) (any, error) {
+func (s *server) statsSeenFiles(params *StatsParams) (any, error) {
 	files, err := s.listFiles(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
 	if err != nil {
 		return nil, err

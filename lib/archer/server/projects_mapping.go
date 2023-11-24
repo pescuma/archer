@@ -194,3 +194,11 @@ func (s *server) toProjectReference(id *model.UUID) gin.H {
 		"type": p.String(),
 	}
 }
+
+func (s *server) toDependency(p *model.ProjectDependency) gin.H {
+	return gin.H{
+		"id":     p.ID,
+		"source": p.Source.ID,
+		"target": p.Target.ID,
+	}
+}
