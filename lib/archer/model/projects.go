@@ -45,42 +45,6 @@ func (ps *Projects) GetByID(id UUID) *Project {
 	return ps.byID[id]
 }
 
-func (ps *Projects) FilterProjects(filters []string, ft FilterType) ([]*Project, error) {
-	if len(filters) == 0 {
-		return ps.ListProjects(ft), nil
-	}
-
-	matched := map[*Project]bool{}
-	for _, fe := range filters {
-		filter, err := ParseFilter(ps, fe, Include)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, p := range ps.ListProjects(ft) {
-			if filter.Decide(filter.FilterProject(p)) == Include {
-				matched[p] = true
-			}
-
-			for _, d := range p.ListDependencies(ft) {
-				if filter.Decide(filter.FilterDependency(d)) == Include {
-					matched[d.Source] = true
-					matched[d.Target] = true
-				}
-			}
-		}
-	}
-
-	result := make([]*Project, 0, len(matched))
-	for p := range matched {
-		result = append(result, p)
-	}
-
-	sortProjects(result)
-
-	return result, nil
-}
-
 func (ps *Projects) ListProjects(ft FilterType) []*Project {
 	result := make([]*Project, 0, len(ps.byName))
 

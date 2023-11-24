@@ -2,9 +2,9 @@ package server
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/pescuma/archer/lib/archer/filters"
 	"github.com/pescuma/archer/lib/archer/model"
 	"github.com/pescuma/archer/lib/archer/utils"
 	"github.com/samber/lo"
@@ -33,7 +33,10 @@ func (s *server) listFiles(file string, proj string, repo string, person string)
 }
 
 func (s *server) filterFiles(col []*model.File, file string, proj string, repo string, person string) ([]*model.File, error) {
-	file = prepareToSearch(file)
+	fileFilter, err := filters.ParseStringFilter(file)
+	if err != nil {
+		return nil, err
+	}
 
 	projIDs, err := s.createProjectFilter(proj)
 	if err != nil {
@@ -49,16 +52,18 @@ func (s *server) filterFiles(col []*model.File, file string, proj string, repo s
 	}
 
 	return lo.Filter(col, func(i *model.File, index int) bool {
-		if file != "" && !strings.Contains(strings.ToLower(i.Path), file) {
+		if !fileFilter(i.Path) {
 			return false
 		}
 
 		if projIDs != nil && (i.ProjectID == nil || !projIDs[*i.ProjectID]) {
 			return false
 		}
+
 		if repoIDs != nil && (i.RepositoryID == nil || !repoIDs[*i.RepositoryID]) {
 			return false
 		}
+
 		if personIDs != nil {
 			ps := s.peopleRelations.ListPeopleByFile(i.ID)
 			if !utils.MapKeysHaveIntersection(ps, personIDs) {

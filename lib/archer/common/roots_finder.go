@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
+	"github.com/pescuma/archer/lib/archer/filters"
 
 	"github.com/pescuma/archer/lib/archer/model"
 	"github.com/pescuma/archer/lib/archer/utils"
@@ -30,7 +31,7 @@ func (r *RootsFinder) ComputeRootDirs(projectsDB *model.Projects, filesDB *model
 	for _, rootDir := range r.rootDirs {
 		switch {
 		case strings.HasPrefix(rootDir, "archer:"):
-			ps, err := projectsDB.FilterProjects([]string{strings.TrimPrefix(rootDir, "archer:")}, model.FilterExcludeExternal)
+			ps, err := filters.ParseAndFilterProjects(projectsDB, []string{strings.TrimPrefix(rootDir, "archer:")}, model.FilterExcludeExternal)
 			if err != nil {
 				return nil, err
 			}

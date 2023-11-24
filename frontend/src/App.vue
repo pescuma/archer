@@ -94,24 +94,14 @@ fui.count = computed(() => {
                     </a>
                   </div>
                 </div>
+
                 <div class="card-body" v-if="fui.visible">
                   <div class="row">
                     <div class="col-3">
                       <div class="mb-3">
                         <label class="form-label">File</label>
                         <div class="input-group mb-2">
-                          <input
-                            type="text"
-                            class="form-control"
-                            :value="fui.filters.file"
-                            @input="
-                              (event) => {
-                                _.debounce(() => {
-                                  fui.filters.file = event.target.value
-                                }, 2000)()
-                              }
-                            "
-                          />
+                          <input type="text" class="form-control" v-model.lazy="fui.filters.file" />
                           <a href="#" class="btn btn-icon text-muted" @click.prevent="fui.filters.file = ''">
                             <icon-trash class="icon" />
                           </a>
@@ -123,18 +113,7 @@ fui.count = computed(() => {
                       <div class="mb-3">
                         <label class="form-label">Project</label>
                         <div class="input-group mb-2">
-                          <input
-                            type="text"
-                            class="form-control"
-                            :value="fui.filters.proj"
-                            @input="
-                              (event) => {
-                                _.debounce(() => {
-                                  fui.filters.proj = event.target.value
-                                }, 2000)()
-                              }
-                            "
-                          />
+                          <input type="text" class="form-control" v-model.lazy="fui.filters.proj" />
                           <a href="#" class="btn btn-icon text-muted" @click.prevent="fui.filters.proj = ''">
                             <icon-trash class="icon" />
                           </a>
@@ -146,18 +125,7 @@ fui.count = computed(() => {
                       <div class="mb-3">
                         <label class="form-label">Repository</label>
                         <div class="input-group mb-2">
-                          <input
-                            type="text"
-                            class="form-control"
-                            :value="fui.filters.repo"
-                            @input="
-                              (event) => {
-                                _.debounce(() => {
-                                  fui.filters.repo = event.target.value
-                                }, 2000)()
-                              }
-                            "
-                          />
+                          <input type="text" class="form-control" v-model.lazy="fui.filters.repo" />
                           <a href="#" class="btn btn-icon text-muted" @click.prevent="fui.filters.repo = ''">
                             <icon-trash class="icon" />
                           </a>
@@ -169,18 +137,7 @@ fui.count = computed(() => {
                       <div class="mb-3">
                         <label class="form-label">Person</label>
                         <div class="input-group mb-2">
-                          <input
-                            type="text"
-                            class="form-control"
-                            :value="fui.filters.person"
-                            @input="
-                              (event) => {
-                                _.debounce(() => {
-                                  fui.filters.person = event.target.value
-                                }, 2000)()
-                              }
-                            "
-                          />
+                          <input type="text" class="form-control" v-model.lazy="fui.filters.person" />
                           <a href="#" class="btn btn-icon text-muted" @click.prevent="fui.filters.person = ''">
                             <icon-trash class="icon" />
                           </a>

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hhatto/gocloc"
+	"github.com/pescuma/archer/lib/archer/filters"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 
@@ -50,7 +51,7 @@ func (l *locImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
-	ps, err := projectsDB.FilterProjects(l.filters, model.FilterExcludeExternal)
+	ps, err := filters.ParseAndFilterProjects(projectsDB, l.filters, model.FilterExcludeExternal)
 	if err != nil {
 		return err
 	}

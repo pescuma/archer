@@ -124,11 +124,6 @@ func paginate[T any](col []T, offset, limit *int) []T {
 
 func prepareToSearch(s string) string {
 	s = strings.TrimSpace(s)
-
-	if s != "" {
-		s = strings.ToLower(s)
-	}
-
 	return s
 }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/pescuma/archer/lib/archer/filters"
 	"github.com/pescuma/archer/lib/archer/model"
 )
 
@@ -29,7 +30,7 @@ func (c *ShowCmd) Run(ctx *context) error {
 	return nil
 }
 
-func (c *ShowCmd) print(projects *model.Projects, filter model.Filter) {
+func (c *ShowCmd) print(projects *model.Projects, filter filters.Filter) {
 	ps := projects.ListProjects(model.FilterExcludeExternal)
 
 	tg := groupByRoot(ps, filter, false, func(p *model.Project) string {
@@ -55,30 +56,6 @@ func (c *ShowCmd) print(projects *model.Projects, filter model.Filter) {
 	if !c.Simple && !tg.size.isEmpty() {
 		c.println("", "Total", "", tg.size.text())
 	}
-}
-
-func (c *ShowCmd) computeNodesShow(ps []*model.Project, filter model.Filter) map[string]bool {
-	show := map[string]bool{}
-
-	for _, p := range ps {
-		show[p.Name] = false
-	}
-
-	for _, p := range ps {
-		if !show[p.Name] {
-			show[p.Name] = filter.Decide(filter.FilterProject(p)) != model.Exclude
-		}
-
-		for _, d := range p.ListDependencies(model.FilterExcludeExternal) {
-			if filter.Decide(filter.FilterDependency(d)) == model.Exclude {
-				continue
-			}
-
-			show[p.Name] = true
-		}
-	}
-
-	return show
 }
 
 func (c *ShowCmd) println(prefix, category, name, size string) {

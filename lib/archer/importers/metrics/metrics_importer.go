@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pescuma/archer/lib/archer/filters"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"github.com/schollz/progressbar/v3"
@@ -55,7 +56,7 @@ func (m *metricsImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
-	ps, err := projectsDB.FilterProjects(m.filters, model.FilterExcludeExternal)
+	ps, err := filters.ParseAndFilterProjects(projectsDB, m.filters, model.FilterExcludeExternal)
 	if err != nil {
 		return err
 	}

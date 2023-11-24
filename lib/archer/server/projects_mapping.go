@@ -2,39 +2,40 @@ package server
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/pescuma/archer/lib/archer/filters"
 	"github.com/pescuma/archer/lib/archer/model"
 	"github.com/pescuma/archer/lib/archer/utils"
 	"github.com/samber/lo"
 )
 
-func (s *server) createProjectFilter(proj string) (map[model.UUID]bool, error) {
-	proj = prepareToSearch(proj)
-	if proj == "" {
-		return nil, nil
-	}
+func (s *server) createProjectAndDepsFilter(file string, proj string, repo string, person string) (filters.Filter, error) {
+	var fs []filters.Filter
 
-	projects, err := s.listProjects("", proj, "", "")
+	fi, err := filters.ParseFilter(s.projects, proj, filters.Include)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make(map[model.UUID]bool, len(projects))
-	for _, p := range projects {
-		result[p.ID] = true
+	fs = append(fs, fi)
+
+	projFilter, err := s.createProjectsExternalFilters(file, repo, person)
+	if err != nil {
+		return nil, err
 	}
-	return result, nil
+
+	if projFilter != nil {
+		fs = append(fs, filters.NewProjectFilter(filters.Include, projFilter))
+	}
+
+	fs = append(fs, filters.CreateIgnoreFilter())
+	fs = append(fs, filters.CreateIgnoreExternalDependenciesFilter())
+
+	return filters.GroupFilters(fs...), nil
 }
 
-func (s *server) listProjects(file string, proj string, repo string, person string) ([]*model.Project, error) {
-	return s.filterProjects(s.projects.ListProjects(model.FilterExcludeExternal), file, proj, repo, person)
-}
-
-func (s *server) filterProjects(col []*model.Project, file string, proj string, repo string, person string) ([]*model.Project, error) {
-	proj = prepareToSearch(proj)
-
+func (s *server) createProjectsExternalFilters(file string, repo string, person string) (func(*model.Project) bool, error) {
 	fileIDs, err := s.createFileFilter(file)
 	if err != nil {
 		return nil, err
@@ -48,28 +49,30 @@ func (s *server) filterProjects(col []*model.Project, file string, proj string, 
 		return nil, err
 	}
 
-	filesPerProject := make(map[model.UUID]map[model.UUID]bool)
-	for _, f := range s.files.ListFiles() {
-		if f.ProjectID == nil {
-			continue
-		}
-
-		projID := *f.ProjectID
-
-		fs, ok := filesPerProject[projID]
-		if !ok {
-			fs = make(map[model.UUID]bool)
-			filesPerProject[projID] = fs
-		}
-
-		fs[f.ID] = true
+	if fileIDs == nil && repoIDs == nil && personIDs == nil {
+		return nil, nil
 	}
 
-	return lo.Filter(col, func(i *model.Project, index int) bool {
-		if proj != "" && !strings.Contains(strings.ToLower(i.Name), proj) {
-			return false
-		}
+	filesPerProject := make(map[model.UUID]map[model.UUID]bool)
+	if fileIDs != nil || personIDs != nil {
+		for _, f := range s.files.ListFiles() {
+			if f.ProjectID == nil {
+				continue
+			}
 
+			projID := *f.ProjectID
+
+			fs, ok := filesPerProject[projID]
+			if !ok {
+				fs = make(map[model.UUID]bool)
+				filesPerProject[projID] = fs
+			}
+
+			fs[f.ID] = true
+		}
+	}
+
+	result := func(i *model.Project) bool {
 		if fileIDs != nil {
 			fs, ok := filesPerProject[i.ID]
 			if !ok {
@@ -105,7 +108,40 @@ func (s *server) filterProjects(col []*model.Project, file string, proj string, 
 		}
 
 		return true
-	}), nil
+	}
+
+	return result, nil
+}
+
+func (s *server) createProjectFilter(proj string) (map[model.UUID]bool, error) {
+	proj = prepareToSearch(proj)
+	if proj == "" {
+		return nil, nil
+	}
+
+	projects, err := s.listProjects("", proj, "", "")
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[model.UUID]bool, len(projects))
+	for _, p := range projects {
+		result[p.ID] = true
+	}
+	return result, nil
+}
+
+func (s *server) listProjects(file string, proj string, repo string, person string) ([]*model.Project, error) {
+	return s.filterProjects(s.projects.ListProjects(model.FilterExcludeExternal), file, proj, repo, person)
+}
+
+func (s *server) filterProjects(col []*model.Project, file string, proj string, repo string, person string) ([]*model.Project, error) {
+	filter, err := s.createProjectAndDepsFilter(file, proj, repo, person)
+	if err != nil {
+		return nil, err
+	}
+
+	return filters.FilterProjects(filter, col), nil
 }
 
 func (s *server) sortProjects(col []*model.Project, field string, asc *bool) error {

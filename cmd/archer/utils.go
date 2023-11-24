@@ -3,13 +3,14 @@ package main
 import (
 	"sort"
 
+	"github.com/pescuma/archer/lib/archer/filters"
 	"github.com/samber/lo"
 
 	"github.com/pescuma/archer/lib/archer/model"
 	"github.com/pescuma/archer/lib/archer/utils"
 )
 
-func groupByRoot(ps []*model.Project, filter model.Filter, forceShowDependentProjects bool, projGrouping func(project *model.Project) string) *group {
+func groupByRoot(ps []*model.Project, filter filters.Filter, forceShowDependentProjects bool, projGrouping func(project *model.Project) string) *group {
 	show := computeNodesShow(ps, filter, forceShowDependentProjects)
 
 	ps = lo.Filter(ps, func(p *model.Project, _ int) bool { return show[p.FullName()] })
@@ -57,11 +58,7 @@ func groupByRoot(ps []*model.Project, filter model.Filter, forceShowDependentPro
 			rg.size.add(size)
 			tg.size.add(size)
 
-			for _, d := range p.ListDependencies(model.FilterExcludeExternal) {
-				if filter.Decide(filter.FilterDependency(d)) == model.Exclude {
-					continue
-				}
-
+			for _, d := range filters.FilterDependencies(filter, p.Dependencies) {
 				dgn := projGrouping(d.Target)
 				dgfn := d.Target.Root + ":" + dgn
 
@@ -104,20 +101,16 @@ func groupByRoot(ps []*model.Project, filter model.Filter, forceShowDependentPro
 	return &tg
 }
 
-func computeNodesShow(ps []*model.Project, filter model.Filter, forceShowDependentProjects bool) map[string]bool {
+func computeNodesShow(ps []*model.Project, filter filters.Filter, forceShowDependentProjects bool) map[string]bool {
 	show := map[string]bool{}
 
 	for _, p := range ps {
-		show[p.FullName()] = false
-	}
-
-	for _, p := range ps {
-		if !show[p.FullName()] {
-			show[p.FullName()] = filter.Decide(filter.FilterProject(p)) != model.Exclude
+		if filters.IncludeProject(filter, p) {
+			show[p.FullName()] = true
 		}
 
 		for _, d := range p.ListDependencies(model.FilterExcludeExternal) {
-			if filter.Decide(filter.FilterDependency(d)) == model.Exclude {
+			if !filters.IncludeDependency(filter, d) {
 				continue
 			}
 

@@ -2,10 +2,10 @@ package server
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hashicorp/go-set/v2"
+	"github.com/pescuma/archer/lib/archer/filters"
 	"github.com/pescuma/archer/lib/archer/model"
 	"github.com/pescuma/archer/lib/archer/utils"
 	"github.com/samber/lo"
@@ -34,7 +34,10 @@ func (s *server) listRepos(file string, proj string, repo string, person string)
 }
 
 func (s *server) filterRepos(col []*model.Repository, file string, proj string, repo string, person string) ([]*model.Repository, error) {
-	repo = prepareToSearch(repo)
+	repoFilter, err := filters.ParseStringFilter(repo)
+	if err != nil {
+		return nil, err
+	}
 
 	projIDs, err := s.createProjectFilter(proj)
 	if err != nil {
@@ -50,7 +53,7 @@ func (s *server) filterRepos(col []*model.Repository, file string, proj string, 
 	}
 
 	return lo.Filter(col, func(i *model.Repository, index int) bool {
-		if repo != "" && !strings.Contains(strings.ToLower(i.Name), repo) {
+		if !repoFilter(i.Name) {
 			return false
 		}
 

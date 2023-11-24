@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/pescuma/archer/lib/archer/filters"
 	"github.com/pescuma/archer/lib/archer/model"
 )
 
@@ -27,13 +28,13 @@ func (c *ConfigSetCmd) Run(ctx *context) error {
 			return err
 		}
 
-		filter, err := model.ParseFilter(projects, c.Project, model.Include)
+		filter, err := filters.ParseFilter(projects, c.Project, filters.Include)
 		if err != nil {
 			return err
 		}
 
 		for _, p := range projects.ListProjects(model.FilterExcludeExternal) {
-			if filter.FilterProject(p) != model.Include {
+			if filter.FilterProject(p) != filters.Include {
 				continue
 			}
 

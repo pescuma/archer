@@ -2,9 +2,9 @@ package server
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/pescuma/archer/lib/archer/filters"
 	"github.com/pescuma/archer/lib/archer/model"
 	"github.com/pescuma/archer/lib/archer/utils"
 	"github.com/samber/lo"
@@ -34,6 +34,10 @@ func (s *server) listPeople(file string, proj string, repo string, person string
 
 func (s *server) filterPeople(col []*model.Person, file string, proj string, repo string, person string) ([]*model.Person, error) {
 	person = prepareToSearch(person)
+	personFilter, err := filters.ParseStringFilter(person)
+	if err != nil {
+		return nil, err
+	}
 
 	fileIDs, err := s.createFileFilter(file)
 	if err != nil {
@@ -51,10 +55,10 @@ func (s *server) filterPeople(col []*model.Person, file string, proj string, rep
 	return lo.Filter(col, func(i *model.Person, index int) bool {
 		if person != "" {
 			hasName := lo.ContainsBy(i.ListNames(), func(j string) bool {
-				return strings.Contains(strings.ToLower(j), person)
+				return personFilter(j)
 			})
 			hasEmail := lo.ContainsBy(i.ListEmails(), func(j string) bool {
-				return strings.Contains(strings.ToLower(j), person)
+				return personFilter(j)
 			})
 			if !hasName && !hasEmail {
 				return false

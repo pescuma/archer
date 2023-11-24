@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
+	"github.com/pescuma/archer/lib/archer/filters"
 
 	"github.com/pescuma/archer/lib/archer/model"
 	"github.com/pescuma/archer/lib/archer/utils"
@@ -69,7 +70,7 @@ func (c *GraphCmd) Run(ctx *context) error {
 	return nil
 }
 
-func (c *GraphCmd) generateDot(projects *model.Projects, filter model.Filter) string {
+func (c *GraphCmd) generateDot(projects *model.Projects, filter filters.Filter) string {
 	ps := projects.ListProjects(model.FilterExcludeExternal)
 
 	getProjectName := func(p *model.Project) string {
@@ -176,31 +177,6 @@ func (c *GraphCmd) computeSizesConfig(tg *group) (bool, func(int) float64) {
 		f = math.Sqrt(f)
 		return utils.Max(f*(sizeRange[1]), sizeRange[0])
 	}
-}
-
-func (c *GraphCmd) computeNodesShow(ps []*model.Project, filter model.Filter) map[string]bool {
-	show := map[string]bool{}
-
-	for _, p := range ps {
-		show[p.Name] = false
-	}
-
-	for _, p := range ps {
-		if !show[p.Name] {
-			show[p.Name] = filter.Decide(filter.FilterProject(p)) != model.Exclude
-		}
-
-		for _, d := range p.ListDependencies(model.FilterExcludeExternal) {
-			if filter.Decide(filter.FilterDependency(d)) == model.Exclude {
-				continue
-			}
-
-			show[d.Source.Name] = true
-			show[d.Target.Name] = true
-		}
-	}
-
-	return show
 }
 
 func (c *GraphCmd) computeColors(ps []*model.Project, getProjectName func(p *model.Project) string) map[string]string {
