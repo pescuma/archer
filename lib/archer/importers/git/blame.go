@@ -14,7 +14,7 @@ import (
 
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/go-git/go-git/v5/utils/diff"
+	"github.com/pescuma/archer/lib/archer/linediff"
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
@@ -29,17 +29,18 @@ type BlameResult struct {
 }
 
 type BlameCache interface {
+	GetFile(name string, hash plumbing.Hash) (*object.File, error)
 	GetCommit(hash plumbing.Hash) (*BlameCommitCache, error)
-	GetCommitTreeEntry(commit *object.Commit, path string) (*object.Tree, *object.TreeEntry, error)
+	GetFileHash(commit *object.Commit, path string) (plumbing.Hash, error)
 }
 
 type BlameCommitCache struct {
 	Parents map[plumbing.Hash]*BlameParentCache
-	Files   map[string]*BlameFileCache
+	Changes map[string]*BlameFileCache
 }
 
 func (c *BlameCommitCache) Touched(file string) bool {
-	_, ok := c.Files[file]
+	_, ok := c.Changes[file]
 	return ok
 }
 
@@ -85,6 +86,13 @@ func Blame(c *object.Commit, path string, cache BlameCache) (*BlameResult, error
 		return nil, err
 	}
 	finalLength := len(finalLines)
+
+	if finalLength == 0 {
+		return &BlameResult{
+			Path: path,
+			Rev:  c.Hash,
+		}, nil
+	}
 
 	needsMap := make([]lineMap, finalLength)
 	for i := range needsMap {
@@ -274,20 +282,37 @@ func (b *blame) addBlames(curItems []*queueItem, cache BlameCache) (bool, error)
 		curItems = nil // free the memory
 	}
 
-	parents, err := parentsContainingPath(curItem.path, curItem.Commit, cache)
+	parents, err := parentsContainingPath(curItem.path, curItem.hash, curItem.Commit, cache)
 	if err != nil {
 		return false, err
 	}
 
-	anyPushed := false
-	for parnetNo, prev := range parents {
-		if prev.Hash == plumbing.ZeroHash {
-			prev.Hash, err = blobHash(prev.Path, prev.Commit, cache)
-			if err != nil {
-				return false, err
+	// In a merge, if the file came from a parent, we can track only that parent
+	if len(parents) > 1 {
+		origs := make([]parentCommit, 0, len(parents))
+		for _, prev := range parents {
+			if curItem.hash == prev.Hash {
+				origs = append(origs, prev)
 			}
 		}
 
+		if len(origs) > 0 && len(origs) < len(parents) {
+			parents = origs
+		}
+	}
+
+	//allSame := ""
+	//for _, prev := range parents {
+	//	if curItem.hash != prev.Hash {
+	//		allSame = prev.Hash.String()
+	//	}
+	//}
+	//if allSame != "" {
+	//	fmt.Printf("%v %v -> %v %v\n", curItem.Commit.Hash.String()[:7], curItem.hash.String()[:7], allSame[:7], curItem.Commit.Committer.When)
+	//}
+
+	anyPushed := false
+	for parnetNo, prev := range parents {
 		if curItem.hash == prev.Hash {
 			if len(parents) == 1 && curItem.MergedChildren == nil && curItem.IdenticalToChild {
 				// commit that has 1 parent and 1 child and is the same as both, bypass it completely
@@ -319,11 +344,7 @@ func (b *blame) addBlames(curItems []*queueItem, cache BlameCache) (bool, error)
 		}
 
 		// get the contents of the file
-		prevTree, prevEntry, err := cache.GetCommitTreeEntry(prev.Commit, prev.Path)
-		if err != nil {
-			return false, err
-		}
-		file, err := prevTree.TreeEntryFile(prevEntry)
+		file, err := cache.GetFile(prev.Path, prev.Hash)
 		if err != nil {
 			return false, err
 		}
@@ -332,17 +353,17 @@ func (b *blame) addBlames(curItems []*queueItem, cache BlameCache) (bool, error)
 			return false, err
 		}
 
-		hunks := diff.Do(prevContents, curItem.Contents)
+		hunks := linediff.DoWithTimeout(prevContents, curItem.Contents, time.Minute)
 		prevl := -1
 		curl := -1
 		need := 0
 		getFromParent := make([]lineMap, 0)
 	out:
-		for h := range hunks {
-			hLines := countLines(hunks[h].Text)
+		for _, h := range hunks {
+			hLines := h.Lines
 			for hl := 0; hl < hLines; hl++ {
 				switch {
-				case hunks[h].Type == diffmatchpatch.DiffEqual:
+				case h.Type == linediff.DiffEqual:
 					prevl++
 					curl++
 					if curl == curItem.NeedsMap[need].Cur {
@@ -354,7 +375,7 @@ func (b *blame) addBlames(curItems []*queueItem, cache BlameCache) (bool, error)
 							break out
 						}
 					}
-				case hunks[h].Type == diffmatchpatch.DiffInsert:
+				case h.Type == linediff.DiffInsert:
 					curl++
 					if curl == curItem.NeedsMap[need].Cur {
 						// the line we want is added, it may have been added here (or by another parent), skip it for now
@@ -363,7 +384,7 @@ func (b *blame) addBlames(curItems []*queueItem, cache BlameCache) (bool, error)
 							break out
 						}
 					}
-				case hunks[h].Type == diffmatchpatch.DiffDelete:
+				case h.Type == linediff.DiffDelete:
 					prevl += hLines
 					continue out
 				default:
@@ -583,51 +604,43 @@ type parentCommit struct {
 	Hash   plumbing.Hash
 }
 
-func parentsContainingPath(path string, c *object.Commit, cache BlameCache) ([]parentCommit, error) {
+func parentsContainingPath(path string, hash plumbing.Hash, c *object.Commit, cache BlameCache) ([]parentCommit, error) {
 	commitCache, err := cache.GetCommit(c.Hash)
 	if err != nil {
 		return nil, err
-	}
-
-	for len(commitCache.Parents) == 1 && !commitCache.Touched(path) {
-		for _, p := range commitCache.Parents {
-			c = p.Commit
-			commitCache, err = cache.GetCommit(c.Hash)
-			if err != nil {
-				return nil, err
-			}
-		}
 	}
 
 	var result []parentCommit
 	for _, parentCache := range commitCache.Parents {
 		parent := parentCache.Commit
 
-		file, ok := commitCache.Files[path]
+		_, commitChangedFile := commitCache.Changes[path]
+		//if commitChangedFile && file.Created {
+		//	println()
+		//}
 
-		if !ok {
-			result = append(result, parentCommit{parent, path, plumbing.ZeroHash})
+		parentPath := path
+		if p, ok := parentCache.Renames[path]; ok {
+			parentPath = p
+		}
 
-		} else if oldPath, ok := parentCache.Renames[path]; ok {
-			result = append(result, parentCommit{parent, oldPath, plumbing.ZeroHash})
+		parentCache, err := cache.GetCommit(parent.Hash)
+		if err != nil {
+			return nil, err
+		}
 
-		} else if file.Created {
-			// If the file was created in this commit, it's not in the parent
+		parentFile, parentChangedFile := parentCache.Changes[path]
+		if parentChangedFile {
+			result = append(result, parentCommit{parent, parentPath, parentFile.Hash})
 
-		} else if parentHash, err := blobHash(path, parent, cache); err == nil { // It may be in one parent and not in the other
-			result = append(result, parentCommit{parent, path, parentHash})
+		} else if !commitChangedFile {
+			result = append(result, parentCommit{parent, parentPath, hash})
+
+		} else if parentHash, err := cache.GetFileHash(parent, parentPath); err == nil {
+			result = append(result, parentCommit{parent, parentPath, parentHash})
 		}
 	}
 	return result, nil
-}
-
-func blobHash(path string, commit *object.Commit, cache BlameCache) (plumbing.Hash, error) {
-	_, e, err := cache.GetCommitTreeEntry(commit, path)
-	if err != nil {
-		return plumbing.ZeroHash, err
-	}
-
-	return e.Hash, nil
 }
 
 // countLines returns the number of lines in a string à la git, this is
@@ -645,4 +658,53 @@ func countLines(s string) int {
 	}
 
 	return nEOL + 1
+}
+
+type Diff struct {
+	Type  diffmatchpatch.Operation
+	Lines int
+}
+
+func doWithTimeout(src, dst string, timeout time.Duration) []Diff {
+	dmp := diffmatchpatch.New()
+	dmp.DiffTimeout = timeout
+	wSrc, wDst := textsToLineIndexes(src, dst)
+	dmpd := dmp.DiffMainRunes(wSrc, wDst, false)
+	diffs := lineIndexesToDiff(dmpd)
+	return diffs
+}
+
+func lineIndexesToDiff(diffs []diffmatchpatch.Diff) []Diff {
+	hydrated := make([]Diff, 0, len(diffs))
+	for _, aDiff := range diffs {
+		hydrated = append(hydrated, Diff{
+			Type:  aDiff.Type,
+			Lines: len(aDiff.Text),
+		})
+	}
+	return hydrated
+}
+
+func textsToLineIndexes(text1, text2 string) ([]rune, []rune) {
+	lineToIndex := make(map[string]int)
+	indexes1 := textToLineIndexes(text1, lineToIndex)
+	indexes2 := textToLineIndexes(text2, lineToIndex)
+	return indexes1, indexes2
+}
+
+func textToLineIndexes(text string, lineToIndex map[string]int) []rune {
+	lines := strings.SplitAfter(text, "\n")
+
+	result := make([]rune, len(lines))
+	for i, line := range lines {
+		lineValue, ok := lineToIndex[line]
+
+		if !ok {
+			lineValue = len(lineToIndex)
+			lineToIndex[line] = lineValue
+		}
+
+		result[i] = rune(lineValue)
+	}
+	return result
 }

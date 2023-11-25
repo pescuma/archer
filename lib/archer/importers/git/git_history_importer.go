@@ -9,16 +9,12 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/go-git/go-git/v5/utils/diff"
-	"github.com/hexops/gotextdiff"
-	"github.com/hexops/gotextdiff/myers"
-	"github.com/pkg/errors"
-	"github.com/samber/lo"
-	"github.com/sergi/go-diff/diffmatchpatch"
-
 	"github.com/pescuma/archer/lib/archer"
+	"github.com/pescuma/archer/lib/archer/linediff"
 	"github.com/pescuma/archer/lib/archer/model"
 	"github.com/pescuma/archer/lib/archer/utils"
+	"github.com/pkg/errors"
+	"github.com/samber/lo"
 )
 
 type gitHistoryImporter struct {
@@ -746,48 +742,33 @@ func (g *gitHistoryImporter) computeChanges(commit *object.Commit, parent *objec
 			} else if commitLines == 0 {
 				gitChange.Deleted += parentLines
 
-			} else if parentLines > 10_000 || commitLines > 10_000 {
-				// gotextdiff goes out of memory
-				diffs := diff.DoWithTimeout(parentContent, commitContent, 30*time.Second)
-				for _, d := range diffs {
-					switch d.Type {
-					case diffmatchpatch.DiffDelete:
-						gitChange.Deleted += g.countLines(d.Text)
-					case diffmatchpatch.DiffInsert:
-						gitChange.Added += g.countLines(d.Text)
-					}
-				}
-
 			} else {
-				edits := myers.ComputeEdits("parent", parentContent, commitContent)
-				unified := gotextdiff.ToUnified("parent", "commit", parentContent, edits)
+				diffs := linediff.DoWithTimeout(parentContent, commitContent, time.Minute)
 
 				// Modified is defined as changes that happened without a line without change in the middle
-				for _, hunk := range unified.Hunks {
-					add := 0
-					del := 0
-					for _, line := range hunk.Lines {
-						switch line.Kind {
-						case gotextdiff.Insert:
-							add++
-						case gotextdiff.Delete:
-							del++
-						default:
-							m := utils.Min(add, del)
-							gitChange.Modified += m
-							gitChange.Added += add - m
-							gitChange.Deleted += del - m
+				add := 0
+				del := 0
+				for _, line := range diffs {
+					switch line.Type {
+					case linediff.DiffInsert:
+						add++
+					case linediff.DiffDelete:
+						del++
+					default:
+						m := utils.Min(add, del)
+						gitChange.Modified += m
+						gitChange.Added += add - m
+						gitChange.Deleted += del - m
 
-							add = 0
-							del = 0
-						}
+						add = 0
+						del = 0
 					}
-
-					m := utils.Min(add, del)
-					gitChange.Modified += m
-					gitChange.Added += add - m
-					gitChange.Deleted += del - m
 				}
+
+				m := utils.Min(add, del)
+				gitChange.Modified += m
+				gitChange.Added += add - m
+				gitChange.Deleted += del - m
 			}
 		}
 	}

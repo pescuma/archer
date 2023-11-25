@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/hashicorp/go-set/v2"
 	"github.com/hhatto/gocloc"
@@ -287,6 +288,9 @@ func (g *gitBlameImporter) computeBlame(storage archer.Storage,
 
 			err = g.computeFileBlame(storage, w, cache)
 			return w, err
+		},
+		utils.ParallelOptions{
+			Routines: 1,
 		})
 
 	for w := range group.Output {
@@ -324,52 +328,72 @@ type blameCacheImpl struct {
 	load    func(plumbing.Hash) (*BlameCommitCache, error)
 }
 
-func (c *blameCacheImpl) GetCommitTreeEntry(commit *object.Commit, path string) (*object.Tree, *object.TreeEntry, error) {
-	loader := func(hash plumbing.Hash) (*object.Tree, error) {
-		tree, err := object.GetTree(c.repo.Storer, hash)
-		if err != nil {
-			return nil, err
-		}
-
-		// Load internal caches
-		_, _ = tree.FindEntry("")
-
-		return tree, nil
-	}
-
-	tc, err := c.trees.Get(commit.TreeHash, loader)
+func (c *blameCacheImpl) GetFileHash(commit *object.Commit, path string) (plumbing.Hash, error) {
+	tree, err := object.GetTree(c.repo.Storer, commit.TreeHash)
 	if err != nil {
-		return nil, nil, err
+		return plumbing.ZeroHash, err
 	}
 
-	paths := strings.Split(path, "/")
-	t := tc
-	for i := 0; i < len(paths)-1; i++ {
-		ce, err := t.FindEntry(paths[i])
-		if err != nil {
-			return nil, nil, err
-		}
-
-		ct, err := c.trees.Get(ce.Hash, loader)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		t = ct
-	}
-
-	e, err := t.FindEntry(paths[len(paths)-1])
+	e, err := tree.FindEntry(path)
 	if err != nil {
-		return nil, nil, err
+		return plumbing.ZeroHash, err
 	}
 
-	return tc, e, err
+	return e.Hash, nil
+
+	//t, err := c.trees.Get(commit.TreeHash, c.treeLoader)
+	//if err != nil {
+	//	return plumbing.ZeroHash, err
+	//}
+	//
+	//paths := strings.Split(path, "/")
+	//for i := 0; i < len(paths)-1; i++ {
+	//	ce, err := t.FindEntry(paths[i])
+	//	if err != nil {
+	//		return plumbing.ZeroHash, err
+	//	}
+	//
+	//	ct, err := c.trees.Get(ce.Hash, c.treeLoader)
+	//	if err != nil {
+	//		return plumbing.ZeroHash, err
+	//	}
+	//
+	//	t = ct
+	//}
+	//
+	//e, err := t.FindEntry(paths[len(paths)-1])
+	//if err != nil {
+	//	return plumbing.ZeroHash, err
+	//}
+	//
+	//return e.Hash, err
+}
+
+func (c *blameCacheImpl) treeLoader(hash plumbing.Hash) (*object.Tree, error) {
+	tree, err := object.GetTree(c.repo.Storer, hash)
+	if err != nil {
+		return nil, err
+	}
+
+	// Load internal caches
+	_, _ = tree.FindEntry("")
+
+	return tree, nil
 }
 
 func (c *blameCacheImpl) GetCommit(hash plumbing.Hash) (*BlameCommitCache, error) {
 	return c.commits.Get(hash, func(hash plumbing.Hash) (*BlameCommitCache, error) {
 		return c.load(hash)
 	})
+}
+
+func (c *blameCacheImpl) GetFile(name string, hash plumbing.Hash) (*object.File, error) {
+	blob, err := object.GetBlob(c.repo.Storer, hash)
+	if err != nil {
+		return nil, err
+	}
+
+	return object.NewFile(name, filemode.Regular, blob), nil
 }
 
 func (g *gitBlameImporter) createCache(storage archer.Storage, filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository) (BlameCache, error) {
@@ -382,7 +406,7 @@ func (g *gitBlameImporter) createCache(storage archer.Storage, filesDB *model.Fi
 	cache.load = func(hash plumbing.Hash) (*BlameCommitCache, error) {
 		result := &BlameCommitCache{
 			Parents: make(map[plumbing.Hash]*BlameParentCache),
-			Files:   make(map[string]*BlameFileCache),
+			Changes: make(map[string]*BlameFileCache),
 		}
 
 		repoCommit := repo.GetCommit(hash.String())
@@ -424,7 +448,7 @@ func (g *gitBlameImporter) createCache(storage archer.Storage, filesDB *model.Fi
 				return nil, err
 			}
 
-			result.Files[filename] = &BlameFileCache{
+			result.Changes[filename] = &BlameFileCache{
 				Hash:    plumbing.NewHash(commitFile.Hash),
 				Created: commitFile.Change == model.FileCreated,
 			}
@@ -444,6 +468,13 @@ func (g *gitBlameImporter) createCache(storage archer.Storage, filesDB *model.Fi
 
 		return result, nil
 	}
+
+	//for _, commit := range repo.ListCommits() {
+	//	_, err := cache.GetCommit(plumbing.NewHash(commit.Hash))
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//}
 
 	return cache, nil
 }
@@ -511,10 +542,14 @@ func (g *gitBlameImporter) listToCompute(filesDB *model.Files, repo *model.Repos
 }
 
 func (g *gitBlameImporter) computeFileBlame(storage archer.Storage, w *blameWork, cache BlameCache) error {
+	now := time.Now()
+
 	blame, err := Blame(w.gitCommit, w.relativePath, cache)
 	if err != nil {
 		return err
 	}
+
+	fmt.Printf("%v (in %v)\n", w.relativePath, time.Since(now))
 
 	contents := strings.Join(lo.Map(blame.Lines, func(item *Line, _ int) string { return item.Text }), "\n")
 	lineTypes, err := g.computeLOC(filepath.Base(w.file.Path), contents)

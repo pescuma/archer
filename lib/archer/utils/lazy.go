@@ -1,6 +1,8 @@
 package utils
 
-import "sync"
+import (
+	"sync"
+)
 
 type Lazy[T any] struct {
 	mutex  sync.RWMutex
@@ -39,16 +41,63 @@ func (l *Lazy[T]) Get() (T, error) {
 }
 
 type Cache[K comparable, V any] struct {
-	m sync.Map
+	mutex sync.RWMutex
+	opts  CacheOptions
+	m     map[K]*Lazy[V]
+	head  node[V]
+	tail  node[V]
 }
 
-func NewCache[K comparable, V any]() *Cache[K, V] {
-	return &Cache[K, V]{}
+type CacheOptions struct {
+	MaxSize int
 }
 
-func (l *Cache[K, V]) Get(key K, loader func(key K) (V, error)) (V, error) {
-	val, _ := l.m.LoadOrStore(key, NewLazy[V](func() (V, error) {
-		return loader(key)
-	}))
-	return val.(*Lazy[V]).Get()
+type node[V any] struct {
+	prev *node[V]
+	next *node[V]
+	uses int
+	val  *Lazy[V]
+}
+
+func NewCache[K comparable, V any](opts ...CacheOptions) *Cache[K, V] {
+	o := CacheOptions{}
+	for _, opt := range opts {
+		if opt.MaxSize > 0 {
+			o.MaxSize = opt.MaxSize
+		}
+	}
+
+	result := &Cache[K, V]{
+		opts: o,
+		m:    make(map[K]*Lazy[V], 10000),
+	}
+	result.head.next = &result.tail
+	result.tail.prev = &result.head
+
+	return result
+}
+
+func (c *Cache[K, V]) Get(key K, loader func(K) (V, error)) (V, error) {
+	c.mutex.RLock()
+	val, ok := c.m[key]
+	c.mutex.RUnlock()
+
+	if ok {
+		return val.Get()
+	}
+
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	val, ok = c.m[key]
+	if !ok {
+		val = NewLazy[V](func() (V, error) { return loader(key) })
+		c.m[key] = val
+	}
+
+	return val.Get()
+}
+
+func (c *Cache[K, V]) Len() int {
+	return len(c.m)
 }

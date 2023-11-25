@@ -37,7 +37,7 @@ type ProcessGroup[I, O any] struct {
 
 func NewProcessGroup[I, O any](proc func(I) (O, error), opts ...ParallelOptions) *ProcessGroup[I, O] {
 	o := ParallelOptions{
-		Routines:     Max(Min(runtime.GOMAXPROCS(-1), runtime.NumCPU())/2-1, 1),
+		Routines:     Max(Min(runtime.GOMAXPROCS(-1), runtime.NumCPU()/2)-1, 1),
 		InputFactor:  2,
 		OutputFactor: 2,
 	}
