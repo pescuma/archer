@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/go-set/v2"
 	"github.com/hhatto/gocloc"
 	"github.com/pescuma/archer/lib/archer"
+	"github.com/pescuma/archer/lib/archer/caches"
 	"github.com/pescuma/archer/lib/archer/model"
 	"github.com/pescuma/archer/lib/archer/utils"
 	"github.com/pkg/errors"
@@ -290,7 +291,7 @@ func (g *gitBlameImporter) computeBlame(storage archer.Storage,
 			return w, err
 		},
 		utils.ParallelOptions{
-			Routines: 1,
+			//Routines: 1,
 		})
 
 	for w := range group.Output {
@@ -323,8 +324,8 @@ func (g *gitBlameImporter) computeBlame(storage archer.Storage,
 
 type blameCacheImpl struct {
 	repo    *git.Repository
-	trees   *utils.Cache[plumbing.Hash, *object.Tree]
-	commits *utils.Cache[plumbing.Hash, *BlameCommitCache]
+	trees   *caches.LFU[plumbing.Hash, *object.Tree]
+	commits *caches.LFU[plumbing.Hash, *BlameCommitCache]
 	load    func(plumbing.Hash) (*BlameCommitCache, error)
 }
 
@@ -399,8 +400,8 @@ func (c *blameCacheImpl) GetFile(name string, hash plumbing.Hash) (*object.File,
 func (g *gitBlameImporter) createCache(storage archer.Storage, filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository) (BlameCache, error) {
 	cache := &blameCacheImpl{
 		repo:    gitRepo,
-		commits: utils.NewCache[plumbing.Hash, *BlameCommitCache](),
-		trees:   utils.NewCache[plumbing.Hash, *object.Tree](),
+		commits: caches.NewLFU[plumbing.Hash, *BlameCommitCache](caches.Options{MaxSize: 10000}),
+		trees:   caches.NewLFU[plumbing.Hash, *object.Tree](caches.Options{MaxSize: 10000}),
 	}
 
 	cache.load = func(hash plumbing.Hash) (*BlameCommitCache, error) {

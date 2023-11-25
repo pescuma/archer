@@ -2,11 +2,13 @@ package model
 
 import (
 	"sort"
+	"sync"
 
 	"github.com/samber/lo"
 )
 
 type Files struct {
+	mutex       sync.RWMutex
 	filesByPath map[string]*File
 	filesByID   map[UUID]*File
 }
@@ -27,6 +29,9 @@ func (fs *Files) GetOrCreateFileEx(path string, id *UUID) *File {
 		panic("empty path not supported")
 	}
 
+	fs.mutex.Lock()
+	defer fs.mutex.Unlock()
+
 	result, ok := fs.filesByPath[path]
 
 	if !ok {
@@ -39,14 +44,23 @@ func (fs *Files) GetOrCreateFileEx(path string, id *UUID) *File {
 }
 
 func (fs *Files) GetFile(path string) *File {
+	fs.mutex.RLock()
+	defer fs.mutex.RUnlock()
+
 	return fs.filesByPath[path]
 }
 
 func (fs *Files) GetFileByID(id UUID) *File {
+	fs.mutex.RLock()
+	defer fs.mutex.RUnlock()
+
 	return fs.filesByID[id]
 }
 
 func (fs *Files) ListFiles() []*File {
+	fs.mutex.RLock()
+	defer fs.mutex.RUnlock()
+
 	result := lo.Values(fs.filesByPath)
 
 	sortFiles(result)
@@ -59,6 +73,9 @@ func (fs *Files) ListFilesByProject(proj *Project) []*File {
 }
 
 func (fs *Files) ListFilesByProjects(ps []*Project) []*File {
+	fs.mutex.RLock()
+	defer fs.mutex.RUnlock()
+
 	consider := map[UUID]bool{}
 	for _, p := range ps {
 		consider[p.ID] = true
