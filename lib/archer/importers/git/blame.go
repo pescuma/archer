@@ -48,6 +48,7 @@ type BlameFileCache struct {
 	Hash    plumbing.Hash
 	Created bool
 }
+
 type BlameParentCache struct {
 	Commit  *object.Commit
 	Renames map[string]string
@@ -605,6 +606,11 @@ type parentCommit struct {
 }
 
 func parentsContainingPath(path string, hash plumbing.Hash, c *object.Commit, cache BlameCache) ([]parentCommit, error) {
+	c, err := skipUnrelatedCommits(path, c, cache)
+	if err != nil {
+		return nil, err
+	}
+
 	commitCache, err := cache.GetCommit(c.Hash)
 	if err != nil {
 		return nil, err
@@ -614,10 +620,10 @@ func parentsContainingPath(path string, hash plumbing.Hash, c *object.Commit, ca
 	for _, parentCache := range commitCache.Parents {
 		parent := parentCache.Commit
 
-		_, commitChangedFile := commitCache.Changes[path]
-		//if commitChangedFile && file.Created {
-		//	println()
-		//}
+		file, commitChangedFile := commitCache.Changes[path]
+		if commitChangedFile && file.Created {
+			continue
+		}
 
 		parentPath := path
 		if p, ok := parentCache.Renames[path]; ok {
@@ -641,6 +647,28 @@ func parentsContainingPath(path string, hash plumbing.Hash, c *object.Commit, ca
 		}
 	}
 	return result, nil
+}
+
+func skipUnrelatedCommits(path string, c *object.Commit, cache BlameCache) (*object.Commit, error) {
+	prev, cur := c, c
+
+	for {
+		cc, err := cache.GetCommit(cur.Hash)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(cc.Parents) != 1 || cc.Touched(path) {
+			break
+		}
+
+		for _, parent := range cc.Parents {
+			prev, cur = cur, parent.Commit
+		}
+	}
+
+	// We need to keep the last one to do correct attribution
+	return prev, nil
 }
 
 // countLines returns the number of lines in a string à la git, this is

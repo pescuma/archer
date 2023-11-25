@@ -8,6 +8,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/pescuma/archer/lib/archer"
 	"github.com/pescuma/archer/lib/archer/model"
+	"github.com/pescuma/archer/lib/archer/utils"
 	"github.com/samber/lo"
 )
 
@@ -29,9 +30,14 @@ func (g gitPeopleImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
+	rootDirs, err := findRootDirs(g.rootDirs)
+	if err != nil {
+		return err
+	}
+
 	fmt.Printf("Importing people...\n")
 
-	_, err = importPeople(peopleDB, g.rootDirs)
+	_, err = importPeople(peopleDB, rootDirs)
 	if err != nil {
 		return err
 	}
@@ -49,7 +55,10 @@ func (g gitPeopleImporter) Import(storage archer.Storage) error {
 func importPeople(peopleDB *model.People, rootDirs []string) (*nameEmailGrouper, error) {
 	grouper := newNameEmailGrouperFrom(peopleDB)
 
+	bar := utils.NewProgressBar(len(rootDirs))
 	for _, rootDir := range rootDirs {
+		bar.Describe(utils.TruncateFilename(rootDir))
+
 		rootDir, err := filepath.Abs(rootDir)
 		if err != nil {
 			return nil, err
@@ -74,6 +83,8 @@ func importPeople(peopleDB *model.People, rootDirs []string) (*nameEmailGrouper,
 		if err != nil {
 			return nil, err
 		}
+
+		_ = bar.Add(1)
 	}
 
 	grouper.prepare()

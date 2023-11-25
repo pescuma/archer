@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-git/go-git/v5"
@@ -78,9 +77,14 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 		return err
 	}
 
+	rootDirs, err := findRootDirs(g.rootDirs)
+	if err != nil {
+		return err
+	}
+
 	fmt.Printf("Importing and grouping authors...\n")
 
-	g.grouper, err = importPeople(peopleDB, g.rootDirs)
+	g.grouper, err = importPeople(peopleDB, rootDirs)
 	if err != nil {
 		return err
 	}
@@ -92,7 +96,7 @@ func (g *gitHistoryImporter) Import(storage archer.Storage) error {
 		}
 	}
 
-	for _, rootDir := range g.rootDirs {
+	for _, rootDir := range rootDirs {
 		rootDir, err := filepath.Abs(rootDir)
 		if err != nil {
 			return err
@@ -384,12 +388,7 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage,
 
 	fmt.Printf("%v: Importing changes...\n", repo.Name)
 
-	var writeMutex sync.RWMutex
-
 	writeResults := func(commitFiles []*model.RepositoryCommitFiles) error {
-		writeMutex.Lock()
-		defer writeMutex.Unlock()
-
 		fmt.Printf("%v: Writing results...\n", repo.Name)
 
 		err := storage.WriteFiles(filesDB)
@@ -423,20 +422,14 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage,
 	bar := utils.NewProgressBar(len(toProcess))
 	start := time.Now()
 	var commitFilesToWrite []*model.RepositoryCommitFiles
+	for _, w := range toProcess {
+		bar.Describe(w.gitCommit.Committer.When.Format("2006-01-02 15"))
 
-	group := utils.ParallelFor(toProcess,
-		func(w *changeWork) (*changeWork, error) {
-			writeMutex.RLock()
-			defer writeMutex.RUnlock()
+		err = g.importCommitChanges(storage, filesDB, repo, w)
+		if err != nil {
+			return err
+		}
 
-			err := g.importCommitChanges(storage, filesDB, repo, w)
-			return w, err
-		},
-		utils.ParallelOptions{
-			Routines: 1,
-		})
-
-	for w := range group.Output {
 		commit := w.commit
 		commitFiles := w.commitFiles
 
@@ -518,10 +511,6 @@ func (g *gitHistoryImporter) importChanges(storage archer.Storage,
 		}
 
 		_ = bar.Add(1)
-	}
-
-	if err = group.Error(); err != nil {
-		return err
 	}
 
 	err = writeResults(commitFilesToWrite)

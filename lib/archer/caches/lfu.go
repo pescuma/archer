@@ -5,83 +5,46 @@ import (
 )
 
 type Options struct {
-	MaxSize int
+	MaxSize      int
+	LevelFactor  int
+	LevelMinSize int
 }
 
 type LFU[K comparable, V any] struct {
 	mutex sync.RWMutex
 	opts  Options
-	m     map[K]*entry[V]
-	head  level[V]
-	tail  level[V]
+	m     map[K]*entry[K, V]
+	head  level[K, V]
+	tail  level[K, V]
 }
 
-// levels store entries with similar numbers of usages
-// they grow exponentially in size
-type level[V any] struct {
-	prev *level[V]
-	next *level[V]
-
-	max     int
-	entries map[*entry[V]]bool
-	head    entry[V]
-	tail    entry[V]
-}
-
-func newLevel[V any](max int) *level[V] {
-	return &level[V]{
-		max: max,
-	}
-}
-func (l *level[V]) insert(a, b *level[V]) {
-	a.next = l
-	l.prev = a
-
-	l.next = b
-	b.prev = l
-}
-func (l *level[V]) remove() {
-	l.prev.next = l.next
-	l.next.prev = l.prev
-}
-
-type entry[V any] struct {
-	prev *entry[V]
-	next *entry[V]
-
-	lvl    *level[V]
-	usages int
-	val    *Lazy[V]
-}
-
-func (e *entry[V]) insert(a, b *entry[V]) {
-	a.next = e
-	e.prev = a
-
-	e.next = b
-	b.prev = e
-}
-func (e *entry[V]) remove() {
-	e.prev.next = e.next
-	e.next.prev = e.prev
-}
-
-func NewLFU[K comparable, V any](opts ...Options) *LFU[K, V] {
+func NewLFU[K comparable, V any](opts ...Options) Cache[K, V] {
 	o := Options{
-		MaxSize: 1000,
+		MaxSize:      1000,
+		LevelFactor:  10,
+		LevelMinSize: -1,
 	}
 	for _, opt := range opts {
 		if opt.MaxSize > 0 {
 			o.MaxSize = opt.MaxSize
 		}
+		if opt.LevelFactor > 0 {
+			o.LevelFactor = opt.LevelFactor
+		}
+		if opt.LevelMinSize > 0 {
+			o.LevelMinSize = opt.LevelMinSize
+		}
+	}
+	if o.LevelMinSize == -1 {
+		o.LevelMinSize = o.MaxSize / 10
 	}
 
 	result := &LFU[K, V]{
 		opts: o,
-		m:    make(map[K]*entry[V]),
+		m:    make(map[K]*entry[K, V]),
 	}
 
-	lvl := newLevel[V](10)
+	lvl := newLevel[K, V](10)
 	lvl.insert(&result.head, &result.tail)
 
 	return result
@@ -92,7 +55,7 @@ func (c *LFU[K, V]) Get(key K, loader func(K) (V, error)) (V, error) {
 
 	entry, ok := c.m[key]
 	if !ok {
-		entry = c.newEntry(NewLazy[V](func() (V, error) { return loader(key) }))
+		entry = c.newEntry(key, NewLazy[V](func() (V, error) { return loader(key) }))
 		c.m[key] = entry
 	} else {
 		c.incUsage(entry)
@@ -103,51 +66,63 @@ func (c *LFU[K, V]) Get(key K, loader func(K) (V, error)) (V, error) {
 	return entry.val.Get()
 }
 
-func (c *LFU[K, V]) newEntry(val *Lazy[V]) *entry[V] {
+func (c *LFU[K, V]) newEntry(key K, val *Lazy[V]) *entry[K, V] {
 	if len(c.m) >= c.opts.MaxSize {
-		lvl := c.head.next
+		lvl := c.findLevelToRemoveEntry()
 
 		last := lvl.tail.prev
 		delete(lvl.entries, last)
+		delete(c.m, last.key)
 		last.remove()
 
-		if len(lvl.entries) == 0 && lvl.max > 10 {
+		if len(lvl.entries) == 0 && lvl.max > c.opts.LevelFactor {
 			lvl.remove()
 		}
 	}
 
-	if c.head.next.max > 10 {
-		lvl := newLevel[V](10)
+	if c.head.next.max > c.opts.LevelFactor {
+		lvl := newLevel[K, V](c.opts.LevelFactor)
 		lvl.insert(&c.head, c.head.next)
 	}
 
 	lvl := c.head.next
 
-	result := &entry[V]{
-		lvl:    lvl,
+	result := &entry[K, V]{
 		usages: 1,
+		key:    key,
 		val:    val,
 	}
+	result.insert(lvl, &lvl.head, lvl.head.next)
 	lvl.entries[result] = true
-	result.insert(&lvl.head, lvl.head.next)
 
 	return result
 }
 
-func (c *LFU[K, V]) incUsage(e *entry[V]) {
+func (c *LFU[K, V]) findLevelToRemoveEntry() *level[K, V] {
+	// The intention is to give new entries some time to be used before they are removed
+	for lvl := c.head.next; lvl != &c.tail; lvl = lvl.next {
+		if len(lvl.entries) > c.opts.LevelMinSize {
+			return lvl
+		}
+	}
+
+	return c.head.next
+}
+
+func (c *LFU[K, V]) incUsage(e *entry[K, V]) {
 	lvl := e.lvl
 	e.usages++
 
 	if e.usages < lvl.max {
 		e.remove()
-		e.insert(&lvl.head, lvl.head.next)
+		e.insert(lvl, &lvl.head, lvl.head.next)
 
 	} else {
-		nextMax := lvl.max * 10
+		nextMax := lvl.max * c.opts.LevelFactor
 
 		next := lvl.next
 		if next.max != nextMax {
-			next = newLevel[V](nextMax)
+			next = newLevel[K, V](nextMax)
 			next.insert(lvl, lvl.next)
 		}
 
@@ -158,9 +133,8 @@ func (c *LFU[K, V]) incUsage(e *entry[V]) {
 			lvl.remove()
 		}
 
-		e.lvl = next
+		e.insert(next, &next.head, next.head.next)
 		next.entries[e] = true
-		e.insert(&next.head, next.head.next)
 	}
 }
 
