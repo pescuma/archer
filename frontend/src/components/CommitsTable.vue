@@ -112,7 +112,7 @@ const columns = [
   },
   {
     name: 'Survived',
-    field: 'survivedLines',
+    field: 'blame',
     type: 'int',
     show: props.size === 'lg',
   },
@@ -272,7 +272,7 @@ async function loadChart() {
     },
     {
       name: 'Commits',
-      type: 'column',
+      type: 'bar',
       data: commitsMonth,
     },
     {

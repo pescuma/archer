@@ -931,7 +931,7 @@ func (s *sqliteStorage) LoadMonthlyStats() (*model.MonthlyStats, error) {
 	})
 
 	for _, sl := range sqlLines {
-		l := result.GetOrCreateLines(sl.Month, sl.RepositoryID, sl.AuthorID, sl.CommitterID, sl.ProjectID)
+		l := result.GetOrCreateLines(sl.Month, sl.RepositoryID, sl.AuthorID, sl.CommitterID, sl.FileID, sl.ProjectID)
 		l.ID = sl.ID
 		l.Changes = toModelChanges(sl.Changes)
 		l.Blame = toModelBlame(sl.Blame)
@@ -1030,6 +1030,7 @@ func toSqlMonthLines(l *model.MonthlyStatsLine) *sqlMonthLines {
 		RepositoryID: l.RepositoryID,
 		AuthorID:     l.AuthorID,
 		CommitterID:  l.CommitterID,
+		FileID:       l.FileID,
 		ProjectID:    l.ProjectID,
 		Changes:      toSqlChanges(l.Changes),
 		Blame:        toSqlBlame(l.Blame),

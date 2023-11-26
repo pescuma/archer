@@ -119,11 +119,12 @@ type sqlFileLine struct {
 type sqlMonthLines struct {
 	ID model.UUID `gorm:"primaryKey"`
 
-	Month        string      `gorm:"index"`
-	RepositoryID model.UUID  `gorm:"index"`
-	AuthorID     model.UUID  `gorm:"index"`
-	CommitterID  model.UUID  `gorm:"index"`
-	ProjectID    *model.UUID `gorm:"index"`
+	Month        string
+	RepositoryID model.UUID
+	AuthorID     model.UUID
+	CommitterID  model.UUID
+	FileID       model.UUID
+	ProjectID    *model.UUID
 
 	Changes *sqlChanges `gorm:"embedded;embeddedPrefix:changes_"`
 	Blame   *sqlBlame   `gorm:"embedded;embeddedPrefix:blame_"`

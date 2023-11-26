@@ -13,9 +13,6 @@ func NewProgressBar(total int) *progressbar.ProgressBar {
 		progressbar.OptionShowIts(),
 		progressbar.OptionSetTheme(progressbar.Theme{Saucer: "#", SaucerPadding: " ", BarStart: "|", BarEnd: "|"}),
 		progressbar.OptionClearOnFinish(),
-		// progressbar.OptionOnCompletion(func() {
-		// 	_, _ = fmt.Fprint(os.Stdout, "\n")
-		// }),
 		progressbar.OptionFullWidth(),
 		progressbar.OptionSetRenderBlankState(true),
 	)

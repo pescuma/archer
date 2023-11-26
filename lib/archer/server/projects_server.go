@@ -14,7 +14,7 @@ func (s *server) initProjects(r *gin.Engine) {
 }
 
 func (s *server) projectsList(params *ListParams) (any, error) {
-	projs, err := s.listProjects(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	projs, err := s.listProjects(&params.Filters)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func (s *server) projectsList(params *ListParams) (any, error) {
 }
 
 func (s *server) statsCountProjects(params *StatsParams) (any, error) {
-	projs, err := s.listProjects(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	projs, err := s.listProjects(&params.Filters)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func (s *server) projectGet() (any, error) {
 }
 
 func (s *server) statsProjectsSeen(params *StatsParams) (any, error) {
-	projs, err := s.listProjects(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	projs, err := s.listProjects(&params.Filters)
 	if err != nil {
 		return nil, err
 	}

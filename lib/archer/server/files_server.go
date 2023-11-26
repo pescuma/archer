@@ -14,7 +14,7 @@ func (s *server) initFiles(r *gin.Engine) {
 }
 
 func (s *server) filesList(params *ListParams) (any, error) {
-	files, err := s.listFiles(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	files, err := s.listFiles(&params.Filters)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func (s *server) filesList(params *ListParams) (any, error) {
 }
 
 func (s *server) statsCountFiles(params *StatsParams) (any, error) {
-	files, err := s.listFiles(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	files, err := s.listFiles(&params.Filters)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +56,7 @@ func (s *server) fileGet() (any, error) {
 }
 
 func (s *server) statsSeenFiles(params *StatsParams) (any, error) {
-	files, err := s.listFiles(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	files, err := s.listFiles(&params.Filters)
 	if err != nil {
 		return nil, err
 	}

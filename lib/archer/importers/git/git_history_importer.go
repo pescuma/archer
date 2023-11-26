@@ -983,7 +983,7 @@ func (g *gitHistoryImporter) propagateChangesToParents(storage archer.Storage, r
 					areas[a] = true
 				}
 
-				s := statsDB.GetOrCreateLines(c.Date.Format("2006-01"), repo.ID, c.AuthorID, c.CommitterID, file.ProjectID)
+				s := statsDB.GetOrCreateLines(c.Date.Format("2006-01"), repo.ID, c.AuthorID, c.CommitterID, file.ID, file.ProjectID)
 				if s.Changes.IsEmpty() {
 					s.Changes.Clear()
 				}

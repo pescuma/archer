@@ -11,49 +11,31 @@ import (
 	"github.com/samber/lo"
 )
 
-func (s *server) createRepoFilter(repo string) (map[model.UUID]bool, error) {
-	repo = prepareToSearch(repo)
-	if repo == "" {
-		return nil, nil
-	}
-
-	repos, err := s.listRepos("", "", repo, "")
-	if err != nil {
-		return nil, err
-	}
-
-	result := make(map[model.UUID]bool, len(repos))
-	for _, p := range repos {
-		result[p.ID] = true
-	}
-	return result, nil
+func (s *server) listRepos(params *Filters) ([]*model.Repository, error) {
+	return s.filterRepos(s.repos.List(), params)
 }
 
-func (s *server) listRepos(file string, proj string, repo string, person string) ([]*model.Repository, error) {
-	return s.filterRepos(s.repos.List(), file, proj, repo, person)
-}
-
-func (s *server) filterRepos(col []*model.Repository, file string, proj string, repo string, person string) ([]*model.Repository, error) {
-	repoFilter, err := filters.ParseStringFilter(repo)
+func (s *server) filterRepos(col []*model.Repository, params *Filters) ([]*model.Repository, error) {
+	repoFilter, err := s.createRepoFilter(params.FilterRepo)
 	if err != nil {
 		return nil, err
 	}
 
-	projIDs, err := s.createProjectFilter(proj)
+	projIDs, err := s.listProjectIDsOrNil(params.FilterProject)
 	if err != nil {
 		return nil, err
 	}
-	fileIDs, err := s.createFileFilter(file)
+	fileIDs, err := s.listFileIDsOrNil(params.FilterFile)
 	if err != nil {
 		return nil, err
 	}
-	personIDs, err := s.createPersonFilter(person)
+	personIDs, err := s.listPersonIDsOrNil(params.FilterPerson, params.FilterPersonID)
 	if err != nil {
 		return nil, err
 	}
 
 	return lo.Filter(col, func(i *model.Repository, index int) bool {
-		if !repoFilter(i.Name) {
+		if !repoFilter(i) {
 			return false
 		}
 
@@ -101,6 +83,46 @@ func (s *server) filterRepos(col []*model.Repository, file string, proj string, 
 
 		return true
 	}), nil
+}
+
+func (s *server) createRepoFilter(repo string) (func(*model.Repository) bool, error) {
+	repo = prepareToSearch(repo)
+
+	switch {
+	case repo != "":
+		f, err := filters.ParseStringFilter(repo)
+		if err != nil {
+			return nil, err
+		}
+
+		return func(r *model.Repository) bool {
+			return f(r.Name)
+		}, nil
+
+	default:
+		return func(_ *model.Repository) bool { return true }, nil
+	}
+}
+
+func (s *server) listRepoIDsOrNil(repo string) (map[model.UUID]bool, error) {
+	repo = prepareToSearch(repo)
+
+	switch {
+	case repo != "":
+		repos, err := s.listRepos(&Filters{FilterRepo: repo})
+		if err != nil {
+			return nil, err
+		}
+
+		result := make(map[model.UUID]bool, len(repos))
+		for _, p := range repos {
+			result[p.ID] = true
+		}
+		return result, nil
+
+	default:
+		return nil, nil
+	}
 }
 
 func (s *server) sortRepos(col []*model.Repository, field string, asc *bool) error {

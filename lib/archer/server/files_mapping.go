@@ -10,49 +10,31 @@ import (
 	"github.com/samber/lo"
 )
 
-func (s *server) createFileFilter(file string) (map[model.UUID]bool, error) {
-	file = prepareToSearch(file)
-	if file == "" {
-		return nil, nil
-	}
-
-	files, err := s.listFiles(file, "", "", "")
-	if err != nil {
-		return nil, err
-	}
-
-	result := make(map[model.UUID]bool, len(files))
-	for _, p := range files {
-		result[p.ID] = true
-	}
-	return result, nil
+func (s *server) listFiles(params *Filters) ([]*model.File, error) {
+	return s.filterFiles(s.files.ListFiles(), params)
 }
 
-func (s *server) listFiles(file string, proj string, repo string, person string) ([]*model.File, error) {
-	return s.filterFiles(s.files.ListFiles(), file, proj, repo, person)
-}
-
-func (s *server) filterFiles(col []*model.File, file string, proj string, repo string, person string) ([]*model.File, error) {
-	fileFilter, err := filters.ParseStringFilter(file)
+func (s *server) filterFiles(col []*model.File, params *Filters) ([]*model.File, error) {
+	fileFilter, err := s.createFileFilter(params.FilterFile)
 	if err != nil {
 		return nil, err
 	}
 
-	projIDs, err := s.createProjectFilter(proj)
+	projIDs, err := s.listProjectIDsOrNil(params.FilterProject)
 	if err != nil {
 		return nil, err
 	}
-	repoIDs, err := s.createRepoFilter(repo)
+	repoIDs, err := s.listRepoIDsOrNil(params.FilterRepo)
 	if err != nil {
 		return nil, err
 	}
-	personIDs, err := s.createPersonFilter(person)
+	personIDs, err := s.listPersonIDsOrNil(params.FilterPerson, params.FilterPersonID)
 	if err != nil {
 		return nil, err
 	}
 
 	return lo.Filter(col, func(i *model.File, index int) bool {
-		if !fileFilter(i.Path) {
+		if !fileFilter(i) {
 			return false
 		}
 
@@ -73,6 +55,46 @@ func (s *server) filterFiles(col []*model.File, file string, proj string, repo s
 
 		return true
 	}), nil
+}
+
+func (s *server) createFileFilter(file string) (func(*model.File) bool, error) {
+	file = prepareToSearch(file)
+
+	switch {
+	case file != "":
+		f, err := filters.ParseStringFilter(file)
+		if err != nil {
+			return nil, err
+		}
+
+		return func(file *model.File) bool {
+			return f(file.Path)
+		}, nil
+
+	default:
+		return func(_ *model.File) bool { return true }, nil
+	}
+}
+
+func (s *server) listFileIDsOrNil(file string) (map[model.UUID]bool, error) {
+	file = prepareToSearch(file)
+
+	switch {
+	case file != "":
+		files, err := s.listFiles(&Filters{FilterFile: file})
+		if err != nil {
+			return nil, err
+		}
+
+		result := make(map[model.UUID]bool, len(files))
+		for _, p := range files {
+			result[p.ID] = true
+		}
+		return result, nil
+
+	default:
+		return nil, nil
+	}
 }
 
 func (s *server) sortFiles(col []*model.File, field string, asc *bool) error {

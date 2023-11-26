@@ -2,8 +2,12 @@
 import _ from 'lodash'
 import moment from 'moment'
 import { onMounted, reactive, ref, watch } from 'vue'
-import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
 import { filters } from '@/utils/filters'
+import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
+
+const props = defineProps({
+  personId: String,
+})
 
 const card = ref(null)
 
@@ -14,15 +18,24 @@ const data = reactive({
 
 onMounted(refresh)
 
-watch(() => filters.data, refresh, { deep: true })
+if (props.personId) {
+  watch(() => props.personId, refresh)
+} else {
+  watch(() => filters.data, refresh, { deep: true })
+}
 
 function refresh() {
   let f = filters.toQueryString()
+  if (props.personId) {
+    f += `&person.id=${encodeURIComponent(props.personId)}`
+  }
+
   card.value.request(`/api/stats/changed/lines?${f}`, function (response) {
     const labels = []
     const modified = []
     const added = []
     const deleted = []
+    const total = []
 
     let format = 'YYYY-MM'
     let months = _.chain(response)
@@ -31,22 +44,28 @@ function refresh() {
         return i !== '0001-01'
       })
       .concat(moment().format(format))
-    let min = moment(months.min(), format)
-    let max = moment(months.max(), format)
+    let min = moment(months.min().value(), format)
+    let max = moment(months.max().value(), format)
+    let sum = 0
     for (let i = min; i <= max; i = i.add(1, 'month')) {
       let month = i.format(format)
 
       labels.push(month + '-15')
 
-      let data = response[month] || { modified: 0, added: 0, deleted: 0 }
+      let data = response[month] || {}
+      if (!data.modified) data.modified = 0
+      if (!data.added) data.added = 0
+      if (!data.deleted) data.deleted = 0
+      sum += data.modified + data.added - data.deleted
+
       modified.push(data.modified)
       added.push(data.added)
       deleted.push(-data.deleted)
+      total.push(sum)
     }
 
     data.opts = {
       chart: {
-        type: 'bar',
         fontFamily: 'inherit',
         toolbar: {
           show: false,
@@ -69,6 +88,11 @@ function refresh() {
       },
       fill: {
         opacity: 1,
+      },
+      stroke: {
+        width: 1,
+        lineCap: 'round',
+        curve: 'smooth',
       },
       tooltip: {
         theme: 'dark',
@@ -103,16 +127,50 @@ function refresh() {
         },
         type: 'datetime',
       },
-      yaxis: {
-        labels: {
-          padding: 4,
-          formatter: function (value) {
-            return Math.abs(value).toLocaleString()
+      yaxis: [
+        {
+          seriesName: 'Modified',
+          labels: {
+            padding: 4,
+            formatter: function (value) {
+              return value.toLocaleString()
+            },
           },
         },
-      },
+        {
+          seriesName: 'Modified',
+          show: false,
+          labels: {
+            padding: 4,
+            formatter: function (value) {
+              return value.toLocaleString()
+            },
+          },
+        },
+        {
+          seriesName: 'Modified',
+          show: false,
+          labels: {
+            padding: 4,
+            formatter: function (value) {
+              return Math.abs(value).toLocaleString()
+            },
+          },
+        },
+        {
+          seriesName: 'Total',
+          show: false,
+          opposite: true,
+          labels: {
+            padding: 4,
+            formatter: function (value) {
+              return Math.abs(value).toLocaleString()
+            },
+          },
+        },
+      ],
       labels: labels,
-      colors: [tabler.getColor('blue'), tabler.getColor('green'), tabler.getColor('red')],
+      colors: [tabler.getColor('blue'), tabler.getColor('green'), tabler.getColor('red'), tabler.getColor('lime')],
       legend: {
         show: false,
       },
@@ -121,15 +179,23 @@ function refresh() {
     data.series = [
       {
         name: 'Modified',
+        type: 'bar',
         data: modified,
       },
       {
         name: 'Added',
+        type: 'bar',
         data: added,
       },
       {
         name: 'Deleted',
+        type: 'bar',
         data: deleted,
+      },
+      {
+        name: 'Total',
+        type: 'line',
+        data: total,
       },
     ]
   })

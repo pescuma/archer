@@ -27,7 +27,7 @@ func (s *server) initRepos(r *gin.Engine) {
 }
 
 func (s *server) statsCountRepos(params *StatsParams) (any, error) {
-	repos, err := s.listRepos(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	repos, err := s.listRepos(&params.Filters)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +38,7 @@ func (s *server) statsCountRepos(params *StatsParams) (any, error) {
 }
 
 func (s *server) reposList(params *ListParams) (any, error) {
-	repos, err := s.listRepos(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	repos, err := s.listRepos(&params.Filters)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func (s *server) commitPatch(params *CommitPatchParams) (any, error) {
 }
 
 func (s *server) statsSeenRepos(params *StatsParams) (any, error) {
-	repos, err := s.listRepos(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	repos, err := s.listRepos(&params.Filters)
 	if err != nil {
 		return nil, err
 	}
@@ -154,46 +154,35 @@ func (s *server) statsSeenCommits(params *StatsParams) (any, error) {
 }
 
 func (s *server) statsChangedLines(params *StatsParams) (any, error) {
-	commits, _ := s.listReposAndCommits(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
-
-	s1 := lo.GroupBy(commits, func(i RepoAndCommit) string {
-		y, m, _ := i.Commit.Date.Date()
-		return fmt.Sprintf("%04d-%02d", y, m)
-	})
-	s2 := lo.MapValues(s1, func(i []RepoAndCommit, _ string) gin.H {
-		i = lo.Filter(i, func(j RepoAndCommit, _ int) bool {
-			return j.Commit.LinesModified != -1
-		})
-		return gin.H{
-			"modified": lo.SumBy(i, func(j RepoAndCommit) int { return j.Commit.LinesModified }),
-			"added":    lo.SumBy(i, func(j RepoAndCommit) int { return j.Commit.LinesAdded }),
-			"deleted":  lo.SumBy(i, func(j RepoAndCommit) int { return j.Commit.LinesDeleted }),
-		}
-	})
-
-	return s2, nil
-}
-
-func (s *server) statsSurvivedLines(params *StatsParams) (any, error) {
-	//fileIDs, err := s.createFileFilter(params.FilterFile)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//projIDs, err := s.createProjectFilter(params.FilterProject)
-	//if err != nil {
-	//	return nil, err
-	//}
-
-	repoIDs, err := s.createRepoFilter(params.FilterRepo)
+	fileIDs, err := s.listFileIDsOrNil(params.FilterFile)
+	if err != nil {
+		return nil, err
+	}
+	projIDs, err := s.listProjectIDsOrNil(params.FilterProject)
+	if err != nil {
+		return nil, err
+	}
+	repoIDs, err := s.listRepoIDsOrNil(params.FilterRepo)
+	if err != nil {
+		return nil, err
+	}
+	personIDs, err := s.listPersonIDsOrNil(params.FilterPerson, params.FilterPersonID)
 	if err != nil {
 		return nil, err
 	}
 
-	personIDs, err := s.createPersonFilter(params.FilterPerson)
-
 	result := make(map[string]map[string]int)
 	for _, l := range s.stats.ListLines() {
+		if l.Changes.LinesTotal() <= 0 {
+			continue
+		}
+
+		if fileIDs != nil && !fileIDs[l.FileID] {
+			continue
+		}
+		if projIDs != nil && (l.ProjectID == nil || !projIDs[*l.ProjectID]) {
+			continue
+		}
 		if repoIDs != nil && !repoIDs[l.RepositoryID] {
 			continue
 		}
@@ -201,22 +190,71 @@ func (s *server) statsSurvivedLines(params *StatsParams) (any, error) {
 			continue
 		}
 
-		if l.Blame.Code == -1 {
+		month, ok := result[l.Month]
+		if !ok {
+			month = make(map[string]int)
+			month["modified"] = 0
+			month["added"] = 0
+			month["deleted"] = 0
+			result[l.Month] = month
+		}
+
+		month["modified"] += l.Changes.LinesModified
+		month["added"] += l.Changes.LinesAdded
+		month["deleted"] += l.Changes.LinesDeleted
+	}
+	return result, nil
+}
+
+func (s *server) statsSurvivedLines(params *StatsParams) (any, error) {
+	fileIDs, err := s.listFileIDsOrNil(params.FilterFile)
+	if err != nil {
+		return nil, err
+	}
+	projIDs, err := s.listProjectIDsOrNil(params.FilterProject)
+	if err != nil {
+		return nil, err
+	}
+	repoIDs, err := s.listRepoIDsOrNil(params.FilterRepo)
+	if err != nil {
+		return nil, err
+	}
+	personIDs, err := s.listPersonIDsOrNil(params.FilterPerson, params.FilterPersonID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]map[string]int)
+	for _, l := range s.stats.ListLines() {
+		if l.Blame.Total() <= 0 {
 			continue
 		}
 
-		m, ok := result[l.Month]
-		if !ok {
-			m = make(map[string]int, 3)
-			m["blank"] = 0
-			m["comment"] = 0
-			m["code"] = 0
-			result[l.Month] = m
+		if fileIDs != nil && !fileIDs[l.FileID] {
+			continue
+		}
+		if projIDs != nil && (l.ProjectID == nil || !projIDs[*l.ProjectID]) {
+			continue
+		}
+		if repoIDs != nil && !repoIDs[l.RepositoryID] {
+			continue
+		}
+		if personIDs != nil && !personIDs[l.AuthorID] && !personIDs[l.CommitterID] {
+			continue
 		}
 
-		m["blank"] = l.Blame.Blank
-		m["comment"] = l.Blame.Comment
-		m["code"] = l.Blame.Code
+		month, ok := result[l.Month]
+		if !ok {
+			month = make(map[string]int)
+			month["code"] = 0
+			month["comment"] = 0
+			month["blank"] = 0
+			result[l.Month] = month
+		}
+
+		month["code"] += l.Blame.Code
+		month["comment"] += l.Blame.Comment
+		month["blank"] += l.Blame.Blank
 	}
 	return result, nil
 }

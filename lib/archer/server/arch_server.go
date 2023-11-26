@@ -11,7 +11,7 @@ func (s *server) initArch(r *gin.Engine) {
 }
 
 func (s *server) archList(params *Filters) (any, error) {
-	filter, err := s.createProjectAndDepsFilter(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	filter, err := s.createProjectAndDepsFilter(params)
 	if err != nil {
 		return nil, err
 	}

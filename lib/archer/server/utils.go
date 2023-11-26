@@ -172,6 +172,15 @@ func (s *server) toChanges(i *model.Changes) gin.H {
 	}
 }
 
+func (s *server) toBlame(i *model.Blame) gin.H {
+	return gin.H{
+		"total":   encodeMetric(i.Total()),
+		"code":    encodeMetric(i.Code),
+		"comment": encodeMetric(i.Comment),
+		"blank":   encodeMetric(i.Blank),
+	}
+}
+
 func (s *server) toMetrics(i *model.Metrics) gin.H {
 	return gin.H{
 		"guiceDependencies":    i.GuiceDependencies,

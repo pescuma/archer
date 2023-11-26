@@ -10,59 +10,32 @@ import (
 	"github.com/samber/lo"
 )
 
-func (s *server) createPersonFilter(person string) (map[model.UUID]bool, error) {
-	person = prepareToSearch(person)
-	if person == "" {
-		return nil, nil
-	}
-
-	people, err := s.listPeople("", "", "", person)
-	if err != nil {
-		return nil, err
-	}
-
-	result := make(map[model.UUID]bool, len(people))
-	for _, p := range people {
-		result[p.ID] = true
-	}
-	return result, nil
+func (s *server) listPeople(params *Filters) ([]*model.Person, error) {
+	return s.filterPeople(s.people.ListPeople(), params)
 }
 
-func (s *server) listPeople(file string, proj string, repo string, person string) ([]*model.Person, error) {
-	return s.filterPeople(s.people.ListPeople(), file, proj, repo, person)
-}
-
-func (s *server) filterPeople(col []*model.Person, file string, proj string, repo string, person string) ([]*model.Person, error) {
-	person = prepareToSearch(person)
-	personFilter, err := filters.ParseStringFilter(person)
+func (s *server) filterPeople(col []*model.Person, params *Filters) ([]*model.Person, error) {
+	personFilter, err := s.createPersonFilter(params.FilterPerson, params.FilterPersonID)
 	if err != nil {
 		return nil, err
 	}
 
-	fileIDs, err := s.createFileFilter(file)
+	fileIDs, err := s.listFileIDsOrNil(params.FilterFile)
 	if err != nil {
 		return nil, err
 	}
-	projIDs, err := s.createProjectFilter(proj)
+	projIDs, err := s.listProjectIDsOrNil(params.FilterProject)
 	if err != nil {
 		return nil, err
 	}
-	repoIDs, err := s.createRepoFilter(repo)
+	repoIDs, err := s.listRepoIDsOrNil(params.FilterRepo)
 	if err != nil {
 		return nil, err
 	}
 
 	return lo.Filter(col, func(i *model.Person, index int) bool {
-		if person != "" {
-			hasName := lo.ContainsBy(i.ListNames(), func(j string) bool {
-				return personFilter(j)
-			})
-			hasEmail := lo.ContainsBy(i.ListEmails(), func(j string) bool {
-				return personFilter(j)
-			})
-			if !hasName && !hasEmail {
-				return false
-			}
+		if !personFilter(i) {
+			return false
 		}
 
 		if fileIDs != nil {
@@ -98,6 +71,64 @@ func (s *server) filterPeople(col []*model.Person, file string, proj string, rep
 	}), nil
 }
 
+func (s *server) createPersonFilter(person string, id string) (func(*model.Person) bool, error) {
+	person = prepareToSearch(person)
+	id = prepareToSearch(id)
+
+	switch {
+	case id != "":
+		uuid := model.NewUUID(id)
+		return func(p *model.Person) bool {
+			return p.ID == uuid
+		}, nil
+
+	case person != "":
+		f, err := filters.ParseStringFilter(person)
+		if err != nil {
+			return nil, err
+		}
+
+		return func(p *model.Person) bool {
+			return lo.ContainsBy(p.ListNames(), func(j string) bool {
+				return f(j)
+			}) ||
+				lo.ContainsBy(p.ListEmails(), func(j string) bool {
+					return f(j)
+				})
+		}, nil
+
+	default:
+		return func(_ *model.Person) bool { return true }, nil
+	}
+}
+
+func (s *server) listPersonIDsOrNil(person string, id string) (map[model.UUID]bool, error) {
+	person = prepareToSearch(person)
+	id = prepareToSearch(id)
+
+	switch {
+	case id != "":
+		result := make(map[model.UUID]bool, 1)
+		result[model.UUID(id)] = true
+		return result, nil
+
+	case person != "":
+		people, err := s.listPeople(&Filters{FilterPerson: person})
+		if err != nil {
+			return nil, err
+		}
+
+		result := make(map[model.UUID]bool, len(people))
+		for _, p := range people {
+			result[p.ID] = true
+		}
+		return result, nil
+
+	default:
+		return nil, nil
+	}
+}
+
 func (s *server) sortPeople(col []*model.Person, field string, asc *bool) error {
 	if field == "" {
 		field = "name"
@@ -114,17 +145,17 @@ func (s *server) sortPeople(col []*model.Person, field string, asc *bool) error 
 		return sortBy(col, func(r *model.Person) string { return r.ListNames()[0] }, *asc)
 	case "emails":
 		return sortBy(col, func(r *model.Person) string { return r.ListEmails()[0] }, *asc)
-	case "blame":
+	case "blame.total":
 		return sortBy(col, func(r *model.Person) int { return r.Blame.Total() }, *asc)
 	case "changes.total":
 		return sortBy(col, func(r *model.Person) int { return r.Changes.Total }, *asc)
 	case "changes.in6Months":
 		return sortBy(col, func(r *model.Person) int { return r.Changes.In6Months }, *asc)
-	case "changes.modifiedLines":
+	case "changes.linesModified":
 		return sortBy(col, func(r *model.Person) int { return r.Changes.LinesModified }, *asc)
-	case "changes.addedLines":
+	case "changes.linesAdded":
 		return sortBy(col, func(r *model.Person) int { return r.Changes.LinesAdded }, *asc)
-	case "changes.deletedLines":
+	case "changes.linesDeleted":
 		return sortBy(col, func(r *model.Person) int { return r.Changes.LinesDeleted }, *asc)
 	case "firstSeen":
 		return sortBy(col, func(r *model.Person) int64 { return r.FirstSeen.UnixMilli() }, *asc)
@@ -141,7 +172,7 @@ func (s *server) toPerson(p *model.Person) gin.H {
 		"name":      p.Name,
 		"names":     p.ListNames(),
 		"emails":    p.ListEmails(),
-		"blame":     encodeMetric(p.Blame.Total()),
+		"blame":     s.toBlame(p.Blame),
 		"changes":   s.toChanges(p.Changes),
 		"firstSeen": encodeDate(p.FirstSeen),
 		"lastSeen":  encodeDate(p.LastSeen),

@@ -12,7 +12,7 @@ func (s *server) initPeople(r *gin.Engine) {
 }
 
 func (s *server) peopleList(params *ListParams) (any, error) {
-	people, err := s.listPeople(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	people, err := s.listPeople(&params.Filters)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +38,7 @@ func (s *server) peopleList(params *ListParams) (any, error) {
 }
 
 func (s *server) statsCountPeople(params *StatsParams) (any, error) {
-	people, err := s.listPeople(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	people, err := s.listPeople(&params.Filters)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func (s *server) personGet() (any, error) {
 }
 
 func (s *server) statsSeenPeople(params *StatsParams) (any, error) {
-	people, err := s.listPeople(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	people, err := s.listPeople(&params.Filters)
 	if err != nil {
 		return nil, err
 	}

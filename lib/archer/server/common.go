@@ -1,10 +1,11 @@
 package server
 
 type Filters struct {
-	FilterFile    string `form:"file"`
-	FilterProject string `form:"proj"`
-	FilterRepo    string `form:"repo"`
-	FilterPerson  string `form:"person"`
+	FilterFile     string `form:"file"`
+	FilterProject  string `form:"proj"`
+	FilterRepo     string `form:"repo"`
+	FilterPerson   string `form:"person"`
+	FilterPersonID string `form:"person.id"`
 }
 
 type ListParams struct {

@@ -5,8 +5,6 @@ import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
 import PaginationCardFooter from '@/components/PaginationCardFooter.vue'
 
-const card = ref(null)
-
 const props = defineProps({
   title: String,
   columns: Array,
@@ -15,6 +13,10 @@ const props = defineProps({
   loadPage: Function,
   loadChart: Function,
 })
+
+const emit = defineEmits(['rowsChanged'])
+
+const card = ref(null)
 
 const data = reactive({
   count: 0,
@@ -207,6 +209,8 @@ async function onLoadPage(pageNum, sort, asc) {
   data.sort = sort
   data.asc = asc
 
+  emit('rowsChanged', result.data, result.total, pageNum, sort, asc)
+
   await nextTick()
 
   document.querySelectorAll('.text-truncate').forEach(function (e) {
@@ -260,9 +264,7 @@ function refresh() {
   onLoadPage(data.pageNum, data.sort, data.asc)
 }
 
-onMounted(async function () {
-  refresh()
-})
+onMounted(refresh)
 
 defineExpose({ refresh })
 </script>

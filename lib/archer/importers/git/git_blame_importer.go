@@ -83,7 +83,7 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 
 	fmt.Printf("Finding out which files to process...\n")
 
-	imported := 0
+	justWroteResults := false
 
 	for _, rootDir := range rootDirs {
 		rootDir, err := filepath.Abs(rootDir)
@@ -131,7 +131,7 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 
 		repo.SeenAt(time.Now())
 
-		imported, err = g.importBlame(storage, filesDB, peopleDB, reposDB, statsDB, repo, gitRepo, gitTree, gitCommit, imported)
+		imported, err := g.importBlame(storage, filesDB, peopleDB, reposDB, statsDB, repo, gitRepo, gitTree, gitCommit)
 		if err != nil {
 			return err
 		}
@@ -140,11 +140,24 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 		if err != nil {
 			return err
 		}
+
+		if g.options.SaveEvery != nil && imported > 0 {
+			err = g.writeResults(storage, filesDB, peopleDB, reposDB, statsDB)
+			if err != nil {
+				return err
+			}
+
+			justWroteResults = true
+		} else {
+			justWroteResults = false
+		}
 	}
 
-	err = g.writeResults(storage, filesDB, peopleDB, reposDB, statsDB)
-	if err != nil {
-		return err
+	if !justWroteResults {
+		err = g.writeResults(storage, filesDB, peopleDB, reposDB, statsDB)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -153,7 +166,6 @@ func (g *gitBlameImporter) Import(storage archer.Storage) error {
 func (g *gitBlameImporter) writeResults(storage archer.Storage,
 	filesDB *model.Files, peopleDB *model.People, reposDB *model.Repositories, statsDB *model.MonthlyStats,
 ) error {
-
 	fmt.Printf("Propagating changes to parents...\n")
 
 	err := g.propagateChangesToParents(storage, filesDB, peopleDB, reposDB, statsDB)
@@ -263,7 +275,6 @@ func (g *gitBlameImporter) deleteFileBlame(storage archer.Storage, file *model.F
 func (g *gitBlameImporter) importBlame(storage archer.Storage,
 	filesDB *model.Files, peopleDB *model.People, reposDB *model.Repositories, statsDB *model.MonthlyStats,
 	repo *model.Repository, gitRepo *git.Repository, gitTree *object.Tree, gitCommit *object.Commit,
-	imported int,
 ) (int, error) {
 	toProcess, err := g.listToCompute(filesDB, repo, gitRepo, gitTree, gitCommit)
 	if err != nil {
@@ -271,7 +282,7 @@ func (g *gitBlameImporter) importBlame(storage archer.Storage,
 	}
 
 	if len(toProcess) == 0 {
-		return imported, nil
+		return 0, nil
 	}
 
 	fmt.Printf("%v: Computing blame of %v files...\n", repo.Name, len(toProcess))
@@ -291,8 +302,6 @@ func (g *gitBlameImporter) importBlame(storage archer.Storage,
 			return 0, err
 		}
 
-		imported++
-
 		if g.options.SaveEvery != nil && time.Since(start) >= *g.options.SaveEvery {
 			_ = bar.Clear()
 
@@ -307,7 +316,7 @@ func (g *gitBlameImporter) importBlame(storage archer.Storage,
 		_ = bar.Add(1)
 	}
 
-	return imported, nil
+	return len(toProcess), nil
 }
 
 type blameCacheImpl struct {
@@ -654,10 +663,7 @@ func (g *gitBlameImporter) propagateChangesToParents(storage archer.Storage,
 		pa := peopleDB.GetPersonByID(blame.AuthorID)
 		file := filesDB.GetFileByID(blame.FileID)
 
-		s := statsDB.GetOrCreateLines(c.Date.Format("2006-01"), blame.RepositoryID, blame.AuthorID, blame.CommitterID, file.ProjectID)
-		if s.Blame.IsEmpty() {
-			s.Blame.Clear()
-		}
+		s := statsDB.GetOrCreateLines(c.Date.Format("2006-01"), blame.RepositoryID, blame.AuthorID, blame.CommitterID, file.ID, file.ProjectID)
 
 		switch blame.LineType {
 		case model.CodeFileLine:

@@ -10,17 +10,30 @@ import (
 	"github.com/samber/lo"
 )
 
-func (s *server) createProjectAndDepsFilter(file string, proj string, repo string, person string) (filters.Filter, error) {
+func (s *server) listProjects(params *Filters) ([]*model.Project, error) {
+	return s.filterProjects(s.projects.ListProjects(model.FilterExcludeExternal), params)
+}
+
+func (s *server) filterProjects(col []*model.Project, params *Filters) ([]*model.Project, error) {
+	filter, err := s.createProjectAndDepsFilter(params)
+	if err != nil {
+		return nil, err
+	}
+
+	return filters.FilterProjects(filter, col), nil
+}
+
+func (s *server) createProjectAndDepsFilter(params *Filters) (filters.Filter, error) {
 	var fs []filters.Filter
 
-	fi, err := filters.ParseFilter(s.projects, proj, filters.Include)
+	fi, err := filters.ParseFilter(s.projects, params.FilterProject, filters.Include)
 	if err != nil {
 		return nil, err
 	}
 
 	fs = append(fs, fi)
 
-	projFilter, err := s.createProjectsExternalFilters(file, repo, person)
+	projFilter, err := s.createProjectsExternalFilters(params)
 	if err != nil {
 		return nil, err
 	}
@@ -35,16 +48,16 @@ func (s *server) createProjectAndDepsFilter(file string, proj string, repo strin
 	return filters.GroupFilters(fs...), nil
 }
 
-func (s *server) createProjectsExternalFilters(file string, repo string, person string) (func(*model.Project) bool, error) {
-	fileIDs, err := s.createFileFilter(file)
+func (s *server) createProjectsExternalFilters(params *Filters) (func(*model.Project) bool, error) {
+	fileIDs, err := s.listFileIDsOrNil(params.FilterFile)
 	if err != nil {
 		return nil, err
 	}
-	repoIDs, err := s.createRepoFilter(repo)
+	repoIDs, err := s.listRepoIDsOrNil(params.FilterRepo)
 	if err != nil {
 		return nil, err
 	}
-	personIDs, err := s.createPersonFilter(person)
+	personIDs, err := s.listPersonIDsOrNil(params.FilterPerson, params.FilterPersonID)
 	if err != nil {
 		return nil, err
 	}
@@ -113,35 +126,25 @@ func (s *server) createProjectsExternalFilters(file string, repo string, person 
 	return result, nil
 }
 
-func (s *server) createProjectFilter(proj string) (map[model.UUID]bool, error) {
+func (s *server) listProjectIDsOrNil(proj string) (map[model.UUID]bool, error) {
 	proj = prepareToSearch(proj)
-	if proj == "" {
+
+	switch {
+	case proj != "":
+		projects, err := s.listProjects(&Filters{FilterProject: proj})
+		if err != nil {
+			return nil, err
+		}
+
+		result := make(map[model.UUID]bool, len(projects))
+		for _, p := range projects {
+			result[p.ID] = true
+		}
+		return result, nil
+
+	default:
 		return nil, nil
 	}
-
-	projects, err := s.listProjects("", proj, "", "")
-	if err != nil {
-		return nil, err
-	}
-
-	result := make(map[model.UUID]bool, len(projects))
-	for _, p := range projects {
-		result[p.ID] = true
-	}
-	return result, nil
-}
-
-func (s *server) listProjects(file string, proj string, repo string, person string) ([]*model.Project, error) {
-	return s.filterProjects(s.projects.ListProjects(model.FilterExcludeExternal), file, proj, repo, person)
-}
-
-func (s *server) filterProjects(col []*model.Project, file string, proj string, repo string, person string) ([]*model.Project, error) {
-	filter, err := s.createProjectAndDepsFilter(file, proj, repo, person)
-	if err != nil {
-		return nil, err
-	}
-
-	return filters.FilterProjects(filter, col), nil
 }
 
 func (s *server) sortProjects(col []*model.Project, field string, asc *bool) error {
