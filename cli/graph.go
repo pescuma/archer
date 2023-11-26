@@ -10,10 +10,10 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
-	"github.com/pescuma/archer/lib/archer/filters"
 
-	"github.com/pescuma/archer/lib/archer/model"
-	"github.com/pescuma/archer/lib/archer/utils"
+	"github.com/pescuma/archer/lib/filters"
+	"github.com/pescuma/archer/lib/model"
+	"github.com/pescuma/archer/lib/utils"
 )
 
 type GraphCmd struct {

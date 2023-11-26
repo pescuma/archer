@@ -6,7 +6,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 
-	"github.com/pescuma/archer/lib/archer/model"
+	"github.com/pescuma/archer/lib/model"
 )
 
 type sizes struct {

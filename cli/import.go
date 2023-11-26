@@ -3,15 +3,15 @@ package main
 import (
 	"time"
 
-	"github.com/pescuma/archer/lib/archer/importers/csproj"
-	"github.com/pescuma/archer/lib/archer/importers/git"
-	"github.com/pescuma/archer/lib/archer/importers/gomod"
-	"github.com/pescuma/archer/lib/archer/importers/gradle"
-	"github.com/pescuma/archer/lib/archer/importers/hibernate"
-	"github.com/pescuma/archer/lib/archer/importers/loc"
-	"github.com/pescuma/archer/lib/archer/importers/metrics"
-	"github.com/pescuma/archer/lib/archer/importers/mysql"
-	"github.com/pescuma/archer/lib/archer/importers/owners"
+	"github.com/pescuma/archer/lib/importers/csproj"
+	"github.com/pescuma/archer/lib/importers/git"
+	"github.com/pescuma/archer/lib/importers/gomod"
+	"github.com/pescuma/archer/lib/importers/gradle"
+	"github.com/pescuma/archer/lib/importers/hibernate"
+	"github.com/pescuma/archer/lib/importers/loc"
+	"github.com/pescuma/archer/lib/importers/metrics"
+	"github.com/pescuma/archer/lib/importers/mysql"
+	"github.com/pescuma/archer/lib/importers/owners"
 )
 
 type ImportGradleCmd struct {

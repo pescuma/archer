@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/pescuma/archer/lib/archer/filters"
-	"github.com/pescuma/archer/lib/archer/model"
+	"github.com/pescuma/archer/lib/filters"
+	"github.com/pescuma/archer/lib/model"
 )
 
 type cmdWithFilters struct {

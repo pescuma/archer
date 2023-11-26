@@ -3,8 +3,8 @@ package main
 import (
 	"github.com/alecthomas/kong"
 
-	"github.com/pescuma/archer/lib/archer"
-	"github.com/pescuma/archer/lib/archer/storage/sqlite"
+	"github.com/pescuma/archer/lib/storages/sqlite"
+	"github.com/pescuma/archer/lib/workspace"
 )
 
 var cli struct {
@@ -37,17 +37,19 @@ var cli struct {
 }
 
 type context struct {
-	ws *archer.Workspace
+	ws *workspace.Workspace
 }
 
 func main() {
 	ctx := kong.Parse(&cli, kong.ShortUsageOnError())
 
-	workspace, err := archer.NewWorkspace(sqlite.NewSqliteStorage, cli.Workspace)
+	ws, err := workspace.NewWorkspace(sqlite.NewSqliteStorage, cli.Workspace)
 	ctx.FatalIfErrorf(err)
 
+	defer ws.Close()
+
 	err = ctx.Run(&context{
-		ws: workspace,
+		ws: ws,
 	})
 	ctx.FatalIfErrorf(err)
 }

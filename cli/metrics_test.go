@@ -5,9 +5,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/pescuma/archer/lib/archer"
-	"github.com/pescuma/archer/lib/archer/importers/metrics"
-	"github.com/pescuma/archer/lib/archer/storage/sqlite"
+	"github.com/pescuma/archer/lib/importers/metrics"
+	"github.com/pescuma/archer/lib/storages/sqlite"
+	"github.com/pescuma/archer/lib/workspace"
 )
 
 func TestCognitiveNoCode(t *testing.T) {
@@ -20,7 +20,7 @@ func TestCognitiveNoCode(t *testing.T) {
 		MaxImportedFiles: &mif,
 	})
 
-	ws, err := archer.NewWorkspace(sqlite.NewSqliteMemoryStorage, "")
+	ws, err := workspace.NewWorkspace(sqlite.NewSqliteMemoryStorage, "")
 	assert.Nil(t, err)
 
 	err = ws.Import(g)

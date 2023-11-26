@@ -3,11 +3,11 @@ package main
 import (
 	"sort"
 
-	"github.com/pescuma/archer/lib/archer/filters"
 	"github.com/samber/lo"
 
-	"github.com/pescuma/archer/lib/archer/model"
-	"github.com/pescuma/archer/lib/archer/utils"
+	"github.com/pescuma/archer/lib/filters"
+	"github.com/pescuma/archer/lib/model"
+	"github.com/pescuma/archer/lib/utils"
 )
 
 func groupByRoot(ps []*model.Project, filter filters.Filter, forceShowDependentProjects bool, projGrouping func(project *model.Project) string) *group {
