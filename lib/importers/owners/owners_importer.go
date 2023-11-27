@@ -12,15 +12,14 @@ import (
 
 	"github.com/pescuma/archer/lib/consoles"
 	"github.com/pescuma/archer/lib/filters"
-	"github.com/pescuma/archer/lib/importers"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/storages"
 	"github.com/pescuma/archer/lib/utils"
 )
 
-type ownersImporter struct {
-	filters []string
-	options Options
+type Importer struct {
+	console consoles.Console
+	storage storages.Storage
 }
 
 type Options struct {
@@ -29,35 +28,35 @@ type Options struct {
 	SaveEvery        *int
 }
 
-func NewImporter(filters []string, options Options) importers.Importer {
-	return &ownersImporter{
-		filters: filters,
-		options: options,
+func NewImporter(console consoles.Console, storage storages.Storage) *Importer {
+	return &Importer{
+		console: console,
+		storage: storage,
 	}
 }
 
-func (m *ownersImporter) Import(console consoles.Console, storage storages.Storage) error {
-	config, err := storage.LoadConfig()
+func (i *Importer) Import(filter []string, opts *Options) error {
+	config, err := i.storage.LoadConfig()
 	if err != nil {
 		return err
 	}
 
-	projectsDB, err := storage.LoadProjects()
+	projectsDB, err := i.storage.LoadProjects()
 	if err != nil {
 		return err
 	}
 
-	filesDB, err := storage.LoadFiles()
+	filesDB, err := i.storage.LoadFiles()
 	if err != nil {
 		return err
 	}
 
-	peopleDB, err := storage.LoadPeople()
+	peopleDB, err := i.storage.LoadPeople()
 	if err != nil {
 		return err
 	}
 
-	ps, err := filters.ParseAndFilterProjects(projectsDB, m.filters, model.FilterExcludeExternal)
+	ps, err := filters.ParseAndFilterProjects(projectsDB, filter, model.FilterExcludeExternal)
 	if err != nil {
 		return err
 	}
@@ -65,7 +64,7 @@ func (m *ownersImporter) Import(console consoles.Console, storage storages.Stora
 	ps = lo.Filter(ps, func(p *model.Project, _ int) bool { return len(p.Dirs) > 0 })
 
 	var candidates []*model.File
-	if len(m.filters) == 0 {
+	if len(filter) == 0 {
 		candidates = filesDB.ListFiles()
 	} else {
 		candidates = filesDB.ListFilesByProjects(ps)
@@ -80,7 +79,7 @@ func (m *ownersImporter) Import(console consoles.Console, storage storages.Stora
 	var ws []*work
 	hasAnyRE := false
 	for _, file := range candidates {
-		if !m.options.ShouldContinue(len(ws)) {
+		if !opts.ShouldContinue(len(ws)) {
 			break
 		}
 
@@ -118,7 +117,7 @@ func (m *ownersImporter) Import(console consoles.Console, storage storages.Stora
 
 		modTime := stat.ModTime().String()
 
-		if m.options.Incremental && modTime == file.Data["owners:last_modified"] {
+		if opts.Incremental && modTime == file.Data["owners:last_modified"] {
 			continue
 		}
 
@@ -137,7 +136,7 @@ func (m *ownersImporter) Import(console consoles.Console, storage storages.Stora
 	fmt.Printf("Importing owners from %v files...\n", len(ws))
 
 	bar := utils.NewProgressBar(len(ws))
-	for i, w := range ws {
+	for j, w := range ws {
 		bytes, err := os.ReadFile(w.file.Path)
 		if err != nil {
 			return err
@@ -157,16 +156,16 @@ func (m *ownersImporter) Import(console consoles.Console, storage storages.Stora
 
 		w.file.Data["owners:last_modified"] = w.modTime
 
-		if m.options.SaveEvery != nil && (i+1)%*m.options.SaveEvery == 0 {
+		if opts.SaveEvery != nil && (j+1)%*opts.SaveEvery == 0 {
 			_ = bar.Clear()
 			fmt.Printf("Writing results...")
 
-			err = storage.WritePeople(peopleDB)
+			err = i.storage.WritePeople()
 			if err != nil {
 				return err
 			}
 
-			err = storage.WriteFiles(filesDB)
+			err = i.storage.WriteFiles()
 			if err != nil {
 				return err
 			}
@@ -177,12 +176,12 @@ func (m *ownersImporter) Import(console consoles.Console, storage storages.Stora
 
 	fmt.Printf("Writing results...\n")
 
-	err = storage.WritePeople(peopleDB)
+	err = i.storage.WritePeople()
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteFiles(filesDB)
+	err = i.storage.WriteFiles()
 	if err != nil {
 		return err
 	}

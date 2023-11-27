@@ -1,7 +1,6 @@
 package metrics
 
 import (
-	"fmt"
 	"io/fs"
 	"math"
 	"os"
@@ -14,7 +13,6 @@ import (
 
 	"github.com/pescuma/archer/lib/consoles"
 	"github.com/pescuma/archer/lib/filters"
-	"github.com/pescuma/archer/lib/importers"
 	"github.com/pescuma/archer/lib/languages/kotlin"
 	"github.com/pescuma/archer/lib/languages/kotlin_parser"
 	"github.com/pescuma/archer/lib/metrics/complexity"
@@ -24,41 +22,41 @@ import (
 	"github.com/pescuma/archer/lib/utils"
 )
 
-type metricsImporter struct {
-	filters []string
-	options Options
+type Importer struct {
+	console consoles.Console
+	storage storages.Storage
 }
 
 type Options struct {
 	Incremental      bool
 	MaxImportedFiles *int
-	SaveEvery        *int
+	SaveEvery        *time.Duration
 }
 
-func NewImporter(filters []string, options Options) importers.Importer {
-	return &metricsImporter{
-		filters: filters,
-		options: options,
+func NewImporter(console consoles.Console, storage storages.Storage) *Importer {
+	return &Importer{
+		console: console,
+		storage: storage,
 	}
 }
 
-func (m *metricsImporter) Import(console consoles.Console, storage storages.Storage) error {
-	projectsDB, err := storage.LoadProjects()
+func (i *Importer) Import(filter []string, opts *Options) error {
+	projectsDB, err := i.storage.LoadProjects()
 	if err != nil {
 		return err
 	}
 
-	filesDB, err := storage.LoadFiles()
+	filesDB, err := i.storage.LoadFiles()
 	if err != nil {
 		return err
 	}
 
-	peopleDB, err := storage.LoadPeople()
+	peopleDB, err := i.storage.LoadPeople()
 	if err != nil {
 		return err
 	}
 
-	ps, err := filters.ParseAndFilterProjects(projectsDB, m.filters, model.FilterExcludeExternal)
+	ps, err := filters.ParseAndFilterProjects(projectsDB, filter, model.FilterExcludeExternal)
 	if err != nil {
 		return err
 	}
@@ -66,7 +64,7 @@ func (m *metricsImporter) Import(console consoles.Console, storage storages.Stor
 	ps = lo.Filter(ps, func(p *model.Project, _ int) bool { return len(p.Dirs) > 0 })
 
 	var candidates []*model.File
-	if len(m.filters) == 0 {
+	if len(filter) == 0 {
 		candidates = filesDB.ListFiles()
 	} else {
 		candidates = filesDB.ListFilesByProjects(ps)
@@ -79,7 +77,7 @@ func (m *metricsImporter) Import(console consoles.Console, storage storages.Stor
 	ws := map[string]*work{}
 
 	for _, file := range candidates {
-		if !m.options.ShouldContinue(len(ws)) {
+		if !opts.ShouldContinue(len(ws)) {
 			break
 		}
 
@@ -104,7 +102,7 @@ func (m *metricsImporter) Import(console consoles.Console, storage storages.Stor
 
 		modTime := stat.ModTime().String()
 
-		if m.options.Incremental && file.Metrics.GuiceDependencies >= 0 {
+		if opts.Incremental && file.Metrics.GuiceDependencies >= 0 {
 			if modTime == file.Data["metrics:last_modified"] {
 				continue
 			}
@@ -116,9 +114,9 @@ func (m *metricsImporter) Import(console consoles.Console, storage storages.Stor
 		}
 	}
 
-	fmt.Printf("Importing metrics from %v files...\n", len(ws))
+	i.console.Printf("Importing metrics from %v files...\n", len(ws))
 
-	lastSave := 0
+	start := time.Now()
 	err = kotlin.ProcessFiles(lo.Keys(ws),
 		func(path string, content kotlin_parser.IKotlinFileContext) error {
 			w := ws[path]
@@ -138,16 +136,16 @@ func (m *metricsImporter) Import(console consoles.Console, storage storages.Stor
 			return nil
 		},
 		func(bar *progressbar.ProgressBar, index int, path string) error {
-			if m.options.SaveEvery != nil && (index+1)-lastSave >= *m.options.SaveEvery {
-				lastSave = index
-
+			if opts.SaveEvery != nil && time.Since(start) > *opts.SaveEvery {
 				_ = bar.Clear()
-				fmt.Print("Writing metrics for files...")
+				i.console.Printf("Writing metrics for files...\n")
 
-				err = storage.WriteFiles(filesDB)
+				err = i.storage.WriteFiles()
 				if err != nil {
 					return err
 				}
+
+				start = time.Now()
 			}
 			return nil
 		},
@@ -159,7 +157,7 @@ func (m *metricsImporter) Import(console consoles.Console, storage storages.Stor
 
 			} else {
 				_ = bar.Clear()
-				fmt.Printf("Error procesing file %v: %v\n", file.Path, err)
+				i.console.Printf("Error procesing file %v: %v\n", file.Path, err)
 			}
 
 			return nil
@@ -168,23 +166,23 @@ func (m *metricsImporter) Import(console consoles.Console, storage storages.Stor
 		return err
 	}
 
-	fmt.Printf("Propagating changes to parents...\n")
+	i.console.Printf("Propagating changes to parents...\n")
 
 	updateParentMetrics(projectsDB, filesDB, peopleDB)
 
-	fmt.Printf("Writing results...\n")
+	i.console.Printf("Writing results...\n")
 
-	err = storage.WriteProjects(projectsDB)
+	err = i.storage.WriteProjects()
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteFiles(filesDB)
+	err = i.storage.WriteFiles()
 	if err != nil {
 		return err
 	}
 
-	err = storage.WritePeople(peopleDB)
+	err = i.storage.WritePeople()
 	if err != nil {
 		return err
 	}

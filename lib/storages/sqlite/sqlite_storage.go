@@ -6,7 +6,6 @@ import (
 	"log"
 	"math"
 	"os"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -29,31 +28,29 @@ type sqliteStorage struct {
 	mutex sync.RWMutex
 	db    *gorm.DB
 
-	configs     map[string]*sqlConfig
-	projs       map[model.UUID]*sqlProject
-	projDeps    map[model.UUID]*sqlProjectDependency
-	projDirs    map[model.UUID]*sqlProjectDirectory
-	files       map[model.UUID]*sqlFile
-	people      map[model.UUID]*sqlPerson
-	peopleRepos map[string]*sqlPersonRepository
-	peopleFiles map[string]*sqlPersonFile
-	area        map[model.UUID]*sqlProductArea
-	repos       map[model.UUID]*sqlRepository
-	repoCommits map[model.UUID]*sqlRepositoryCommit
-	monthLines  map[model.UUID]*sqlMonthLines
+	projects        *model.Projects
+	files           *model.Files
+	people          *model.People
+	peopleRelations *model.PeopleRelations
+	repos           *model.Repositories
+	stats           *model.MonthlyStats
+	config          *map[string]string
+
+	sqlConfigs     map[string]*sqlConfig
+	sqlProjs       map[model.UUID]*sqlProject
+	sqlProjDeps    map[model.UUID]*sqlProjectDependency
+	sqlProjDirs    map[model.UUID]*sqlProjectDirectory
+	sqlFiles       map[model.UUID]*sqlFile
+	sqlPeople      map[model.UUID]*sqlPerson
+	sqlPeopleRepos map[string]*sqlPersonRepository
+	sqlPeopleFiles map[string]*sqlPersonFile
+	area           map[model.UUID]*sqlProductArea
+	sqlRepos       map[model.UUID]*sqlRepository
+	sqlRepoCommits map[model.UUID]*sqlRepositoryCommit
+	monthLines     map[model.UUID]*sqlMonthLines
 }
 
-func NewSqliteStorage(path string) (storages.Storage, error) {
-	if _, err := os.Stat(path); err != nil {
-		fmt.Printf("Creating workspace at %v\n", path)
-		err = os.MkdirAll(path, 0o700)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	file := filepath.Join(path, "archer.sqlite")
-
+func NewSqliteStorage(file string) (storages.Storage, error) {
 	return newFrom(file + "?_pragma=journal_mode(WAL)")
 }
 
@@ -94,17 +91,17 @@ func newFrom(dsn string) (storages.Storage, error) {
 	}
 
 	return &sqliteStorage{
-		db:          db,
-		configs:     map[string]*sqlConfig{},
-		projs:       map[model.UUID]*sqlProject{},
-		projDeps:    map[model.UUID]*sqlProjectDependency{},
-		projDirs:    map[model.UUID]*sqlProjectDirectory{},
-		files:       map[model.UUID]*sqlFile{},
-		people:      map[model.UUID]*sqlPerson{},
-		peopleRepos: map[string]*sqlPersonRepository{},
-		peopleFiles: map[string]*sqlPersonFile{},
-		repos:       map[model.UUID]*sqlRepository{},
-		repoCommits: map[model.UUID]*sqlRepositoryCommit{},
+		db:             db,
+		sqlConfigs:     map[string]*sqlConfig{},
+		sqlProjs:       map[model.UUID]*sqlProject{},
+		sqlProjDeps:    map[model.UUID]*sqlProjectDependency{},
+		sqlProjDirs:    map[model.UUID]*sqlProjectDirectory{},
+		sqlFiles:       map[model.UUID]*sqlFile{},
+		sqlPeople:      map[model.UUID]*sqlPerson{},
+		sqlPeopleRepos: map[string]*sqlPersonRepository{},
+		sqlPeopleFiles: map[string]*sqlPersonFile{},
+		sqlRepos:       map[model.UUID]*sqlRepository{},
+		sqlRepoCommits: map[model.UUID]*sqlRepositoryCommit{},
 	}, nil
 }
 
@@ -121,6 +118,10 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
+	if s.projects != nil {
+		return s.projects, nil
+	}
+
 	result := model.NewProjects()
 
 	var projs []*sqlProject
@@ -129,7 +130,7 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 		return nil, err
 	}
 
-	s.projs = lo.Associate(projs, func(i *sqlProject) (model.UUID, *sqlProject) {
+	s.sqlProjs = lo.Associate(projs, func(i *sqlProject) (model.UUID, *sqlProject) {
 		return i.ID, i
 	})
 
@@ -139,7 +140,7 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 		return nil, err
 	}
 
-	s.projDeps = lo.Associate(deps, func(i *sqlProjectDependency) (model.UUID, *sqlProjectDependency) {
+	s.sqlProjDeps = lo.Associate(deps, func(i *sqlProjectDependency) (model.UUID, *sqlProjectDependency) {
 		return i.ID, i
 	})
 
@@ -149,7 +150,7 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 		return nil, err
 	}
 
-	s.projDirs = lo.Associate(dirs, func(i *sqlProjectDirectory) (model.UUID, *sqlProjectDirectory) {
+	s.sqlProjDirs = lo.Associate(dirs, func(i *sqlProjectDirectory) (model.UUID, *sqlProjectDirectory) {
 		return i.ID, i
 	})
 
@@ -197,32 +198,26 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 		d.LastSeen = sd.LastSeen
 	}
 
+	s.projects = result
 	return result, nil
 }
 
-func (s *sqliteStorage) WriteProjects(projs *model.Projects) error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	all := projs.ListProjects(model.FilterAll)
-
-	return s.writeProjects(all)
+func (s *sqliteStorage) WriteProjects() error {
+	return s.writeProjects(s.projects.ListProjects(model.FilterAll))
 }
 
 func (s *sqliteStorage) WriteProject(proj *model.Project) error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	projs := []*model.Project{proj}
-
-	return s.writeProjects(projs)
+	return s.writeProjects([]*model.Project{proj})
 }
 
 func (s *sqliteStorage) writeProjects(projs []*model.Project) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
 	var sqlProjs []*sqlProject
 	for _, p := range projs {
 		sp := toSqlProject(p)
-		if prepareChange(&s.projs, sp.ID, sp) {
+		if prepareChange(&s.sqlProjs, sp.ID, sp) {
 			sqlProjs = append(sqlProjs, sp)
 		}
 	}
@@ -231,7 +226,7 @@ func (s *sqliteStorage) writeProjects(projs []*model.Project) error {
 	for _, p := range projs {
 		for _, d := range p.Dependencies {
 			sd := toSqlProjectDependency(d)
-			if prepareChange(&s.projDeps, sd.ID, sd) {
+			if prepareChange(&s.sqlProjDeps, sd.ID, sd) {
 				sqlDeps = append(sqlDeps, sd)
 			}
 		}
@@ -241,7 +236,7 @@ func (s *sqliteStorage) writeProjects(projs []*model.Project) error {
 	for _, p := range projs {
 		for _, d := range p.Dirs {
 			sd := toSqlProjectDirectory(d, p)
-			if prepareChange(&s.projDirs, sd.ID, sd) {
+			if prepareChange(&s.sqlProjDirs, sd.ID, sd) {
 				sqlDirs = append(sqlDirs, sd)
 			}
 		}
@@ -258,21 +253,21 @@ func (s *sqliteStorage) writeProjects(projs []*model.Project) error {
 		return err
 	}
 
-	addList(&s.projs, sqlProjs, func(s *sqlProject) model.UUID { return s.ID })
+	addList(&s.sqlProjs, sqlProjs, func(s *sqlProject) model.UUID { return s.ID })
 
 	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlDeps).Error
 	if err != nil {
 		return err
 	}
 
-	addList(&s.projDeps, sqlDeps, func(s *sqlProjectDependency) model.UUID { return s.ID })
+	addList(&s.sqlProjDeps, sqlDeps, func(s *sqlProjectDependency) model.UUID { return s.ID })
 
 	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlDirs).Error
 	if err != nil {
 		return err
 	}
 
-	addList(&s.projDirs, sqlDirs, func(s *sqlProjectDirectory) model.UUID { return s.ID })
+	addList(&s.sqlProjDirs, sqlDirs, func(s *sqlProjectDirectory) model.UUID { return s.ID })
 
 	// TODO delete
 
@@ -283,6 +278,10 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
+	if s.files != nil {
+		return s.files, nil
+	}
+
 	result := model.NewFiles()
 
 	var files []*sqlFile
@@ -291,7 +290,7 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 		return nil, err
 	}
 
-	s.files = lo.Associate(files, func(i *sqlFile) (model.UUID, *sqlFile) {
+	s.sqlFiles = lo.Associate(files, func(i *sqlFile) (model.UUID, *sqlFile) {
 		return i.ID, i
 	})
 
@@ -310,37 +309,26 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 		f.LastSeen = sf.LastSeen
 	}
 
+	s.files = result
 	return result, nil
 }
 
-func (s *sqliteStorage) WriteFiles(files *model.Files) error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	all := files.ListFiles()
-
-	err := s.writeFiles(all)
-	if err != nil {
-		return err
-	}
-
-	// TODO delete
-
-	return nil
+func (s *sqliteStorage) WriteFiles() error {
+	return s.writeFiles(s.files.ListFiles())
 }
 
 func (s *sqliteStorage) WriteFile(file *model.File) error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
 	return s.writeFiles([]*model.File{file})
 }
 
 func (s *sqliteStorage) writeFiles(all []*model.File) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
 	var sqlFiles []*sqlFile
 	for _, f := range all {
 		sf := toSqlFile(f)
-		if prepareChange(&s.files, sf.ID, sf) {
+		if prepareChange(&s.sqlFiles, sf.ID, sf) {
 			sqlFiles = append(sqlFiles, sf)
 		}
 	}
@@ -356,7 +344,9 @@ func (s *sqliteStorage) writeFiles(all []*model.File) error {
 		return err
 	}
 
-	addList(&s.files, sqlFiles, func(s *sqlFile) model.UUID { return s.ID })
+	addList(&s.sqlFiles, sqlFiles, func(s *sqlFile) model.UUID { return s.ID })
+
+	// TODO delete
 
 	return nil
 }
@@ -448,6 +438,10 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
+	if s.people != nil {
+		return s.people, nil
+	}
+
 	result := model.NewPeople()
 
 	var people []*sqlPerson
@@ -456,7 +450,7 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 		return nil, err
 	}
 
-	s.people = lo.Associate(people, func(i *sqlPerson) (model.UUID, *sqlPerson) {
+	s.sqlPeople = lo.Associate(people, func(i *sqlPerson) (model.UUID, *sqlPerson) {
 		return i.ID, i
 	})
 
@@ -493,24 +487,25 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 		a.Data = decodeMap(sa.Data)
 	}
 
+	s.people = result
 	return result, nil
 }
 
-func (s *sqliteStorage) WritePeople(peopleDB *model.People) error {
+func (s *sqliteStorage) WritePeople() error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
 	var sqlPeople []*sqlPerson
-	people := peopleDB.ListPeople()
+	people := s.people.ListPeople()
 	for _, p := range people {
 		sp := toSqlPerson(p)
-		if prepareChange(&s.people, sp.ID, sp) {
+		if prepareChange(&s.sqlPeople, sp.ID, sp) {
 			sqlPeople = append(sqlPeople, sp)
 		}
 	}
 
 	var sqlAreas []*sqlProductArea
-	area := peopleDB.ListProductAreas()
+	area := s.people.ListProductAreas()
 	for _, p := range area {
 		sp := toSqlProductArea(p)
 		if prepareChange(&s.area, sp.ID, sp) {
@@ -529,7 +524,7 @@ func (s *sqliteStorage) WritePeople(peopleDB *model.People) error {
 		return err
 	}
 
-	addList(&s.people, sqlPeople, func(s *sqlPerson) model.UUID { return s.ID })
+	addList(&s.sqlPeople, sqlPeople, func(s *sqlPerson) model.UUID { return s.ID })
 
 	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlAreas).Error
 	if err != nil {
@@ -551,6 +546,10 @@ func (s *sqliteStorage) LoadPeopleRelations() (*model.PeopleRelations, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
+	if s.peopleRelations != nil {
+		return s.peopleRelations, nil
+	}
+
 	result := model.NewPeopleRelations()
 
 	var rs []*sqlPersonRepository
@@ -559,7 +558,7 @@ func (s *sqliteStorage) LoadPeopleRelations() (*model.PeopleRelations, error) {
 		return nil, err
 	}
 
-	s.peopleRepos = lo.Associate(rs, func(i *sqlPersonRepository) (string, *sqlPersonRepository) {
+	s.sqlPeopleRepos = lo.Associate(rs, func(i *sqlPersonRepository) (string, *sqlPersonRepository) {
 		return compositeKey(i.PersonID, i.RepositoryID), i
 	})
 
@@ -569,7 +568,7 @@ func (s *sqliteStorage) LoadPeopleRelations() (*model.PeopleRelations, error) {
 		return nil, err
 	}
 
-	s.peopleFiles = lo.Associate(fs, func(i *sqlPersonFile) (string, *sqlPersonFile) {
+	s.sqlPeopleFiles = lo.Associate(fs, func(i *sqlPersonFile) (string, *sqlPersonFile) {
 		return compositeKey(i.PersonID, i.FileID), i
 	})
 
@@ -585,25 +584,26 @@ func (s *sqliteStorage) LoadPeopleRelations() (*model.PeopleRelations, error) {
 		pr.LastSeen = f.LastSeen
 	}
 
+	s.peopleRelations = result
 	return result, nil
 }
 
-func (s *sqliteStorage) WritePeopleRelations(prs *model.PeopleRelations) error {
+func (s *sqliteStorage) WritePeopleRelations() error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
 	var rs []*sqlPersonRepository
-	for _, r := range prs.ListRepositories() {
+	for _, r := range s.peopleRelations.ListRepositories() {
 		pr := toSqlPersonRepository(r)
-		if prepareChange(&s.peopleRepos, compositeKey(r.PersonID, r.RepositoryID), pr) {
+		if prepareChange(&s.sqlPeopleRepos, compositeKey(r.PersonID, r.RepositoryID), pr) {
 			rs = append(rs, pr)
 		}
 	}
 
 	var fs []*sqlPersonFile
-	for _, f := range prs.ListFiles() {
+	for _, f := range s.peopleRelations.ListFiles() {
 		pf := toSqlPersonFile(f)
-		if prepareChange(&s.peopleFiles, compositeKey(f.PersonID, f.FileID), pf) {
+		if prepareChange(&s.sqlPeopleFiles, compositeKey(f.PersonID, f.FileID), pf) {
 			fs = append(fs, pf)
 		}
 	}
@@ -626,8 +626,8 @@ func (s *sqliteStorage) WritePeopleRelations(prs *model.PeopleRelations) error {
 
 	// TODO delete
 
-	addList(&s.peopleRepos, rs, func(pr *sqlPersonRepository) string { return compositeKey(pr.PersonID, pr.RepositoryID) })
-	addList(&s.peopleFiles, fs, func(pr *sqlPersonFile) string { return compositeKey(pr.PersonID, pr.FileID) })
+	addList(&s.sqlPeopleRepos, rs, func(pr *sqlPersonRepository) string { return compositeKey(pr.PersonID, pr.RepositoryID) })
+	addList(&s.sqlPeopleFiles, fs, func(pr *sqlPersonFile) string { return compositeKey(pr.PersonID, pr.FileID) })
 
 	return nil
 }
@@ -636,47 +636,19 @@ func (s *sqliteStorage) LoadRepositories() (*model.Repositories, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
-	return s.loadRepositories(
-		func([]*sqlRepository) func(db *gorm.DB) *gorm.DB {
-			return func(db *gorm.DB) *gorm.DB {
-				return db
-			}
-		})
-}
-
-func (s *sqliteStorage) LoadRepository(rootDir string) (*model.Repository, error) {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
-
-	reposDB, err := s.loadRepositories(
-		func(repos []*sqlRepository) func(db *gorm.DB) *gorm.DB {
-			if repos == nil {
-				return func(db *gorm.DB) *gorm.DB {
-					return db.Where("root_dir = ?", rootDir)
-				}
-			} else {
-				return func(db *gorm.DB) *gorm.DB {
-					return db.Where("repository_id = ?", repos[0].ID)
-				}
-			}
-		})
-	if err != nil {
-		return nil, err
+	if s.repos != nil {
+		return s.repos, nil
 	}
 
-	return reposDB.Get(rootDir), nil
-}
-
-func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm.DB) *gorm.DB) (*model.Repositories, error) {
 	result := model.NewRepositories()
 
 	var repos []*sqlRepository
-	err := s.db.Scopes(scope(repos)).Find(&repos).Error
+	err := s.db.Find(&repos).Error
 	if err != nil {
 		return nil, err
 	}
 
-	addMap(&s.repos, lo.Associate(repos, func(i *sqlRepository) (model.UUID, *sqlRepository) {
+	addMap(&s.sqlRepos, lo.Associate(repos, func(i *sqlRepository) (model.UUID, *sqlRepository) {
 		return i.ID, i
 	}))
 
@@ -685,12 +657,12 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 	}
 
 	var commits []*sqlRepositoryCommit
-	err = s.db.Scopes(scope(repos)).Find(&commits).Error
+	err = s.db.Find(&commits).Error
 	if err != nil {
 		return nil, err
 	}
 
-	addMap(&s.repoCommits, lo.Associate(commits, func(i *sqlRepositoryCommit) (model.UUID, *sqlRepositoryCommit) {
+	addMap(&s.sqlRepoCommits, lo.Associate(commits, func(i *sqlRepositoryCommit) (model.UUID, *sqlRepositoryCommit) {
 		return i.ID, i
 	}))
 
@@ -729,35 +701,37 @@ func (s *sqliteStorage) loadRepositories(scope func([]*sqlRepository) func(*gorm
 		commitsById[c.ID] = c
 	}
 
+	s.repos = result
 	return result, nil
 }
 
-func (s *sqliteStorage) WriteRepositories(repos *model.Repositories) error {
-	for _, repo := range repos.List() {
-		err := s.WriteRepository(repo)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+func (s *sqliteStorage) WriteRepositories() error {
+	return s.writeRepositories(s.repos.List())
 }
 
 func (s *sqliteStorage) WriteRepository(repo *model.Repository) error {
+	return s.writeRepositories([]*model.Repository{repo})
+}
+
+func (s *sqliteStorage) writeRepositories(repos []*model.Repository) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
 	var sqlRepos []*sqlRepository
-	sr := toSqlRepository(repo)
-	if prepareChange(&s.repos, sr.ID, sr) {
-		sqlRepos = append(sqlRepos, sr)
+	for _, repo := range repos {
+		sr := toSqlRepository(repo)
+		if prepareChange(&s.sqlRepos, sr.ID, sr) {
+			sqlRepos = append(sqlRepos, sr)
+		}
 	}
 
 	var sqlCommits []*sqlRepositoryCommit
-	for _, c := range repo.ListCommits() {
-		sc := toSqlRepositoryCommit(repo, c)
-		if prepareChange(&s.repoCommits, sc.ID, sc) {
-			sqlCommits = append(sqlCommits, sc)
+	for _, repo := range repos {
+		for _, c := range repo.ListCommits() {
+			sc := toSqlRepositoryCommit(repo, c)
+			if prepareChange(&s.sqlRepoCommits, sc.ID, sc) {
+				sqlCommits = append(sqlCommits, sc)
+			}
 		}
 	}
 
@@ -772,14 +746,14 @@ func (s *sqliteStorage) WriteRepository(repo *model.Repository) error {
 		return err
 	}
 
-	addList(&s.repos, sqlRepos, func(s *sqlRepository) model.UUID { return s.ID })
+	addList(&s.sqlRepos, sqlRepos, func(s *sqlRepository) model.UUID { return s.ID })
 
 	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommits).Error
 	if err != nil {
 		return err
 	}
 
-	addList(&s.repoCommits, sqlCommits, func(s *sqlRepositoryCommit) model.UUID { return s.ID })
+	addList(&s.sqlRepoCommits, sqlCommits, func(s *sqlRepositoryCommit) model.UUID { return s.ID })
 
 	// TODO delete
 
@@ -793,7 +767,7 @@ func (s *sqliteStorage) WriteCommit(repo *model.Repository, commit *model.Reposi
 	var sqlCommits []*sqlRepositoryCommit
 
 	sc := toSqlRepositoryCommit(repo, commit)
-	if prepareChange(&s.repoCommits, sc.ID, sc) {
+	if prepareChange(&s.sqlRepoCommits, sc.ID, sc) {
 		sqlCommits = append(sqlCommits, sc)
 	}
 
@@ -808,7 +782,7 @@ func (s *sqliteStorage) WriteCommit(repo *model.Repository, commit *model.Reposi
 		return err
 	}
 
-	addList(&s.repoCommits, sqlCommits, func(s *sqlRepositoryCommit) model.UUID { return s.ID })
+	addList(&s.sqlRepoCommits, sqlCommits, func(s *sqlRepositoryCommit) model.UUID { return s.ID })
 
 	// TODO delete
 
@@ -909,6 +883,10 @@ func (s *sqliteStorage) LoadMonthlyStats() (*model.MonthlyStats, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
+	if s.stats != nil {
+		return s.stats, nil
+	}
+
 	result := model.NewMonthlyStats()
 
 	var sqlLines []*sqlMonthLines
@@ -928,15 +906,16 @@ func (s *sqliteStorage) LoadMonthlyStats() (*model.MonthlyStats, error) {
 		l.Blame = toModelBlame(sl.Blame)
 	}
 
+	s.stats = result
 	return result, nil
 }
 
-func (s *sqliteStorage) WriteMonthlyStats(stats *model.MonthlyStats) error {
+func (s *sqliteStorage) WriteMonthlyStats() error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
 	var sqlLines []*sqlMonthLines
-	for _, f := range stats.ListLines() {
+	for _, f := range s.stats.ListLines() {
 		sf := toSqlMonthLines(f)
 		if prepareChange(&s.monthLines, sf.ID, sf) {
 			sqlLines = append(sqlLines, sf)
@@ -965,6 +944,10 @@ func (s *sqliteStorage) LoadConfig() (*map[string]string, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
+	if s.config != nil {
+		return s.config, nil
+	}
+
 	result := map[string]string{}
 
 	var sqlConfigs []*sqlConfig
@@ -973,7 +956,7 @@ func (s *sqliteStorage) LoadConfig() (*map[string]string, error) {
 		return nil, err
 	}
 
-	s.configs = lo.Associate(sqlConfigs, func(i *sqlConfig) (string, *sqlConfig) {
+	s.sqlConfigs = lo.Associate(sqlConfigs, func(i *sqlConfig) (string, *sqlConfig) {
 		return i.Key, i
 	})
 
@@ -981,17 +964,18 @@ func (s *sqliteStorage) LoadConfig() (*map[string]string, error) {
 		result[sc.Key] = sc.Value
 	}
 
+	s.config = &result
 	return &result, nil
 }
 
-func (s *sqliteStorage) WriteConfig(configs *map[string]string) error {
+func (s *sqliteStorage) WriteConfig() error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
 	var sqlConfigs []*sqlConfig
-	for k, v := range *configs {
+	for k, v := range *s.config {
 		sc := toSqlConfig(k, v)
-		if prepareChange(&s.configs, sc.Key, sc) {
+		if prepareChange(&s.sqlConfigs, sc.Key, sc) {
 			sqlConfigs = append(sqlConfigs, sc)
 		}
 	}
@@ -1007,7 +991,7 @@ func (s *sqliteStorage) WriteConfig(configs *map[string]string) error {
 		return err
 	}
 
-	addList(&s.configs, sqlConfigs, func(s *sqlConfig) string { return s.Key })
+	addList(&s.sqlConfigs, sqlConfigs, func(s *sqlConfig) string { return s.Key })
 
 	// TODO delete
 

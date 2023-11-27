@@ -11,30 +11,31 @@ import (
 
 	"github.com/pescuma/archer/lib/common"
 	"github.com/pescuma/archer/lib/consoles"
-	"github.com/pescuma/archer/lib/importers"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/storages"
 )
 
-type mysqlImporter struct {
-	connectionString string
+type Importer struct {
+	console consoles.Console
+	storage storages.Storage
 }
 
-func NewImporter(connectionString string) importers.Importer {
-	return &mysqlImporter{
-		connectionString: connectionString,
+func NewImporter(console consoles.Console, storage storages.Storage) *Importer {
+	return &Importer{
+		console: console,
+		storage: storage,
 	}
 }
 
-func (m *mysqlImporter) Import(console consoles.Console, storage storages.Storage) error {
-	projects, err := storage.LoadProjects()
+func (i *Importer) Import(connectionString string) error {
+	projects, err := i.storage.LoadProjects()
 	if err != nil {
 		return err
 	}
 
-	db, err := sql.Open("mysql", m.connectionString)
+	db, err := sql.Open("mysql", connectionString)
 	if err != nil {
-		return errors.Wrapf(err, "error connecting to MySQL using %v", m.connectionString)
+		return errors.Wrapf(err, "error connecting to MySQL using %v", connectionString)
 	}
 
 	defer db.Close()
@@ -43,22 +44,22 @@ func (m *mysqlImporter) Import(console consoles.Console, storage storages.Storag
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
-	err = m.importTables(db, projects)
+	err = i.importTables(db, projects)
 	if err != nil {
 		return err
 	}
 
-	err = m.importFKs(db, projects)
+	err = i.importFKs(db, projects)
 	if err != nil {
 		return err
 	}
 
 	fmt.Printf("Writing results...\n")
 
-	return storage.WriteProjects(projects)
+	return i.storage.WriteProjects()
 }
 
-func (m *mysqlImporter) importTables(db *sql.DB, projs *model.Projects) error {
+func (i *Importer) importTables(db *sql.DB, projs *model.Projects) error {
 	results, err := db.Query(`
 		select TABLE_SCHEMA schema_name,
 			   TABLE_NAME   table_name,
@@ -114,7 +115,7 @@ func (m *mysqlImporter) importTables(db *sql.DB, projs *model.Projects) error {
 	return nil
 }
 
-func (m *mysqlImporter) importFKs(db *sql.DB, projs *model.Projects) error {
+func (i *Importer) importFKs(db *sql.DB, projs *model.Projects) error {
 	results, err := db.Query(`
 		select CONSTRAINT_SCHEMA schema_name,
 			   TABLE_NAME,

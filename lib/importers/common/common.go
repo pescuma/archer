@@ -1,52 +1,48 @@
 package common
 
 import (
-	"fmt"
 	"io/fs"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/pescuma/archer/lib/consoles"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/utils"
 )
 
-func FindAndImportFiles(name string, rootDir string, matcher func(string) bool, process func(string) error) error {
-	fmt.Printf("Finding %v...\n", name)
+func FindAndImportFiles(console consoles.Console, name string, dirs []string, matcher func(string) bool, process func(string) error) error {
+	console.Printf("Finding %v...\n", name)
 
-	rootDir, err := utils.PathAbs(rootDir)
-	if err != nil {
-		return err
+	var queue []string
+
+	for _, dir := range dirs {
+		dir, err := utils.PathAbs(dir)
+		if err != nil {
+			return err
+		}
+
+		files, err := utils.ListFilesRecursive(dir, matcher)
+		if err != nil {
+			return err
+		}
+
+		queue = append(queue, files...)
 	}
 
-	queue, err := utils.ListFilesRecursive(rootDir, matcher)
-	if err != nil {
-		return err
-	}
+	console.Printf("Importing %v...\n", name)
 
-	fmt.Printf("Importing %v...\n", name)
-
-	return ImportFiles(rootDir, queue, func(path string) error {
-		return process(path)
+	return ImportFiles(queue, func(file string) error {
+		return process(file)
 	})
 }
 
-func ImportFiles(rootDir string, queue []string, process func(string) error) error {
+func ImportFiles(queue []string, process func(string) error) error {
 	bar := utils.NewProgressBar(len(queue))
 	for _, file := range queue {
-		relativePath, err := filepath.Rel(rootDir, file)
-		if err != nil {
-			return err
-		}
+		bar.Describe(utils.TruncateFilename(file))
 
-		bar.Describe(utils.TruncateFilename(relativePath))
-
-		file, err = utils.PathAbs(file)
-		if err != nil {
-			return err
-		}
-
-		err = process(file)
+		err := process(file)
 		if err != nil {
 			return err
 		}

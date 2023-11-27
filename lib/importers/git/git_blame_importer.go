@@ -20,15 +20,14 @@ import (
 
 	"github.com/pescuma/archer/lib/caches"
 	"github.com/pescuma/archer/lib/consoles"
-	"github.com/pescuma/archer/lib/importers"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/storages"
 	"github.com/pescuma/archer/lib/utils"
 )
 
-type gitBlameImporter struct {
-	rootDirs []string
-	options  BlameOptions
+type BlameImporter struct {
+	console consoles.Console
+	storage storages.Storage
 
 	abort error
 }
@@ -39,11 +38,11 @@ type BlameOptions struct {
 	SaveEvery        *time.Duration
 }
 
-func NewBlameImporter(rootDirs []string, options BlameOptions) importers.Importer {
-	return &gitBlameImporter{
-		rootDirs: rootDirs,
-		options:  options,
-		abort:    errors.New("ABORT"),
+func NewBlameImporter(console consoles.Console, storage storages.Storage) *BlameImporter {
+	return &BlameImporter{
+		console: console,
+		storage: storage,
+		abort:   errors.New("ABORT"),
 	}
 }
 
@@ -56,47 +55,42 @@ type blameWork struct {
 	lastMod      string
 }
 
-func (g *gitBlameImporter) Import(console consoles.Console, storage storages.Storage) error {
-	console.Printf("Loading existing data...\n")
+func (i *BlameImporter) Import(dirs []string, opts *BlameOptions) error {
+	i.console.Printf("Loading existing data...\n")
 
-	filesDB, err := storage.LoadFiles()
+	filesDB, err := i.storage.LoadFiles()
 	if err != nil {
 		return err
 	}
 
-	peopleDB, err := storage.LoadPeople()
+	peopleDB, err := i.storage.LoadPeople()
 	if err != nil {
 		return err
 	}
 
-	reposDB, err := storage.LoadRepositories()
+	reposDB, err := i.storage.LoadRepositories()
 	if err != nil {
 		return err
 	}
 
-	statsDB, err := storage.LoadMonthlyStats()
+	statsDB, err := i.storage.LoadMonthlyStats()
 	if err != nil {
 		return err
 	}
 
-	rootDirs, err := findRootDirs(g.rootDirs)
+	dirs, err = findRootDirs(dirs)
 	if err != nil {
 		return err
 	}
 
-	console.Printf("Finding out which files to process...\n")
+	i.console.Printf("Finding out which files to process...\n")
 
 	justWroteResults := false
 
-	for _, rootDir := range rootDirs {
-		rootDir, err := filepath.Abs(rootDir)
+	for _, dir := range dirs {
+		gitRepo, err := git.PlainOpen(dir)
 		if err != nil {
-			return err
-		}
-
-		gitRepo, err := git.PlainOpen(rootDir)
-		if err != nil {
-			console.Printf("Skipping %s: %s\n", rootDir, err)
+			i.console.Printf("Skipping %s: %s\n", dir, err)
 			continue
 		}
 
@@ -115,37 +109,37 @@ func (g *gitBlameImporter) Import(console consoles.Console, storage storages.Sto
 			return err
 		}
 
-		repo := reposDB.Get(rootDir)
+		repo := reposDB.Get(dir)
 
 		if repo == nil {
-			console.Printf("%v: repository history not fully imported. run 'import git history'\n", rootDir)
+			i.console.Printf("%v: repository history not fully imported. run 'import git history'\n", dir)
 			continue
 		}
 
-		importedHistory, err := g.checkImportedHistory(repo, gitRepo)
+		importedHistory, err := i.checkImportedHistory(repo, gitRepo)
 		if err != nil {
 			return err
 		}
 
 		if !importedHistory {
-			console.Printf("%v: repository history not fully imported. run 'import git history'\n", repo.Name)
+			i.console.Printf("%v: repository history not fully imported. run 'import git history'\n", repo.Name)
 			continue
 		}
 
 		repo.SeenAt(time.Now())
 
-		imported, err := g.importBlame(console, storage, filesDB, peopleDB, reposDB, statsDB, repo, gitRepo, gitTree, gitCommit)
+		imported, err := i.importBlame(filesDB, peopleDB, reposDB, statsDB, repo, gitRepo, gitTree, gitCommit, opts)
 		if err != nil {
 			return err
 		}
 
-		err = g.deleteBlame(console, storage, filesDB, repo, gitTree)
+		err = i.deleteBlame(filesDB, repo, gitTree)
 		if err != nil {
 			return err
 		}
 
-		if g.options.SaveEvery != nil && imported > 0 {
-			err = g.writeResults(console, storage, filesDB, peopleDB, reposDB, statsDB)
+		if opts.SaveEvery != nil && imported > 0 {
+			err = i.writeResults(filesDB, peopleDB, reposDB, statsDB, opts)
 			if err != nil {
 				return err
 			}
@@ -157,7 +151,7 @@ func (g *gitBlameImporter) Import(console consoles.Console, storage storages.Sto
 	}
 
 	if !justWroteResults {
-		err = g.writeResults(console, storage, filesDB, peopleDB, reposDB, statsDB)
+		err = i.writeResults(filesDB, peopleDB, reposDB, statsDB, opts)
 		if err != nil {
 			return err
 		}
@@ -166,27 +160,27 @@ func (g *gitBlameImporter) Import(console consoles.Console, storage storages.Sto
 	return nil
 }
 
-func (g *gitBlameImporter) writeResults(console consoles.Console, storage storages.Storage, filesDB *model.Files, peopleDB *model.People, reposDB *model.Repositories, statsDB *model.MonthlyStats) error {
-	console.Printf("Propagating changes to parents...\n")
+func (i *BlameImporter) writeResults(filesDB *model.Files, peopleDB *model.People, reposDB *model.Repositories, statsDB *model.MonthlyStats, opts *BlameOptions) error {
+	i.console.Printf("Propagating changes to parents...\n")
 
-	err := g.propagateChangesToParents(storage, filesDB, peopleDB, reposDB, statsDB)
+	err := i.propagateChangesToParents(filesDB, peopleDB, reposDB, statsDB)
 	if err != nil {
 		return err
 	}
 
-	console.Printf("Writing results...\n")
+	i.console.Printf("Writing results...\n")
 
-	err = storage.WritePeople(peopleDB)
+	err = i.storage.WritePeople()
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteRepositories(reposDB)
+	err = i.storage.WriteRepositories()
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteMonthlyStats(statsDB)
+	err = i.storage.WriteMonthlyStats()
 	if err != nil {
 		return err
 	}
@@ -194,8 +188,8 @@ func (g *gitBlameImporter) writeResults(console consoles.Console, storage storag
 	return nil
 }
 
-func (g *gitBlameImporter) deleteBlame(console consoles.Console, storage storages.Storage, filesDB *model.Files, repo *model.Repository, gitTree *object.Tree) error {
-	toDelete, err := g.listToDelete(filesDB, repo, gitTree)
+func (i *BlameImporter) deleteBlame(filesDB *model.Files, repo *model.Repository, gitTree *object.Tree) error {
+	toDelete, err := i.listToDelete(filesDB, repo, gitTree)
 	if err != nil {
 		return err
 	}
@@ -204,11 +198,11 @@ func (g *gitBlameImporter) deleteBlame(console consoles.Console, storage storage
 		return nil
 	}
 
-	console.Printf("%v: Cleaning %v deleted files...\n", repo.Name, len(toDelete))
+	i.console.Printf("%v: Cleaning %v deleted files...\n", repo.Name, len(toDelete))
 
 	bar := utils.NewProgressBar(len(toDelete))
 	for _, file := range toDelete {
-		err = g.deleteFileBlame(storage, file)
+		err = i.deleteFileBlame(file)
 		if err != nil {
 			return err
 		}
@@ -219,7 +213,7 @@ func (g *gitBlameImporter) deleteBlame(console consoles.Console, storage storage
 	return nil
 }
 
-func (g *gitBlameImporter) listToDelete(filesDB *model.Files, repo *model.Repository, gitTree *object.Tree) (map[string]*model.File, error) {
+func (i *BlameImporter) listToDelete(filesDB *model.Files, repo *model.Repository, gitTree *object.Tree) (map[string]*model.File, error) {
 	existing := set.New[string](1000)
 
 	err := gitTree.Files().ForEach(func(file *object.File) error {
@@ -251,8 +245,8 @@ func (g *gitBlameImporter) listToDelete(filesDB *model.Files, repo *model.Reposi
 	return result, nil
 }
 
-func (g *gitBlameImporter) deleteFileBlame(storage storages.Storage, file *model.File) error {
-	contents, err := storage.LoadFileContents(file.ID)
+func (i *BlameImporter) deleteFileBlame(file *model.File) error {
+	contents, err := i.storage.LoadFileContents(file.ID)
 	if err != nil {
 		return err
 	}
@@ -263,7 +257,7 @@ func (g *gitBlameImporter) deleteFileBlame(storage storages.Storage, file *model
 
 	contents.Lines = nil
 
-	err = storage.WriteFileContents(contents)
+	err = i.storage.WriteFileContents(contents)
 	if err != nil {
 		return err
 	}
@@ -271,8 +265,8 @@ func (g *gitBlameImporter) deleteFileBlame(storage storages.Storage, file *model
 	return nil
 }
 
-func (g *gitBlameImporter) importBlame(console consoles.Console, storage storages.Storage, filesDB *model.Files, peopleDB *model.People, reposDB *model.Repositories, statsDB *model.MonthlyStats, repo *model.Repository, gitRepo *git.Repository, gitTree *object.Tree, gitCommit *object.Commit) (int, error) {
-	toProcess, err := g.listToCompute(console, filesDB, repo, gitRepo, gitTree, gitCommit)
+func (i *BlameImporter) importBlame(filesDB *model.Files, peopleDB *model.People, reposDB *model.Repositories, statsDB *model.MonthlyStats, repo *model.Repository, gitRepo *git.Repository, gitTree *object.Tree, gitCommit *object.Commit, opts *BlameOptions) (int, error) {
+	toProcess, err := i.listToCompute(filesDB, repo, gitRepo, gitTree, gitCommit, opts)
 	if err != nil {
 		return 0, err
 	}
@@ -281,9 +275,9 @@ func (g *gitBlameImporter) importBlame(console consoles.Console, storage storage
 		return 0, nil
 	}
 
-	console.Printf("%v: Computing blame of %v files...\n", repo.Name, len(toProcess))
+	i.console.Printf("%v: Computing blame of %v files...\n", repo.Name, len(toProcess))
 
-	cache, err := g.newBlameCache(storage, filesDB, repo, gitRepo)
+	cache, err := i.newBlameCache(filesDB, repo, gitRepo)
 	if err != nil {
 		return 0, err
 	}
@@ -293,15 +287,15 @@ func (g *gitBlameImporter) importBlame(console consoles.Console, storage storage
 	for _, w := range toProcess {
 		bar.Describe(utils.TruncateFilename(w.relativePath))
 
-		err = g.computeFileBlame(storage, w, cache)
+		err = i.computeFileBlame(w, cache)
 		if err != nil {
 			return 0, err
 		}
 
-		if g.options.SaveEvery != nil && time.Since(start) >= *g.options.SaveEvery {
+		if opts.SaveEvery != nil && time.Since(start) >= *opts.SaveEvery {
 			_ = bar.Clear()
 
-			err = g.writeResults(console, storage, filesDB, peopleDB, reposDB, statsDB)
+			err = i.writeResults(filesDB, peopleDB, reposDB, statsDB, opts)
 			if err != nil {
 				return 0, err
 			}
@@ -323,9 +317,9 @@ type blameCacheImpl struct {
 	commits caches.Cache[plumbing.Hash, *BlameCommitCache]
 }
 
-func (g *gitBlameImporter) newBlameCache(storage storages.Storage, filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository) (BlameCache, error) {
+func (i *BlameImporter) newBlameCache(filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository) (BlameCache, error) {
 	cache := &blameCacheImpl{
-		storage: storage,
+		storage: i.storage,
 		filesDB: filesDB,
 		repo:    repo,
 		gitRepo: gitRepo,
@@ -428,7 +422,7 @@ func (c *blameCacheImpl) GetFile(name string, hash plumbing.Hash) (*object.File,
 	return object.NewFile(name, filemode.Regular, blob), nil
 }
 
-func (g *gitBlameImporter) listToCompute(console consoles.Console, filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository, gitTree *object.Tree, gitCommit *object.Commit) ([]*blameWork, error) {
+func (i *BlameImporter) listToCompute(filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository, gitTree *object.Tree, gitCommit *object.Commit, opts *BlameOptions) ([]*blameWork, error) {
 	var result []*blameWork
 
 	limit := math.MaxInt
@@ -441,8 +435,8 @@ func (g *gitBlameImporter) listToCompute(console consoles.Console, filesDB *mode
 	}
 
 	err := gitTree.Files().ForEach(func(gitFile *object.File) error {
-		if !g.options.ShouldContinue(len(result)) {
-			return g.abort
+		if !opts.ShouldContinue(len(result)) {
+			return i.abort
 		}
 
 		path, err := utils.PathAbs(repo.RootDir, gitFile.Name)
@@ -461,7 +455,7 @@ func (g *gitBlameImporter) listToCompute(console consoles.Console, filesDB *mode
 			file.SeenAt(time.Now(), stat.ModTime())
 
 			lastMod = stat.ModTime().String()
-			if g.options.Incremental && lastMod == file.Data["blame:last_modified"] {
+			if opts.Incremental && lastMod == file.Data["blame:last_modified"] {
 				return nil
 			}
 		}
@@ -482,7 +476,7 @@ func (g *gitBlameImporter) listToCompute(console consoles.Console, filesDB *mode
 
 		// Otherwise we go out of memory
 		if len(lines) >= limit {
-			console.Printf("%v: Skipping %v: too many lines (%v)\n", repo.Name, path, len(lines))
+			i.console.Printf("%v: Skipping %v: too many lines (%v)\n", repo.Name, path, len(lines))
 			return nil
 		}
 
@@ -497,7 +491,7 @@ func (g *gitBlameImporter) listToCompute(console consoles.Console, filesDB *mode
 
 		return nil
 	})
-	if err != nil && err != g.abort {
+	if err != nil && err != i.abort {
 		return nil, err
 	}
 
@@ -512,7 +506,7 @@ func (g *gitBlameImporter) listToCompute(console consoles.Console, filesDB *mode
 	return result, nil
 }
 
-func (g *gitBlameImporter) computeFileBlame(storage storages.Storage, w *blameWork, cache BlameCache) error {
+func (i *BlameImporter) computeFileBlame(w *blameWork, cache BlameCache) error {
 	//now := time.Now()
 
 	blame, err := Blame(w.gitCommit, w.relativePath, cache)
@@ -523,12 +517,12 @@ func (g *gitBlameImporter) computeFileBlame(storage storages.Storage, w *blameWo
 	//console.Printf(" %v (in %v)\n", w.relativePath, time.Since(now))
 
 	contents := strings.Join(lo.Map(blame.Lines, func(item *Line, _ int) string { return item.Text }), "\n")
-	lineTypes, err := g.computeLOC(filepath.Base(w.file.Path), contents)
+	lineTypes, err := i.computeLOC(filepath.Base(w.file.Path), contents)
 	if err != nil {
 		return err
 	}
 
-	fileLines, err := storage.LoadFileContents(w.file.ID)
+	fileLines, err := i.storage.LoadFileContents(w.file.ID)
 	if err != nil {
 		return err
 	}
@@ -573,12 +567,12 @@ func (g *gitBlameImporter) computeFileBlame(storage storages.Storage, w *blameWo
 		delete(w.file.Data, "blame:last_modified")
 	}
 
-	err = storage.WriteFileContents(fileLines)
+	err = i.storage.WriteFileContents(fileLines)
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteFile(w.file)
+	err = i.storage.WriteFile(w.file)
 	if err != nil {
 		return err
 	}
@@ -586,7 +580,7 @@ func (g *gitBlameImporter) computeFileBlame(storage storages.Storage, w *blameWo
 	return nil
 }
 
-func (g *gitBlameImporter) computeLOC(name string, contents string) ([]model.FileLineType, error) {
+func (i *BlameImporter) computeLOC(name string, contents string) ([]model.FileLineType, error) {
 	tmp, err := os.CreateTemp("", "archer-*-"+name)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error computing lines of code")
@@ -628,10 +622,8 @@ func (g *gitBlameImporter) computeLOC(name string, contents string) ([]model.Fil
 	return result, nil
 }
 
-func (g *gitBlameImporter) propagateChangesToParents(storage storages.Storage,
-	filesDB *model.Files, peopleDB *model.People, reposDB *model.Repositories, statsDB *model.MonthlyStats,
-) error {
-	blames, err := storage.QueryBlamePerAuthor()
+func (i *BlameImporter) propagateChangesToParents(filesDB *model.Files, peopleDB *model.People, reposDB *model.Repositories, statsDB *model.MonthlyStats) error {
+	blames, err := i.storage.QueryBlamePerAuthor()
 	if err != nil {
 		return err
 	}
@@ -680,7 +672,7 @@ func (g *gitBlameImporter) propagateChangesToParents(storage storages.Storage,
 	return nil
 }
 
-func (g *gitBlameImporter) checkImportedHistory(repo *model.Repository, gitRepo *git.Repository) (bool, error) {
+func (i *BlameImporter) checkImportedHistory(repo *model.Repository, gitRepo *git.Repository) (bool, error) {
 	if repo == nil {
 		return false, nil
 	}
@@ -693,12 +685,12 @@ func (g *gitBlameImporter) checkImportedHistory(repo *model.Repository, gitRepo 
 	err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
 		repoCommit := repo.GetCommit(gitCommit.Hash.String())
 		if repoCommit == nil || repoCommit.FilesModified == -1 {
-			return g.abort
+			return i.abort
 		}
 
 		return nil
 	})
-	if err != nil && err != g.abort {
+	if err != nil && err != i.abort {
 		return false, err
 	}
 

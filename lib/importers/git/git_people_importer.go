@@ -2,52 +2,52 @@ package git
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/samber/lo"
 
 	"github.com/pescuma/archer/lib/consoles"
-	"github.com/pescuma/archer/lib/importers"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/storages"
 	"github.com/pescuma/archer/lib/utils"
 )
 
-type gitPeopleImporter struct {
-	rootDirs []string
+type PeopleImporter struct {
+	console consoles.Console
+	storage storages.Storage
 }
 
-func NewPeopleImporter(rootDirs []string) importers.Importer {
-	return &gitPeopleImporter{
-		rootDirs: rootDirs,
+func NewPeopleImporter(console consoles.Console, storage storages.Storage) *PeopleImporter {
+	return &PeopleImporter{
+		console: console,
+		storage: storage,
 	}
 }
 
-func (g gitPeopleImporter) Import(console consoles.Console, storage storages.Storage) error {
+func (g PeopleImporter) Import(dirs []string) error {
 	fmt.Printf("Loading existing data...\n")
 
-	peopleDB, err := storage.LoadPeople()
+	peopleDB, err := g.storage.LoadPeople()
 	if err != nil {
 		return err
 	}
 
-	rootDirs, err := findRootDirs(g.rootDirs)
+	dirs, err = findRootDirs(dirs)
 	if err != nil {
 		return err
 	}
 
 	fmt.Printf("Importing people...\n")
 
-	_, err = importPeople(peopleDB, rootDirs)
+	_, err = importPeople(peopleDB, dirs)
 	if err != nil {
 		return err
 	}
 
 	fmt.Printf("Writing results...\n")
 
-	err = storage.WritePeople(peopleDB)
+	err = g.storage.WritePeople()
 	if err != nil {
 		return err
 	}
@@ -55,21 +55,16 @@ func (g gitPeopleImporter) Import(console consoles.Console, storage storages.Sto
 	return nil
 }
 
-func importPeople(peopleDB *model.People, rootDirs []string) (*nameEmailGrouper, error) {
+func importPeople(peopleDB *model.People, dirs []string) (*nameEmailGrouper, error) {
 	grouper := newNameEmailGrouperFrom(peopleDB)
 
-	bar := utils.NewProgressBar(len(rootDirs))
-	for _, rootDir := range rootDirs {
-		bar.Describe(utils.TruncateFilename(rootDir))
+	bar := utils.NewProgressBar(len(dirs))
+	for _, dir := range dirs {
+		bar.Describe(utils.TruncateFilename(dir))
 
-		rootDir, err := filepath.Abs(rootDir)
+		gr, err := git.PlainOpen(dir)
 		if err != nil {
-			return nil, err
-		}
-
-		gr, err := git.PlainOpen(rootDir)
-		if err != nil {
-			fmt.Printf("Skipping '%s': %s\n", rootDir, err)
+			fmt.Printf("Skipping '%s': %s\n", dir, err)
 			continue
 		}
 

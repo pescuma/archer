@@ -2,7 +2,6 @@ package loc
 
 import (
 	"bufio"
-	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -13,47 +12,46 @@ import (
 
 	"github.com/pescuma/archer/lib/consoles"
 	"github.com/pescuma/archer/lib/filters"
-	"github.com/pescuma/archer/lib/importers"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/storages"
 	"github.com/pescuma/archer/lib/utils"
 )
 
-type locImporter struct {
-	filters []string
-	options Options
+type Importer struct {
+	console consoles.Console
+	storage storages.Storage
 }
 
 type Options struct {
 	Incremental bool
 }
 
-func NewImporter(filters []string, options Options) importers.Importer {
-	return &locImporter{
-		filters: filters,
-		options: options,
+func NewImporter(console consoles.Console, storage storages.Storage) *Importer {
+	return &Importer{
+		console: console,
+		storage: storage,
 	}
 }
 
-func (l *locImporter) Import(console consoles.Console, storage storages.Storage) error {
-	fmt.Printf("Loading existing data...\n")
+func (i *Importer) Import(filter []string, opts *Options) error {
+	i.console.Printf("Loading existing data...\n")
 
-	projectsDB, err := storage.LoadProjects()
+	projectsDB, err := i.storage.LoadProjects()
 	if err != nil {
 		return err
 	}
 
-	filesDB, err := storage.LoadFiles()
+	filesDB, err := i.storage.LoadFiles()
 	if err != nil {
 		return err
 	}
 
-	peopleDB, err := storage.LoadPeople()
+	peopleDB, err := i.storage.LoadPeople()
 	if err != nil {
 		return err
 	}
 
-	ps, err := filters.ParseAndFilterProjects(projectsDB, l.filters, model.FilterExcludeExternal)
+	ps, err := filters.ParseAndFilterProjects(projectsDB, filter, model.FilterExcludeExternal)
 	if err != nil {
 		return err
 	}
@@ -61,13 +59,13 @@ func (l *locImporter) Import(console consoles.Console, storage storages.Storage)
 	ps = lo.Filter(ps, func(p *model.Project, _ int) bool { return len(p.Dirs) > 0 })
 
 	var candidates []*model.File
-	if len(l.filters) == 0 {
+	if len(filter) == 0 {
 		candidates = filesDB.ListFiles()
 	} else {
 		candidates = filesDB.ListFilesByProjects(ps)
 	}
 
-	fmt.Printf("Importing size from %v files...\n", len(candidates))
+	i.console.Printf("Importing size from %v files...\n", len(candidates))
 
 	files := make([]*model.File, 0, len(candidates))
 
@@ -80,7 +78,7 @@ func (l *locImporter) Import(console consoles.Console, storage storages.Storage)
 
 			modTime := stat.ModTime().String()
 
-			if !l.options.Incremental || modTime != file.Data["loc:last_modified"] {
+			if !opts.Incremental || modTime != file.Data["loc:last_modified"] {
 				file.Data["loc:last_modified"] = modTime
 				files = append(files, file)
 
@@ -96,9 +94,9 @@ func (l *locImporter) Import(console consoles.Console, storage storages.Storage)
 		_ = bar.Add(1)
 	}
 
-	fmt.Printf("Importing lines of code from %v files...\n", len(files))
+	i.console.Printf("Importing lines of code from %v files...\n", len(files))
 
-	loc, err := l.computeLOC(files)
+	loc, err := i.computeLOC(files)
 	if err != nil {
 		return err
 	}
@@ -122,19 +120,19 @@ func (l *locImporter) Import(console consoles.Console, storage storages.Storage)
 
 	updateParents(projectsDB, filesDB, peopleDB)
 
-	fmt.Printf("Writing results...\n")
+	i.console.Printf("Writing results...\n")
 
-	err = storage.WriteProjects(projectsDB)
+	err = i.storage.WriteProjects()
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteFiles(filesDB)
+	err = i.storage.WriteFiles()
 	if err != nil {
 		return err
 	}
 
-	err = storage.WritePeople(peopleDB)
+	err = i.storage.WritePeople()
 	if err != nil {
 		return err
 	}
@@ -200,7 +198,7 @@ func updateParents(projectsDB *model.Projects, filesDB *model.Files, peopleDB *m
 	}
 }
 
-func (l *locImporter) computeLOC(files []*model.File) (*gocloc.Result, error) {
+func (i *Importer) computeLOC(files []*model.File) (*gocloc.Result, error) {
 	languages := gocloc.NewDefinedLanguages()
 	options := gocloc.NewClocOptions()
 

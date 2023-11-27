@@ -1,7 +1,6 @@
 package gomod
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,62 +10,60 @@ import (
 	"golang.org/x/mod/module"
 
 	"github.com/pescuma/archer/lib/consoles"
-	"github.com/pescuma/archer/lib/importers"
 	"github.com/pescuma/archer/lib/importers/common"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/storages"
 )
 
-type gomodImporter struct {
-	rootDir  string
-	rootName string
-	options  Options
+type Importer struct {
+	console consoles.Console
+	storage storages.Storage
 }
 
 type Options struct {
+	Root             string
 	RespectGitignore bool
 }
 
-func NewImporter(rootDir string, rootName string, options Options) importers.Importer {
-	return &gomodImporter{
-		rootDir:  rootDir,
-		rootName: rootName,
-		options:  options,
+func NewImporter(console consoles.Console, storage storages.Storage) *Importer {
+	return &Importer{
+		console: console,
+		storage: storage,
 	}
 }
 
-func (i *gomodImporter) Import(console consoles.Console, storage storages.Storage) error {
-	fmt.Printf("Loading existing data...\n")
+func (i *Importer) Import(dirs []string, opts *Options) error {
+	i.console.Printf("Loading existing data...\n")
 
-	projsDB, err := storage.LoadProjects()
+	projsDB, err := i.storage.LoadProjects()
 	if err != nil {
 		return err
 	}
 
-	filesDB, err := storage.LoadFiles()
+	filesDB, err := i.storage.LoadFiles()
 	if err != nil {
 		return err
 	}
 
-	err = common.FindAndImportFiles("projects", i.rootDir,
+	err = common.FindAndImportFiles(i.console, "projects", dirs,
 		func(name string) bool {
 			return name == "go.mod"
 		},
 		func(path string) error {
-			return i.process(projsDB, filesDB, path)
+			return i.process(projsDB, filesDB, path, opts)
 		})
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Writing results...\n")
+	i.console.Printf("Writing results...\n")
 
-	err = storage.WriteProjects(projsDB)
+	err = i.storage.WriteProjects()
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteFiles(filesDB)
+	err = i.storage.WriteFiles()
 	if err != nil {
 		return err
 	}
@@ -74,7 +71,7 @@ func (i *gomodImporter) Import(console consoles.Console, storage storages.Storag
 	return nil
 }
 
-func (i *gomodImporter) process(projsDB *model.Projects, filesDB *model.Files, path string) error {
+func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path string, opts *Options) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -87,11 +84,11 @@ func (i *gomodImporter) process(projsDB *model.Projects, filesDB *model.Files, p
 
 	name := ast.Module.Mod.Path
 	if name == "" {
-		fmt.Printf("Ignoring %v because of empty module name", path)
+		i.console.Printf("Ignoring %v because of empty module name", path)
 		return nil
 	}
 
-	proj := projsDB.GetOrCreate(i.rootName, name)
+	proj := projsDB.GetOrCreate(opts.Root, name)
 	proj.Type = model.CodeType
 	proj.RootDir = filepath.Dir(path)
 	proj.ProjectFile = path
@@ -112,14 +109,14 @@ func (i *gomodImporter) process(projsDB *model.Projects, filesDB *model.Files, p
 	}
 
 	for _, req := range ast.Require {
-		i.addDep(projsDB, proj, req.Mod)
+		i.addDep(projsDB, proj, req.Mod, opts)
 	}
 
 	for _, rep := range ast.Replace {
-		i.addDep(projsDB, proj, rep.New)
+		i.addDep(projsDB, proj, rep.New, opts)
 	}
 
-	filter, _ := common.CreateFileFilter(proj.RootDir, i.options.RespectGitignore,
+	filter, _ := common.CreateFileFilter(proj.RootDir, opts.RespectGitignore,
 		func(path string) bool {
 			name := filepath.Base(path)
 			return name == "go.mod" || strings.HasSuffix(name, ".go")
@@ -142,12 +139,12 @@ func (i *gomodImporter) process(projsDB *model.Projects, filesDB *model.Files, p
 	return nil
 }
 
-func (i *gomodImporter) addDep(projsDB *model.Projects, proj *model.Project, mod module.Version) {
+func (i *Importer) addDep(projsDB *model.Projects, proj *model.Project, mod module.Version, opts *Options) {
 	if mod.Path == "" {
 		return
 	}
 
-	dp := projsDB.GetOrCreate(i.rootName, mod.Path)
+	dp := projsDB.GetOrCreate(opts.Root, mod.Path)
 
 	dep := proj.GetOrCreateDependency(dp)
 	if mod.Version != "" {

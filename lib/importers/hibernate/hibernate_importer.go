@@ -14,7 +14,6 @@ import (
 
 	"github.com/pescuma/archer/lib/common"
 	"github.com/pescuma/archer/lib/consoles"
-	"github.com/pescuma/archer/lib/importers"
 	"github.com/pescuma/archer/lib/languages/kotlin"
 	"github.com/pescuma/archer/lib/languages/kotlin_parser"
 	"github.com/pescuma/archer/lib/model"
@@ -22,45 +21,42 @@ import (
 	"github.com/pescuma/archer/lib/utils"
 )
 
-type hibernateImporter struct {
-	rootsFinder common.RootsFinder
-	rootName    string
-	options     Options
+type Importer struct {
+	console consoles.Console
+	storage storages.Storage
 }
 
 type Options struct {
+	Root        string
 	Incremental bool
 }
 
-func NewImporter(rootDirs, globs []string, rootName string, options Options) importers.Importer {
-	return &hibernateImporter{
-		rootsFinder: common.NewRootsFinder(rootDirs, globs),
-		rootName:    rootName,
-		options:     options,
+func NewImporter(console consoles.Console, storage storages.Storage) *Importer {
+	return &Importer{
+		console: console,
+		storage: storage,
 	}
 }
 
-func (h *hibernateImporter) Import(console consoles.Console, storage storages.Storage) error {
-	projectsDB, err := storage.LoadProjects()
+func (i *Importer) Import(rootDirs, globs []string, opts *Options) error {
+	projectsDB, err := i.storage.LoadProjects()
 	if err != nil {
 		return err
 	}
 
-	filesDB, err := storage.LoadFiles()
+	filesDB, err := i.storage.LoadFiles()
 	if err != nil {
 		return err
 	}
 
-	roots, err := h.rootsFinder.ComputeRootDirs(projectsDB, filesDB)
+	rootsFinder := common.NewRootsFinder(rootDirs, globs)
+
+	roots, err := rootsFinder.ComputeRootDirs(projectsDB, filesDB)
 	if err != nil {
 		return err
 	}
 
-	for _, r := range roots {
-		fmt.Printf("%v\n", r)
-	}
-
-	lastModifiedKey := fmt.Sprintf("hibernate:%v:last_modified", h.rootName)
+	lastModifiedKey := fmt.Sprintf("hibernate:%v:last_modified", opts.Root)
 
 	type fileInfo struct {
 		root     common.RootDir
@@ -89,7 +85,7 @@ func (h *hibernateImporter) Import(console consoles.Console, storage storages.St
 
 			modTime := stat.ModTime().String()
 
-			if h.options.Incremental && modTime == file.Data[lastModifiedKey] {
+			if opts.Incremental && modTime == file.Data[lastModifiedKey] {
 				return nil
 			}
 
@@ -175,7 +171,7 @@ func (h *hibernateImporter) Import(console consoles.Console, storage storages.St
 
 		root := c.Root[0]
 
-		proj := projectsDB.GetOrCreate(h.rootName, c.Tables[0])
+		proj := projectsDB.GetOrCreate(opts.Root, c.Tables[0])
 		dbProjs[proj] = true
 
 		proj.Type = model.DatabaseType
@@ -207,7 +203,7 @@ func (h *hibernateImporter) Import(console consoles.Console, storage storages.St
 				continue
 			}
 
-			dp := projectsDB.GetOrCreate(h.rootName, dc.Tables[0])
+			dp := projectsDB.GetOrCreate(opts.Root, dc.Tables[0])
 			dbProjs[dp] = true
 
 			d := proj.GetOrCreateDependency(dp)
@@ -223,12 +219,12 @@ func (h *hibernateImporter) Import(console consoles.Console, storage storages.St
 
 	fmt.Printf("Writing results...\n")
 
-	err = storage.WriteProjects(projectsDB)
+	err = i.storage.WriteProjects()
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteFiles(filesDB)
+	err = i.storage.WriteFiles()
 	if err != nil {
 		return err
 	}
@@ -305,18 +301,18 @@ func (l *treeListener) EnterClassDeclaration(ctx *kotlin_parser.ClassDeclaration
 	l.IncreasePrefix()
 }
 
-func (l *treeListener) ExitClassDeclaration(ctx *kotlin_parser.ClassDeclarationContext) {
+func (l *treeListener) ExitClassDeclaration(_ *kotlin_parser.ClassDeclarationContext) {
 	l.DecreasePrefix()
 
 	l.currentClassName = utils.RemoveLast(l.currentClassName)
 	l.currentClass = utils.RemoveLast(l.currentClass)
 }
 
-func (l *treeListener) EnterFunctionDeclaration(ctx *kotlin_parser.FunctionDeclarationContext) {
+func (l *treeListener) EnterFunctionDeclaration(_ *kotlin_parser.FunctionDeclarationContext) {
 	l.insideFunction++
 }
 
-func (l *treeListener) ExitFunctionDeclaration(ctx *kotlin_parser.FunctionDeclarationContext) {
+func (l *treeListener) ExitFunctionDeclaration(_ *kotlin_parser.FunctionDeclarationContext) {
 	l.insideFunction--
 }
 

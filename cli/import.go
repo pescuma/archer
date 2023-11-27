@@ -6,50 +6,124 @@ import (
 	"github.com/pescuma/archer/lib/importers/csproj"
 	"github.com/pescuma/archer/lib/importers/git"
 	"github.com/pescuma/archer/lib/importers/gomod"
-	"github.com/pescuma/archer/lib/importers/gradle"
 	"github.com/pescuma/archer/lib/importers/hibernate"
 	"github.com/pescuma/archer/lib/importers/loc"
 	"github.com/pescuma/archer/lib/importers/metrics"
-	"github.com/pescuma/archer/lib/importers/mysql"
 	"github.com/pescuma/archer/lib/importers/owners"
 )
 
+type ImportAllCmd struct {
+	Paths       []string      `arg:"" help:"Paths to recursively search for data." type:"existingpath"`
+	Root        string        `help:"Root name."`
+	Gitignore   bool          `default:"true" help:"Respect .gitignore file when importing files."`
+	Incremental bool          `default:"true" negatable:"" help:"Don't import commits already imported."`
+	SaveEvery   time.Duration `default:"10m" help:"Save results while processing to avoid losing work."`
+}
+
+func (c *ImportAllCmd) Run(ctx *context) error {
+	ws := ctx.ws
+
+	ws.Console().PushPrefix("gomod: ")
+
+	err := ws.ImportGoMod(c.Paths, &gomod.Options{
+		Root:             c.Root,
+		RespectGitignore: c.Gitignore,
+	})
+	if err != nil {
+		return err
+	}
+
+	ws.Console().PopPrefix()
+	ws.Console().PushPrefix("csproj: ")
+
+	err = ws.ImportCsproj(c.Paths, &csproj.Options{
+		Root:             c.Root,
+		RespectGitignore: c.Gitignore,
+	})
+	if err != nil {
+		return err
+	}
+
+	ws.Console().PopPrefix()
+	ws.Console().PushPrefix("git history: ")
+
+	err = ws.ImportGitHistory(c.Paths, &git.HistoryOptions{
+		Incremental: c.Incremental,
+		SaveEvery:   toOption(c.SaveEvery),
+	})
+	if err != nil {
+		return err
+	}
+
+	ws.Console().PopPrefix()
+	ws.Console().PushPrefix("loc: ")
+
+	err = ws.ImportLOC(nil, &loc.Options{
+		Incremental: c.Incremental,
+	})
+	if err != nil {
+		return err
+	}
+
+	ws.Console().PopPrefix()
+	ws.Console().PushPrefix("metrics: ")
+
+	err = ws.ImportMetrics(nil, &metrics.Options{
+		Incremental: c.Incremental,
+		SaveEvery:   toOption(c.SaveEvery),
+	})
+	if err != nil {
+		return err
+	}
+
+	ws.Console().PopPrefix()
+	ws.Console().PushPrefix("git blame: ")
+
+	err = ws.ImportGitBlame(c.Paths, &git.BlameOptions{
+		Incremental: c.Incremental,
+		SaveEvery:   toOption(c.SaveEvery),
+	})
+	if err != nil {
+		return err
+	}
+
+	ws.Console().PopPrefix()
+
+	return nil
+}
+
 type ImportGradleCmd struct {
-	Path string `arg:"" help:"Path with root of gradle project." type:"existingpath"`
+	Path string `arg:"" help:"Path to search for gradle projects." type:"existingpath"`
 }
 
 func (c *ImportGradleCmd) Run(ctx *context) error {
-	g := gradle.NewImporter(c.Path)
-
-	return ctx.ws.Import(g)
+	return ctx.ws.ImportGradle(c.Path)
 }
 
-type ImportGomodCmd struct {
-	Path      string `arg:"" help:"Path to recursively search for go.mod files." type:"existingpath"`
-	Root      string `default:"go" help:"Root name for the projects."`
-	Gitignore bool   `default:"true" help:"Respect .gitignore file when importing files."`
+type ImportGoModCmd struct {
+	Paths     []string `arg:"" help:"Paths to recursively search for go.mod files." type:"existingpath"`
+	Root      string   `default:"go" help:"Root name for the projects."`
+	Gitignore bool     `default:"true" help:"Respect .gitignore file when importing files."`
 }
 
-func (c *ImportGomodCmd) Run(ctx *context) error {
-	g := gomod.NewImporter(c.Path, c.Root, gomod.Options{
+func (c *ImportGoModCmd) Run(ctx *context) error {
+	return ctx.ws.ImportGoMod(c.Paths, &gomod.Options{
+		Root:             c.Root,
 		RespectGitignore: c.Gitignore,
 	})
-
-	return ctx.ws.Import(g)
 }
 
 type ImportCsprojCmd struct {
-	Path      string `arg:"" help:"Path to recursively search for csproj files." type:"existingpath"`
-	Root      string `default:"cs" help:"Root name for the projects."`
-	Gitignore bool   `default:"true" help:"Respect .gitignore file when importing files."`
+	Paths     []string `arg:"" help:"Paths to recursively search for csproj files." type:"existingpath"`
+	Root      string   `default:"cs" help:"Root name for the projects."`
+	Gitignore bool     `default:"true" help:"Respect .gitignore file when importing files."`
 }
 
 func (c *ImportCsprojCmd) Run(ctx *context) error {
-	g := csproj.NewImporter(c.Path, c.Root, csproj.Options{
+	return ctx.ws.ImportCsproj(c.Paths, &csproj.Options{
+		Root:             c.Root,
 		RespectGitignore: c.Gitignore,
 	})
-
-	return ctx.ws.Import(g)
 }
 
 type ImportHibernateCmd struct {
@@ -60,11 +134,10 @@ type ImportHibernateCmd struct {
 }
 
 func (c *ImportHibernateCmd) Run(ctx *context) error {
-	g := hibernate.NewImporter(c.Path, c.Glob, c.Root, hibernate.Options{
+	return ctx.ws.ImportHibernate(c.Path, c.Glob, &hibernate.Options{
+		Root:        c.Root,
 		Incremental: c.Incremental,
 	})
-
-	return ctx.ws.Import(g)
 }
 
 type ImportMySqlCmd struct {
@@ -72,9 +145,7 @@ type ImportMySqlCmd struct {
 }
 
 func (c *ImportMySqlCmd) Run(ctx *context) error {
-	g := mysql.NewImporter(c.ConnectionString)
-
-	return ctx.ws.Import(g)
+	return ctx.ws.ImportMySql(c.ConnectionString)
 }
 
 type ImportLOCCmd struct {
@@ -83,34 +154,24 @@ type ImportLOCCmd struct {
 }
 
 func (c *ImportLOCCmd) Run(ctx *context) error {
-	g := loc.NewImporter(c.Filters, loc.Options{
+	return ctx.ws.ImportLOC(c.Filters, &loc.Options{
 		Incremental: c.Incremental,
 	})
-
-	return ctx.ws.Import(g)
 }
 
 type ImportMetricsCmd struct {
-	Filters       []string `default:"" help:"Filters to be applied to the projects. Empty means all."`
-	Incremental   bool     `default:"true" negatable:"" help:"Don't import files already imported."`
-	LimitImported int      `help:"Limit the number of imported files. Can be used to incrementally import data."`
-	SaveEvery     int      `help:"Save results after some number of files."`
+	Filters       []string      `default:"" help:"Filters to be applied to the projects. Empty means all."`
+	Incremental   bool          `default:"true" negatable:"" help:"Don't import files already imported."`
+	LimitImported int           `help:"Limit the number of imported files. Can be used to incrementally import data."`
+	SaveEvery     time.Duration `default:"10m" help:"Save results while processing to avoid losing work."`
 }
 
 func (c *ImportMetricsCmd) Run(ctx *context) error {
-	options := metrics.Options{
-		Incremental: c.Incremental,
-	}
-	if c.LimitImported != 0 {
-		options.MaxImportedFiles = &c.LimitImported
-	}
-	if c.SaveEvery != 0 {
-		options.SaveEvery = &c.SaveEvery
-	}
-
-	g := metrics.NewImporter(c.Filters, options)
-
-	return ctx.ws.Import(g)
+	return ctx.ws.ImportMetrics(c.Filters, &metrics.Options{
+		Incremental:      c.Incremental,
+		MaxImportedFiles: toOption(c.LimitImported),
+		SaveEvery:        toOption(c.SaveEvery),
+	})
 }
 
 type ImportGitPeopleCmd struct {
@@ -118,84 +179,43 @@ type ImportGitPeopleCmd struct {
 }
 
 func (c *ImportGitPeopleCmd) Run(ctx *context) error {
-	g := git.NewPeopleImporter(c.Paths)
-
-	return ctx.ws.Import(g)
+	return ctx.ws.ImportGitPeople(c.Paths)
 }
 
 type ImportGitHistoryCmd struct {
-	Paths         []string       `arg:"" help:"Paths with the roots of git repositories." type:"existingpath"`
-	Incremental   bool           `default:"true" negatable:"" help:"Don't import commits already imported."`
-	LimitImported int            `help:"Limit the number of imported commits. Can be used to incrementally import data. Counted from the latest commit."`
-	LimitCommits  int            `help:"Limit the number of commits to be imported. Counted from the latest commit."`
-	LimitDuration time.Duration  `help:"Import commits only in this duration. Counted from current time."`
-	After         time.Time      `help:"Import commits after this date (inclusive)."`
-	Before        time.Time      `help:"Import commits before this date (exclusive)."`
-	SaveEvery     *time.Duration `default:"10m" help:"Save results while processing to avoid losing work."`
+	Paths         []string      `arg:"" help:"Paths with the roots of git repositories." type:"existingpath"`
+	Incremental   bool          `default:"true" negatable:"" help:"Don't import commits already imported."`
+	LimitImported int           `help:"Limit the number of imported commits. Can be used to incrementally import data. Counted from the latest commit."`
+	LimitCommits  int           `help:"Limit the number of commits to be imported. Counted from the latest commit."`
+	After         time.Time     `help:"Import commits after this date (inclusive)."`
+	Before        time.Time     `help:"Import commits before this date (exclusive)."`
+	SaveEvery     time.Duration `default:"10m" help:"Save results while processing to avoid losing work."`
 }
 
 func (c *ImportGitHistoryCmd) Run(ctx *context) error {
-	options := git.HistoryOptions{
-		Incremental: c.Incremental,
-	}
-
-	if c.LimitImported != 0 {
-		options.MaxImportedCommits = &c.LimitImported
-	}
-	if c.LimitCommits != 0 {
-		options.MaxCommits = &c.LimitCommits
-	}
-
-	emptyTime := time.Time{}
-	if c.After != emptyTime {
-		options.After = &c.After
-	}
-	if c.Before != emptyTime {
-		options.Before = &c.Before
-	}
-
-	if c.LimitDuration != 0 {
-		before := time.Now()
-		after := before.Add(-c.LimitDuration)
-
-		if options.After == nil || options.After.Before(after) {
-			options.After = &after
-		}
-		if options.Before == nil || options.Before.After(before) {
-			options.Before = &before
-		}
-	}
-
-	if c.SaveEvery != nil {
-		options.SaveEvery = c.SaveEvery
-	}
-
-	g := git.NewHistoryImporter(c.Paths, options)
-
-	return ctx.ws.Import(g)
+	return ctx.ws.ImportGitHistory(c.Paths, &git.HistoryOptions{
+		Incremental:        c.Incremental,
+		MaxImportedCommits: toOption(c.LimitImported),
+		MaxCommits:         toOption(c.LimitCommits),
+		After:              toOption(c.After),
+		Before:             toOption(c.Before),
+		SaveEvery:          toOption(c.SaveEvery),
+	})
 }
 
 type ImportGitBlameCmd struct {
-	Paths         []string       `arg:"" help:"Paths with the roots of git repositories." type:"existingpath"`
-	Incremental   bool           `default:"true" negatable:"" help:"Don't import files already imported."`
-	LimitImported int            `help:"Limit the number of imported files. Can be used to incrementally import data. Counted by file name."`
-	SaveEvery     *time.Duration `default:"10m" help:"Save results while processing to avoid losing work."`
+	Paths         []string      `arg:"" help:"Paths with the roots of git repositories." type:"existingpath"`
+	Incremental   bool          `default:"true" negatable:"" help:"Don't import files already imported."`
+	LimitImported int           `help:"Limit the number of imported files. Can be used to incrementally import data. Counted by file name."`
+	SaveEvery     time.Duration `default:"10m" help:"Save results while processing to avoid losing work."`
 }
 
 func (c *ImportGitBlameCmd) Run(ctx *context) error {
-	options := git.BlameOptions{
-		Incremental: c.Incremental,
-	}
-	if c.LimitImported != 0 {
-		options.MaxImportedFiles = &c.LimitImported
-	}
-	if c.SaveEvery != nil {
-		options.SaveEvery = c.SaveEvery
-	}
-
-	g := git.NewBlameImporter(c.Paths, options)
-
-	return ctx.ws.Import(g)
+	return ctx.ws.ImportGitBlame(c.Paths, &git.BlameOptions{
+		Incremental:      c.Incremental,
+		MaxImportedFiles: toOption(c.LimitImported),
+		SaveEvery:        toOption(c.SaveEvery),
+	})
 }
 
 type ImportOwnersCmd struct {
@@ -206,17 +226,19 @@ type ImportOwnersCmd struct {
 }
 
 func (c *ImportOwnersCmd) Run(ctx *context) error {
-	options := owners.Options{
-		Incremental: c.Incremental,
-	}
-	if c.LimitImported != 0 {
-		options.MaxImportedFiles = &c.LimitImported
-	}
-	if c.SaveEvery != 0 {
-		options.SaveEvery = &c.SaveEvery
-	}
+	return ctx.ws.ImportOwners(c.Filters, &owners.Options{
+		Incremental:      c.Incremental,
+		MaxImportedFiles: toOption(c.LimitImported),
+		SaveEvery:        toOption(c.SaveEvery),
+	})
+}
 
-	g := owners.NewImporter(c.Filters, options)
+func toOption[T comparable](d T) *T {
+	var def T
 
-	return ctx.ws.Import(g)
+	if d == def {
+		return nil
+	} else {
+		return &d
+	}
 }

@@ -15,35 +15,36 @@ import (
 	"github.com/pescuma/archer/lib/consoles"
 	"github.com/pescuma/archer/lib/storages"
 
-	"github.com/pescuma/archer/lib/importers"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/utils"
 )
 
-type gradleImporter struct {
-	rootDir string
+type Importer struct {
+	console consoles.Console
+	storage storages.Storage
 }
 
-func NewImporter(rootDir string) importers.Importer {
-	return &gradleImporter{
-		rootDir: rootDir,
+func NewImporter(console consoles.Console, storage storages.Storage) *Importer {
+	return &Importer{
+		console: console,
+		storage: storage,
 	}
 }
 
-func (g *gradleImporter) Import(console consoles.Console, storage storages.Storage) error {
-	projsDB, err := storage.LoadProjects()
+func (i *Importer) Import(rootDir string) error {
+	projsDB, err := i.storage.LoadProjects()
 	if err != nil {
 		return err
 	}
 
-	filesDB, err := storage.LoadFiles()
+	filesDB, err := i.storage.LoadFiles()
 	if err != nil {
 		return err
 	}
 
 	fmt.Printf("Listing projects...\n")
 
-	queue, err := g.importProjectNames()
+	queue, err := listProjects(rootDir)
 	if err != nil {
 		return err
 	}
@@ -54,7 +55,7 @@ func (g *gradleImporter) Import(console consoles.Console, storage storages.Stora
 
 	bar := utils.NewProgressBar(len(queue))
 	for _, p := range queue {
-		err = g.importBasicInfo(projsDB, filesDB, p, rootProj)
+		err = i.importBasicInfo(rootDir, projsDB, filesDB, p, rootProj)
 		if err != nil {
 			return err
 		}
@@ -68,7 +69,7 @@ func (g *gradleImporter) Import(console consoles.Console, storage storages.Stora
 	for _, p := range queue {
 		proj := projsDB.GetOrCreate(rootProj, p)
 
-		err = g.importDirectories(filesDB, proj)
+		err = i.importDirectories(filesDB, proj)
 		if err != nil {
 			return err
 		}
@@ -81,10 +82,10 @@ func (g *gradleImporter) Import(console consoles.Console, storage storages.Stora
 	bar = utils.NewProgressBar(len(queue))
 	block := 100
 	projsInsideRoot := lo.Associate(queue, func(s string) (string, bool) { return s, true })
-	for i := 0; i < len(queue); i += block {
-		piece := utils.Take(queue[i:], block)
+	for j := 0; j < len(queue); j += block {
+		piece := utils.Take(queue[j:], block)
 
-		err = g.loadDependencies(projsDB, piece, rootProj, projsInsideRoot)
+		err = i.loadDependencies(rootDir, projsDB, piece, rootProj, projsInsideRoot)
 		if err != nil {
 			return err
 		}
@@ -109,12 +110,12 @@ func (g *gradleImporter) Import(console consoles.Console, storage storages.Stora
 
 	fmt.Printf("Writing results...\n")
 
-	err = storage.WriteProjects(projsDB)
+	err = i.storage.WriteProjects()
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteFiles(filesDB)
+	err = i.storage.WriteFiles()
 	if err != nil {
 		return err
 	}
@@ -122,22 +123,13 @@ func (g *gradleImporter) Import(console consoles.Console, storage storages.Stora
 	return nil
 }
 
-func (g *gradleImporter) importProjectNames() ([]string, error) {
-	projNames, err := listProjects(g.rootDir)
-	if err != nil {
-		return nil, err
-	}
-
-	return projNames, nil
-}
-
-func (g *gradleImporter) importBasicInfo(projsDB *model.Projects, filesDB *model.Files, projName string, rootProj string) error {
-	projDir, err := g.getProjectDir(projName)
+func (i *Importer) importBasicInfo(rootDir string, projsDB *model.Projects, filesDB *model.Files, projName string, rootProj string) error {
+	projDir, err := i.getProjectDir(rootDir, projName)
 	if err != nil {
 		return err
 	}
 
-	projFileName, err := g.getProjectFile(projName)
+	projFileName, err := i.getProjectFile(rootDir, projName)
 	if err != nil {
 		return err
 	}
@@ -161,8 +153,8 @@ func (g *gradleImporter) importBasicInfo(projsDB *model.Projects, filesDB *model
 	return nil
 }
 
-func (g *gradleImporter) importDirectories(files *model.Files, proj *model.Project) error {
-	err := g.importDirectory(files, proj, proj.RootDir, model.ConfigDir, false)
+func (i *Importer) importDirectories(files *model.Files, proj *model.Project) error {
+	err := i.importDirectory(files, proj, proj.RootDir, model.ConfigDir, false)
 	if err != nil {
 		return err
 	}
@@ -184,7 +176,7 @@ func (g *gradleImporter) importDirectories(files *model.Files, proj *model.Proje
 			return err
 		}
 
-		err = g.importDirectory(files, proj, dirPath, c.Type, true)
+		err = i.importDirectory(files, proj, dirPath, c.Type, true)
 		if err != nil {
 			return err
 		}
@@ -193,7 +185,7 @@ func (g *gradleImporter) importDirectories(files *model.Files, proj *model.Proje
 	return nil
 }
 
-func (g *gradleImporter) importDirectory(files *model.Files, proj *model.Project, dirPath string, dirType model.ProjectDirectoryType, recursive bool) error {
+func (i *Importer) importDirectory(files *model.Files, proj *model.Project, dirPath string, dirType model.ProjectDirectoryType, recursive bool) error {
 	dirPath, err := utils.PathAbs(dirPath)
 	if err != nil {
 		return nil
@@ -238,20 +230,20 @@ func (g *gradleImporter) importDirectory(files *model.Files, proj *model.Project
 	})
 }
 
-func (g *gradleImporter) getProjectDir(projName string) (string, error) {
+func (i *Importer) getProjectDir(rootDir, projName string) (string, error) {
 	if projName[0] == ':' {
 		return utils.PathAbs(
-			g.rootDir,
+			rootDir,
 			strings.ReplaceAll(projName[1:], ":", string(os.PathSeparator)),
 		)
 
 	} else {
-		return g.rootDir, nil
+		return rootDir, nil
 	}
 }
 
-func (g *gradleImporter) getProjectFile(projName string) (string, error) {
-	dir, err := g.getProjectDir(projName)
+func (i *Importer) getProjectFile(rootDir, projName string) (string, error) {
+	dir, err := i.getProjectDir(rootDir, projName)
 	if err != nil {
 		return "", err
 	}
@@ -270,7 +262,7 @@ func (g *gradleImporter) getProjectFile(projName string) (string, error) {
 	return "", nil
 }
 
-func (g *gradleImporter) loadDependencies(projs *model.Projects, projNamesToImport []string, rootProj string, projsInsideRoot map[string]bool) error {
+func (i *Importer) loadDependencies(rootDir string, projs *model.Projects, projNamesToImport []string, rootProj string, projsInsideRoot map[string]bool) error {
 	args := make([]string, 0, 3*len(projNamesToImport))
 	for _, projName := range projNamesToImport {
 		var target string
@@ -283,8 +275,8 @@ func (g *gradleImporter) loadDependencies(projs *model.Projects, projNamesToImpo
 		args = append(args, target, "--configuration", "compileClasspath")
 	}
 
-	cmd := exec.Command(filepath.Join(g.rootDir, "gradlew"), args...)
-	cmd.Dir = g.rootDir
+	cmd := exec.Command(filepath.Join(rootDir, "gradlew"), args...)
+	cmd.Dir = rootDir
 
 	output, err := cmd.Output()
 	if err != nil {
@@ -331,7 +323,7 @@ func splitOutputPerTarget(output string) map[string]string {
 	return result
 }
 
-func (g *gradleImporter) needsUpdate(projFile string, depsJson string) (bool, error) {
+func (i *Importer) needsUpdate(projFile string, depsJson string) (bool, error) {
 	sp, err := os.Stat(projFile)
 	if err != nil {
 		// No project file means no deps

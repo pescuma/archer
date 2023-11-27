@@ -2,7 +2,6 @@ package git
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -13,16 +12,15 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/pescuma/archer/lib/consoles"
-	"github.com/pescuma/archer/lib/importers"
 	"github.com/pescuma/archer/lib/linediff"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/storages"
 	"github.com/pescuma/archer/lib/utils"
 )
 
-type gitHistoryImporter struct {
-	rootDirs []string
-	options  HistoryOptions
+type HistoryImporter struct {
+	console consoles.Console
+	storage storages.Storage
 
 	grouper         *nameEmailGrouper
 	commitsTotal    int
@@ -39,152 +37,147 @@ type HistoryOptions struct {
 	SaveEvery          *time.Duration
 }
 
-func NewHistoryImporter(rootDirs []string, options HistoryOptions) importers.Importer {
-	return &gitHistoryImporter{
-		rootDirs: rootDirs,
-		options:  options,
-		abort:    errors.New("ABORT"),
+func NewHistoryImporter(console consoles.Console, storage storages.Storage) *HistoryImporter {
+	return &HistoryImporter{
+		console: console,
+		storage: storage,
+		abort:   errors.New("ABORT"),
 	}
 }
 
-func (g *gitHistoryImporter) Import(console consoles.Console, storage storages.Storage) error {
-	fmt.Printf("Loading existing data...\n")
+func (i *HistoryImporter) Import(dirs []string, opts *HistoryOptions) error {
+	i.console.Printf("Loading existing data...\n")
 
-	projectsDB, err := storage.LoadProjects()
+	projectsDB, err := i.storage.LoadProjects()
 	if err != nil {
 		return err
 	}
 
-	filesDB, err := storage.LoadFiles()
+	filesDB, err := i.storage.LoadFiles()
 	if err != nil {
 		return err
 	}
 
-	peopleDB, err := storage.LoadPeople()
+	peopleDB, err := i.storage.LoadPeople()
 	if err != nil {
 		return err
 	}
 
-	reposDB, err := storage.LoadRepositories()
+	reposDB, err := i.storage.LoadRepositories()
 	if err != nil {
 		return err
 	}
 
-	peopleRelationsDB, err := storage.LoadPeopleRelations()
+	peopleRelationsDB, err := i.storage.LoadPeopleRelations()
 	if err != nil {
 		return err
 	}
 
-	statsDB, err := storage.LoadMonthlyStats()
+	statsDB, err := i.storage.LoadMonthlyStats()
 	if err != nil {
 		return err
 	}
 
-	rootDirs, err := findRootDirs(g.rootDirs)
+	dirs, err = findRootDirs(dirs)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Importing and grouping authors...\n")
+	i.console.Printf("Importing and grouping authors...\n")
 
-	g.grouper, err = importPeople(peopleDB, rootDirs)
+	i.grouper, err = importPeople(peopleDB, dirs)
 	if err != nil {
 		return err
 	}
 
-	if g.options.SaveEvery != nil {
-		err = storage.WritePeople(peopleDB)
+	if opts.SaveEvery != nil {
+		err = i.storage.WritePeople()
 		if err != nil {
 			return err
 		}
 	}
 
-	for _, rootDir := range rootDirs {
-		rootDir, err := filepath.Abs(rootDir)
+	for _, dir := range dirs {
+		gitRepo, err := git.PlainOpen(dir)
 		if err != nil {
-			return err
-		}
-
-		gitRepo, err := git.PlainOpen(rootDir)
-		if err != nil {
-			fmt.Printf("Skipping '%s': %s\n", rootDir, err)
+			i.console.Printf("Skipping '%s': %s\n", dir, err)
 			continue
 		}
 
-		repo := reposDB.GetOrCreate(rootDir)
-		repo.Name = filepath.Base(rootDir)
+		repo := reposDB.GetOrCreate(dir)
+		repo.Name = filepath.Base(dir)
 		repo.VCS = "git"
 
-		commitsImported, err := g.importCommits(peopleDB, peopleRelationsDB, repo, gitRepo)
+		commitsImported, err := i.importCommits(peopleDB, peopleRelationsDB, repo, gitRepo, opts)
 		if err != nil {
 			return err
 		}
 
-		repo.FilesHead, err = g.countFilesAtHEAD(gitRepo)
+		repo.FilesHead, err = i.countFilesAtHEAD(gitRepo)
 		if err != nil {
 			return err
 		}
 
-		if g.options.SaveEvery != nil && commitsImported > 0 {
-			fmt.Printf("%v: Writing results...\n", repo.Name)
+		if opts.SaveEvery != nil && commitsImported > 0 {
+			i.console.Printf("%v: Writing results...\n", repo.Name)
 
-			err = storage.WritePeople(peopleDB)
+			err = i.storage.WritePeople()
 			if err != nil {
 				return err
 			}
 
-			err := storage.WriteRepository(repo)
+			err := i.storage.WriteRepository(repo)
 			if err != nil {
 				return err
 			}
 
-			err = storage.WritePeopleRelations(peopleRelationsDB)
+			err = i.storage.WritePeopleRelations()
 			if err != nil {
 				return err
 			}
 		}
 
-		err = g.importChanges(storage, filesDB, projectsDB, peopleRelationsDB, repo, gitRepo)
+		err = i.importChanges(filesDB, projectsDB, peopleRelationsDB, repo, gitRepo, opts)
 		if err != nil {
 			return err
 		}
 	}
 
-	fmt.Printf("Propagating changes to parents...\n")
+	i.console.Printf("Propagating changes to parents...\n")
 
-	err = g.propagateChangesToParents(storage, reposDB, projectsDB, filesDB, peopleDB, statsDB)
+	err = i.propagateChangesToParents(reposDB, projectsDB, filesDB, peopleDB, statsDB)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Writing results...\n")
+	i.console.Printf("Writing results...\n")
 
-	err = storage.WriteProjects(projectsDB)
+	err = i.storage.WriteProjects()
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteFiles(filesDB)
+	err = i.storage.WriteFiles()
 	if err != nil {
 		return err
 	}
 
-	err = storage.WritePeople(peopleDB)
+	err = i.storage.WritePeople()
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteRepositories(reposDB)
+	err = i.storage.WriteRepositories()
 	if err != nil {
 		return err
 	}
 
-	err = storage.WritePeopleRelations(peopleRelationsDB)
+	err = i.storage.WritePeopleRelations()
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteMonthlyStats(statsDB)
+	err = i.storage.WriteMonthlyStats()
 	if err != nil {
 		return err
 	}
@@ -192,7 +185,7 @@ func (g *gitHistoryImporter) Import(console consoles.Console, storage storages.S
 	return nil
 }
 
-func (g *gitHistoryImporter) countFilesAtHEAD(gitRepo *git.Repository) (int, error) {
+func (i *HistoryImporter) countFilesAtHEAD(gitRepo *git.Repository) (int, error) {
 	gitHead, err := gitRepo.Head()
 	if err != nil {
 		return 0, err
@@ -226,7 +219,7 @@ func log(gitRepo *git.Repository) (object.CommitIter, error) {
 	})
 }
 
-func (g *gitHistoryImporter) countCommitsToImport(repo *model.Repository, gitRepo *git.Repository) (int, error) {
+func (i *HistoryImporter) countCommitsToImport(repo *model.Repository, gitRepo *git.Repository, opts *HistoryOptions) (int, error) {
 	commitsIter, err := log(gitRepo)
 	if err != nil {
 		return 0, err
@@ -234,7 +227,7 @@ func (g *gitHistoryImporter) countCommitsToImport(repo *model.Repository, gitRep
 
 	imported := 0
 	err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
-		if g.options.Incremental && repo.ContainsCommit(gitCommit.Hash.String()) {
+		if opts.Incremental && repo.ContainsCommit(gitCommit.Hash.String()) {
 			return nil
 		}
 
@@ -249,10 +242,11 @@ func (g *gitHistoryImporter) countCommitsToImport(repo *model.Repository, gitRep
 	return imported, nil
 }
 
-func (g *gitHistoryImporter) importCommits(peopleDB *model.People, peopleRelationsDB *model.PeopleRelations,
+func (i *HistoryImporter) importCommits(peopleDB *model.People, peopleRelationsDB *model.PeopleRelations,
 	repo *model.Repository, gitRepo *git.Repository,
+	opts *HistoryOptions,
 ) (int, error) {
-	imported, err := g.countCommitsToImport(repo, gitRepo)
+	imported, err := i.countCommitsToImport(repo, gitRepo, opts)
 	if err != nil {
 		return 0, err
 	}
@@ -261,7 +255,7 @@ func (g *gitHistoryImporter) importCommits(peopleDB *model.People, peopleRelatio
 		return 0, nil
 	}
 
-	fmt.Printf("%v: Importing commits...\n", repo.Name)
+	i.console.Printf("%v: Importing commits...\n", repo.Name)
 
 	commitsIter, err := log(gitRepo)
 	if err != nil {
@@ -270,15 +264,15 @@ func (g *gitHistoryImporter) importCommits(peopleDB *model.People, peopleRelatio
 
 	bar := utils.NewProgressBar(imported)
 	err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
-		if g.options.Incremental && repo.ContainsCommit(gitCommit.Hash.String()) {
+		if opts.Incremental && repo.ContainsCommit(gitCommit.Hash.String()) {
 			return nil
 		}
 
 		bar.Describe(gitCommit.Committer.When.Format("2006-01-02 15"))
 		_ = bar.Add(1)
 
-		author := peopleDB.GetOrCreatePerson(g.grouper.getName(gitCommit.Author.Email, gitCommit.Author.Name))
-		committer := peopleDB.GetOrCreatePerson(g.grouper.getName(gitCommit.Committer.Email, gitCommit.Committer.Name))
+		author := peopleDB.GetOrCreatePerson(i.grouper.getName(gitCommit.Author.Email, gitCommit.Author.Name))
+		committer := peopleDB.GetOrCreatePerson(i.grouper.getName(gitCommit.Committer.Email, gitCommit.Committer.Name))
 
 		commit := repo.GetOrCreateCommit(gitCommit.Hash.String())
 		commit.Message = strings.TrimSpace(gitCommit.Message)
@@ -308,7 +302,7 @@ func (g *gitHistoryImporter) importCommits(peopleDB *model.People, peopleRelatio
 	err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
 		repoCommit := repo.GetCommit(gitCommit.Hash.String())
 
-		if g.options.Incremental && len(repoCommit.Parents) > 0 {
+		if opts.Incremental && len(repoCommit.Parents) > 0 {
 			return nil
 		}
 
@@ -331,7 +325,7 @@ func (g *gitHistoryImporter) importCommits(peopleDB *model.People, peopleRelatio
 	return imported, nil
 }
 
-func (g *gitHistoryImporter) listChangesToImport(repo *model.Repository, gitRepo *git.Repository) ([]*changeWork, error) {
+func (i *HistoryImporter) listChangesToImport(repo *model.Repository, gitRepo *git.Repository, opts *HistoryOptions) ([]*changeWork, error) {
 	commitsIter, err := log(gitRepo)
 	if err != nil {
 		return nil, err
@@ -342,14 +336,14 @@ func (g *gitHistoryImporter) listChangesToImport(repo *model.Repository, gitRepo
 	imported := 0
 	total := 0
 	err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
-		if !g.options.ShouldContinue(g.commitsTotal+total, g.commitsImported+imported, gitCommit.Committer.When) {
-			return g.abort
+		if !opts.ShouldContinue(i.commitsTotal+total, i.commitsImported+imported, gitCommit.Committer.When) {
+			return i.abort
 		}
 		total++
 
 		commit := repo.GetCommit(gitCommit.Hash.String())
 
-		if g.options.Incremental && commit.FilesModified != -1 {
+		if opts.Incremental && commit.FilesModified != -1 {
 			return nil
 		}
 		imported++
@@ -358,7 +352,7 @@ func (g *gitHistoryImporter) listChangesToImport(repo *model.Repository, gitRepo
 
 		return nil
 	})
-	if err != nil && err != g.abort {
+	if err != nil && err != i.abort {
 		return nil, err
 	}
 
@@ -376,11 +370,11 @@ type changeWork struct {
 	commitFiles *model.RepositoryCommitFiles
 }
 
-func (g *gitHistoryImporter) importChanges(storage storages.Storage,
-	filesDB *model.Files, projsDB *model.Projects, peopleRelationsDB *model.PeopleRelations,
+func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Projects, peopleRelationsDB *model.PeopleRelations,
 	repo *model.Repository, gitRepo *git.Repository,
+	opts *HistoryOptions,
 ) error {
-	toProcess, err := g.listChangesToImport(repo, gitRepo)
+	toProcess, err := i.listChangesToImport(repo, gitRepo, opts)
 	if err != nil {
 		return err
 	}
@@ -389,32 +383,32 @@ func (g *gitHistoryImporter) importChanges(storage storages.Storage,
 		return nil
 	}
 
-	fmt.Printf("%v: Importing changes...\n", repo.Name)
+	i.console.Printf("%v: Importing changes...\n", repo.Name)
 
 	writeResults := func(commitFiles []*model.RepositoryCommitFiles) error {
-		fmt.Printf("%v: Writing results...\n", repo.Name)
+		i.console.Printf("%v: Writing results...\n", repo.Name)
 
-		err := storage.WriteFiles(filesDB)
+		err := i.storage.WriteFiles()
 		if err != nil {
 			return nil
 		}
 
-		err = storage.WriteProjects(projsDB)
+		err = i.storage.WriteProjects()
 		if err != nil {
 			return nil
 		}
 
-		err = storage.WriteRepository(repo)
+		err = i.storage.WriteRepository(repo)
 		if err != nil {
 			return err
 		}
 
-		err = storage.WriteRepositoryCommitFiles(commitFiles)
+		err = i.storage.WriteRepositoryCommitFiles(commitFiles)
 		if err != nil {
 			return err
 		}
 
-		err = storage.WritePeopleRelations(peopleRelationsDB)
+		err = i.storage.WritePeopleRelations()
 		if err != nil {
 			return err
 		}
@@ -428,7 +422,7 @@ func (g *gitHistoryImporter) importChanges(storage storages.Storage,
 	for _, w := range toProcess {
 		bar.Describe(w.gitCommit.Committer.When.Format("2006-01-02 15"))
 
-		err = g.importCommitChanges(storage, filesDB, repo, w)
+		err = i.importCommitChanges(filesDB, repo, w)
 		if err != nil {
 			return err
 		}
@@ -501,7 +495,7 @@ func (g *gitHistoryImporter) importChanges(storage storages.Storage,
 
 		commitFilesToWrite = append(commitFilesToWrite, commitFiles)
 
-		if g.options.SaveEvery != nil && time.Since(start) >= *g.options.SaveEvery {
+		if opts.SaveEvery != nil && time.Since(start) >= *opts.SaveEvery {
 			_ = bar.Clear()
 
 			err = writeResults(commitFilesToWrite)
@@ -524,22 +518,22 @@ func (g *gitHistoryImporter) importChanges(storage storages.Storage,
 	return nil
 }
 
-func (g *gitHistoryImporter) importCommitChanges(storage storages.Storage, filesDB *model.Files, repo *model.Repository, w *changeWork) error {
+func (i *HistoryImporter) importCommitChanges(filesDB *model.Files, repo *model.Repository, w *changeWork) error {
 	commit := repo.GetCommit(w.gitCommit.Hash.String())
 
-	commitFiles, err := storage.LoadRepositoryCommitFiles(repo, commit)
+	commitFiles, err := i.storage.LoadRepositoryCommitFiles(repo, commit)
 	if err != nil {
 		return err
 	}
 
 	if len(commit.Parents) == 0 {
-		err = g.computeChangesRootCommit(filesDB, repo, commitFiles, w.gitCommit)
+		err = i.computeChangesRootCommit(filesDB, repo, commitFiles, w.gitCommit)
 
 	} else if len(commit.Parents) == 1 {
-		err = g.computeChangesSimpleCommit(filesDB, repo, commitFiles, w.gitCommit)
+		err = i.computeChangesSimpleCommit(filesDB, repo, commitFiles, w.gitCommit)
 
 	} else if len(commit.Parents) > 1 {
-		err = g.computeChangesMergeCommit(filesDB, repo, commitFiles, w.gitCommit)
+		err = i.computeChangesMergeCommit(filesDB, repo, commitFiles, w.gitCommit)
 	}
 	if err != nil {
 		return err
@@ -551,7 +545,7 @@ func (g *gitHistoryImporter) importCommitChanges(storage storages.Storage, files
 	return nil
 }
 
-func (g *gitHistoryImporter) computeChangesMergeCommit(filesDB *model.Files, repo *model.Repository,
+func (i *HistoryImporter) computeChangesMergeCommit(filesDB *model.Files, repo *model.Repository,
 	commitFiles *model.RepositoryCommitFiles, gitCommit *object.Commit,
 ) error {
 	changesPerFile := make(map[string]map[*object.Commit]*gitFileChange)
@@ -560,7 +554,7 @@ func (g *gitHistoryImporter) computeChangesMergeCommit(filesDB *model.Files, rep
 	err := gitCommit.Parents().ForEach(func(gitParent *object.Commit) error {
 		parents++
 
-		gitChanges, err := g.computeChangesNoLines(gitCommit, gitParent)
+		gitChanges, err := i.computeChangesNoLines(gitCommit, gitParent)
 		if err != nil {
 			return err
 		}
@@ -619,7 +613,7 @@ func (g *gitHistoryImporter) computeChangesMergeCommit(filesDB *model.Files, rep
 				cf.Change = model.FileModified
 			}
 
-			err = g.computeLinesChanged(gitFile)
+			err = i.computeLinesChanged(gitFile)
 			if err != nil {
 				return err
 			}
@@ -639,13 +633,13 @@ func (g *gitHistoryImporter) computeChangesMergeCommit(filesDB *model.Files, rep
 	return nil
 }
 
-func (g *gitHistoryImporter) computeChangesSimpleCommit(filesDB *model.Files, repo *model.Repository,
+func (i *HistoryImporter) computeChangesSimpleCommit(filesDB *model.Files, repo *model.Repository,
 	commitFiles *model.RepositoryCommitFiles, gitCommit *object.Commit,
 ) error {
 	return gitCommit.Parents().ForEach(func(gitParent *object.Commit) error {
 		repoParent := repo.GetCommit(gitParent.Hash.String())
 
-		gitChanges, err := g.computeChanges(gitCommit, gitParent)
+		gitChanges, err := i.computeChanges(gitCommit, gitParent)
 		if err != nil {
 			return err
 		}
@@ -681,7 +675,7 @@ func (g *gitHistoryImporter) computeChangesSimpleCommit(filesDB *model.Files, re
 	})
 }
 
-func (g *gitHistoryImporter) computeChangesRootCommit(filesDB *model.Files, repo *model.Repository,
+func (i *HistoryImporter) computeChangesRootCommit(filesDB *model.Files, repo *model.Repository,
 	commitFiles *model.RepositoryCommitFiles, gitCommit *object.Commit,
 ) error {
 	gitTree, err := gitCommit.Tree()
@@ -713,7 +707,7 @@ func (g *gitHistoryImporter) computeChangesRootCommit(filesDB *model.Files, repo
 	})
 }
 
-func (g *gitHistoryImporter) computeChangesNoLines(commit *object.Commit, parent *object.Commit) ([]*gitFileChange, error) {
+func (i *HistoryImporter) computeChangesNoLines(commit *object.Commit, parent *object.Commit) ([]*gitFileChange, error) {
 	commitTree, err := commit.Tree()
 	if err != nil {
 		return nil, err
@@ -771,14 +765,14 @@ func (g *gitHistoryImporter) computeChangesNoLines(commit *object.Commit, parent
 	return result, nil
 }
 
-func (g *gitHistoryImporter) computeChanges(commit *object.Commit, parent *object.Commit) ([]*gitFileChange, error) {
-	result, err := g.computeChangesNoLines(commit, parent)
+func (i *HistoryImporter) computeChanges(commit *object.Commit, parent *object.Commit) ([]*gitFileChange, error) {
+	result, err := i.computeChangesNoLines(commit, parent)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, gitChange := range result {
-		err = g.computeLinesChanged(gitChange)
+		err = i.computeLinesChanged(gitChange)
 		if err != nil {
 			return nil, err
 		}
@@ -787,13 +781,13 @@ func (g *gitHistoryImporter) computeChanges(commit *object.Commit, parent *objec
 	return result, nil
 }
 
-func (g *gitHistoryImporter) computeLinesChanged(gitChange *gitFileChange) error {
-	commitContent, commitIsBinary, err := g.fileContent(gitChange.File)
+func (i *HistoryImporter) computeLinesChanged(gitChange *gitFileChange) error {
+	commitContent, commitIsBinary, err := i.fileContent(gitChange.File)
 	if err != nil {
 		return err
 	}
 
-	parentContent, parentIsBinary, err := g.fileContent(gitChange.OldFile)
+	parentContent, parentIsBinary, err := i.fileContent(gitChange.OldFile)
 	if err != nil {
 		return err
 	}
@@ -805,8 +799,8 @@ func (g *gitHistoryImporter) computeLinesChanged(gitChange *gitFileChange) error
 		return nil
 	}
 
-	commitLines := g.countLines(commitContent)
-	parentLines := g.countLines(parentContent)
+	commitLines := i.countLines(commitContent)
+	parentLines := i.countLines(parentContent)
 
 	gitChange.Modified = 0
 	gitChange.Added = 0
@@ -850,7 +844,7 @@ func (g *gitHistoryImporter) computeLinesChanged(gitChange *gitFileChange) error
 	return nil
 }
 
-func (g *gitHistoryImporter) fileContent(f *object.File) (string, bool, error) {
+func (i *HistoryImporter) fileContent(f *object.File) (string, bool, error) {
 	if f == nil {
 		return "", false, nil
 	}
@@ -872,7 +866,7 @@ func (g *gitHistoryImporter) fileContent(f *object.File) (string, bool, error) {
 	return content, isBinary, err
 }
 
-func (g *gitHistoryImporter) countLines(text string) int {
+func (i *HistoryImporter) countLines(text string) int {
 	if text == "" {
 		return 0
 	}
@@ -884,9 +878,7 @@ func (g *gitHistoryImporter) countLines(text string) int {
 	return result
 }
 
-func (g *gitHistoryImporter) propagateChangesToParents(storage storages.Storage, reposDB *model.Repositories, projectsDB *model.Projects,
-	filesDB *model.Files, peopleDB *model.People, statsDB *model.MonthlyStats,
-) error {
+func (i *HistoryImporter) propagateChangesToParents(reposDB *model.Repositories, projectsDB *model.Projects, filesDB *model.Files, peopleDB *model.People, statsDB *model.MonthlyStats) error {
 	dirsByIDs := map[model.UUID]*model.ProjectDirectory{}
 	for _, p := range projectsDB.ListProjects(model.FilterExcludeExternal) {
 		for _, d := range p.Dirs {
@@ -943,7 +935,7 @@ func (g *gitHistoryImporter) propagateChangesToParents(storage storages.Storage,
 			author := peopleDB.GetPersonByID(c.AuthorID)
 			addChanges(author.Changes)
 
-			commitFiles, err := storage.LoadRepositoryCommitFiles(repo, c)
+			commitFiles, err := i.storage.LoadRepositoryCommitFiles(repo, c)
 			if err != nil {
 				return err
 			}

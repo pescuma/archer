@@ -6,11 +6,11 @@ import (
 
 type Storage interface {
 	LoadProjects() (*model.Projects, error)
-	WriteProjects(projs *model.Projects) error
+	WriteProjects() error
 	WriteProject(proj *model.Project) error
 
 	LoadFiles() (*model.Files, error)
-	WriteFiles(files *model.Files) error
+	WriteFiles() error
 	WriteFile(file *model.File) error
 
 	LoadFileContents(fileID model.UUID) (*model.FileContents, error)
@@ -18,13 +18,12 @@ type Storage interface {
 	QueryBlamePerAuthor() ([]*BlamePerAuthor, error)
 
 	LoadPeople() (*model.People, error)
-	WritePeople(people *model.People) error
+	WritePeople() error
 	LoadPeopleRelations() (*model.PeopleRelations, error)
-	WritePeopleRelations(prs *model.PeopleRelations) error
+	WritePeopleRelations() error
 
 	LoadRepositories() (*model.Repositories, error)
-	LoadRepository(rootDir string) (*model.Repository, error)
-	WriteRepositories(repos *model.Repositories) error
+	WriteRepositories() error
 	WriteRepository(repo *model.Repository) error
 	WriteCommit(repo *model.Repository, commit *model.RepositoryCommit) error
 	LoadRepositoryCommitFiles(repo *model.Repository, commit *model.RepositoryCommit) (*model.RepositoryCommitFiles, error)
@@ -32,10 +31,10 @@ type Storage interface {
 	QueryCommits(file string, proj string, repo string, person string) ([]model.UUID, error)
 
 	LoadMonthlyStats() (*model.MonthlyStats, error)
-	WriteMonthlyStats(stats *model.MonthlyStats) error
+	WriteMonthlyStats() error
 
 	LoadConfig() (*map[string]string, error)
-	WriteConfig(*map[string]string) error
+	WriteConfig() error
 
 	Close() error
 }

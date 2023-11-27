@@ -12,63 +12,59 @@ import (
 	"github.com/hashicorp/go-set/v2"
 
 	"github.com/pescuma/archer/lib/consoles"
-	"github.com/pescuma/archer/lib/importers"
 	"github.com/pescuma/archer/lib/importers/common"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/storages"
 	"github.com/pescuma/archer/lib/utils"
 )
 
-type csprojImporter struct {
-	rootDir  string
-	rootName string
-	options  Options
+type Importer struct {
+	console consoles.Console
+	storage storages.Storage
 }
 
 type Options struct {
+	Root             string
 	RespectGitignore bool
 }
 
-func NewImporter(rootDir string, rootName string, options Options) importers.Importer {
-	return &csprojImporter{
-		rootDir:  rootDir,
-		rootName: rootName,
-		options:  options,
+func NewImporter(console consoles.Console, storage storages.Storage) *Importer {
+	return &Importer{
+		console: console,
+		storage: storage,
 	}
 }
 
-func (i *csprojImporter) Import(console consoles.Console, storage storages.Storage) error {
-	console.Printf("Loading existing data...\n")
+func (i *Importer) Import(dirs []string, options *Options) error {
+	i.console.Printf("Loading existing data...\n")
 
-	projsDB, err := storage.LoadProjects()
+	projsDB, err := i.storage.LoadProjects()
 	if err != nil {
 		return err
 	}
 
-	filesDB, err := storage.LoadFiles()
+	filesDB, err := i.storage.LoadFiles()
 	if err != nil {
 		return err
 	}
 
-	err = common.FindAndImportFiles("projects", i.rootDir,
-		func(name string) bool {
-			return strings.HasSuffix(strings.ToLower(name), ".csproj")
-		},
-		func(path string) error {
-			return i.process(console, projsDB, filesDB, path)
-		})
+	err = common.FindAndImportFiles(i.console, "projects", dirs, func(name string) bool {
+		return strings.HasSuffix(strings.ToLower(name), ".csproj")
+	}, func(path string) error {
+		return i.process(projsDB, filesDB, path, options)
+	})
 	if err != nil {
 		return err
 	}
 
-	console.Printf("Writing results...\n")
+	i.console.Printf("Writing results...\n")
 
-	err = storage.WriteProjects(projsDB)
+	err = i.storage.WriteProjects()
 	if err != nil {
 		return err
 	}
 
-	err = storage.WriteFiles(filesDB)
+	err = i.storage.WriteFiles()
 	if err != nil {
 		return err
 	}
@@ -76,7 +72,7 @@ func (i *csprojImporter) Import(console consoles.Console, storage storages.Stora
 	return nil
 }
 
-func (i *csprojImporter) process(console consoles.Console, projsDB *model.Projects, filesDB *model.Files, path string) error {
+func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path string, opts *Options) error {
 	bytes, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -89,11 +85,11 @@ func (i *csprojImporter) process(console consoles.Console, projsDB *model.Projec
 	}
 
 	if xmlProj.Sdk == "" && len(xmlProj.ItemGroups) == 0 {
-		console.Printf("Ignoring because it is an empty project: %v\n", path)
+		i.console.Printf("Ignoring because it is an empty project: %v\n", path)
 		return nil
 	}
 
-	proj := projsDB.GetOrCreate(i.rootName, i.getProjectName(path))
+	proj := projsDB.GetOrCreate(opts.Root, i.getProjectName(path))
 	proj.Type = model.CodeType
 	proj.RootDir = filepath.Dir(path)
 	proj.ProjectFile = path
@@ -115,7 +111,7 @@ func (i *csprojImporter) process(console consoles.Console, projsDB *model.Projec
 
 	excludes := set.New[string](10)
 
-	filter, err := common.CreateFileFilter(proj.RootDir, i.options.RespectGitignore,
+	filter, err := common.CreateFileFilter(proj.RootDir, opts.RespectGitignore,
 		func(path string) bool {
 			return strings.HasSuffix(path, ".csproj") || strings.HasSuffix(path, ".cs")
 		},
@@ -131,16 +127,16 @@ func (i *csprojImporter) process(console consoles.Console, projsDB *model.Projec
 
 	for _, item := range xmlProj.ItemGroups {
 		for _, pkgRef := range item.PackageReferences {
-			i.addPkgDep(projsDB, proj, pkgRef.Include, pkgRef.Version)
+			i.addPkgDep(projsDB, proj, pkgRef.Include, pkgRef.Version, opts)
 		}
 		for _, projRef := range item.ProjectReferences {
-			err := i.addProjDep(projsDB, proj, projRef.Include)
+			err := i.addProjDep(projsDB, proj, projRef.Include, opts)
 			if err != nil {
 				return err
 			}
 		}
 		for _, ref := range item.References {
-			i.addPkgDep(projsDB, proj, ref.Include, "")
+			i.addPkgDep(projsDB, proj, ref.Include, "", opts)
 		}
 
 		for _, f := range item.Nones {
@@ -198,12 +194,12 @@ func (i *csprojImporter) process(console consoles.Console, projsDB *model.Projec
 	return nil
 }
 
-func (i *csprojImporter) addPkgDep(projsDB *model.Projects, proj *model.Project, pkg string, version string) {
+func (i *Importer) addPkgDep(projsDB *model.Projects, proj *model.Project, pkg string, version string, opts *Options) {
 	if pkg == "" {
 		return
 	}
 
-	dp := projsDB.GetOrCreate(i.rootName, pkg)
+	dp := projsDB.GetOrCreate(opts.Root, pkg)
 
 	dep := proj.GetOrCreateDependency(dp)
 	if version != "" {
@@ -211,7 +207,7 @@ func (i *csprojImporter) addPkgDep(projsDB *model.Projects, proj *model.Project,
 	}
 }
 
-func (i *csprojImporter) addProjDep(projsDB *model.Projects, proj *model.Project, path string) error {
+func (i *Importer) addProjDep(projsDB *model.Projects, proj *model.Project, path string, opts *Options) error {
 	if path == "" {
 		return nil
 	}
@@ -221,14 +217,14 @@ func (i *csprojImporter) addProjDep(projsDB *model.Projects, proj *model.Project
 		return err
 	}
 
-	dp := projsDB.GetOrCreate(i.rootName, i.getProjectName(path))
+	dp := projsDB.GetOrCreate(opts.Root, i.getProjectName(path))
 
 	proj.GetOrCreateDependency(dp)
 
 	return nil
 }
 
-func (i *csprojImporter) addFiles(filesDB *model.Files, proj *model.Project, dir *model.ProjectDirectory, excludes *set.Set[string], path string) error {
+func (i *Importer) addFiles(filesDB *model.Files, proj *model.Project, dir *model.ProjectDirectory, excludes *set.Set[string], path string) error {
 	if path == "" {
 		return nil
 	}
@@ -285,7 +281,7 @@ func (i *csprojImporter) addFiles(filesDB *model.Files, proj *model.Project, dir
 	return nil
 }
 
-func (i *csprojImporter) getProjectName(path string) string {
+func (i *Importer) getProjectName(path string) string {
 	name := filepath.Base(path)
 	name = name[:len(name)-len(filepath.Ext(name))]
 	return name
