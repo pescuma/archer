@@ -926,6 +926,10 @@ func (i *HistoryImporter) propagateChangesToParents(reposDB *model.Repositories,
 		files := make(map[*model.File]bool)
 
 		for _, c := range repo.ListCommits() {
+			if c.Ignore {
+				continue
+			}
+		
 			inLast6Months := now.Sub(c.Date) < 6*30*24*time.Hour
 			addChanges := func(c *model.Changes) {
 				c.In6Months += utils.IIf(inLast6Months, 1, 0)

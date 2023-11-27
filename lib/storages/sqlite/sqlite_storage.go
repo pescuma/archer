@@ -423,9 +423,12 @@ func (s *sqliteStorage) QueryBlamePerAuthor() ([]*storages.BlamePerAuthor, error
 	var result []*storages.BlamePerAuthor
 
 	err := s.db.Raw(`
-select author_id, committer_id, repository_id, commit_id, file_id, type line_type, count(*) lines
+select l.author_id, l.committer_id, l.repository_id, l.commit_id, l.file_id, l.type line_type, count(*) lines
 from file_lines l
-group by author_id, committer_id, repository_id, commit_id, file_id, type
+	join repository_commits c
+		on c.id = l.commit_id 
+where c.ignore = 0
+group by l.author_id, l.committer_id, l.repository_id, l.commit_id, file_id, type
 	`).Scan(&result).Error
 	if err != nil {
 		return nil, err
