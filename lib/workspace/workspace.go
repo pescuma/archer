@@ -18,7 +18,7 @@ import (
 	"github.com/pescuma/archer/lib/importers/owners"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/storages"
-	"github.com/pescuma/archer/lib/storages/sqlite"
+	"github.com/pescuma/archer/lib/storages/orm"
 	"github.com/pescuma/archer/lib/utils"
 )
 
@@ -36,24 +36,28 @@ func NewWorkspace(file string) (*Workspace, error) {
 		}
 	}
 
-	file, err := utils.PathAbs(file)
-	if err != nil {
-		return nil, err
-	}
+	var storage storages.Storage
+	var err error
+	switch {
+	case file == ":memory:":
+		storage, err = orm.NewGormStorage(orm.WithSqliteInMemory())
 
-	path := filepath.Dir(file)
-	if _, err := os.Stat(path); err != nil {
-		fmt.Printf("Creating workspace at %v\n", path)
-		err = os.MkdirAll(path, 0o700)
+	case strings.HasSuffix(file, ".sqlite"):
+		file, err = utils.PathAbs(file)
 		if err != nil {
 			return nil, err
 		}
-	}
 
-	var storage storages.Storage
-	switch {
-	case strings.HasSuffix(file, ".sqlite"):
-		storage, err = sqlite.NewSqliteStorage(file)
+		path := filepath.Dir(file)
+		if _, err := os.Stat(path); err != nil {
+			fmt.Printf("Creating workspace at %v\n", path)
+			err = os.MkdirAll(path, 0o700)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		storage, err = orm.NewGormStorage(orm.WithSqlite(file))
 
 	default:
 		return nil, fmt.Errorf("unknown storage type for file %v", file)

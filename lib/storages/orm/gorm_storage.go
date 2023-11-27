@@ -1,4 +1,4 @@
-package sqlite
+package orm
 
 import (
 	"database/sql"
@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/glebarez/sqlite"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -24,7 +23,7 @@ import (
 	"github.com/pescuma/archer/lib/utils"
 )
 
-type sqliteStorage struct {
+type gormStorage struct {
 	mutex sync.RWMutex
 	db    *gorm.DB
 
@@ -50,15 +49,7 @@ type sqliteStorage struct {
 	monthLines     map[model.UUID]*sqlMonthLines
 }
 
-func NewSqliteStorage(file string) (storages.Storage, error) {
-	return newFrom(file + "?_pragma=journal_mode(WAL)")
-}
-
-func NewSqliteMemoryStorage(_ string) (storages.Storage, error) {
-	return newFrom(":memory:")
-}
-
-func newFrom(dsn string) (storages.Storage, error) {
+func NewGormStorage(d gorm.Dialector) (storages.Storage, error) {
 	l := logger.New(
 		log.New(os.Stdout, "\r\n", log.LstdFlags),
 		logger.Config{
@@ -69,7 +60,7 @@ func newFrom(dsn string) (storages.Storage, error) {
 		},
 	)
 
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
+	db, err := gorm.Open(d, &gorm.Config{
 		NamingStrategy: &NamingStrategy{},
 		Logger:         l,
 	})
@@ -90,7 +81,7 @@ func newFrom(dsn string) (storages.Storage, error) {
 		return nil, err
 	}
 
-	return &sqliteStorage{
+	return &gormStorage{
 		db:             db,
 		sqlConfigs:     map[string]*sqlConfig{},
 		sqlProjs:       map[model.UUID]*sqlProject{},
@@ -105,7 +96,7 @@ func newFrom(dsn string) (storages.Storage, error) {
 	}, nil
 }
 
-func (s *sqliteStorage) Close() error {
+func (s *gormStorage) Close() error {
 	db, err := s.db.DB()
 	if err != nil {
 		return err
@@ -114,7 +105,7 @@ func (s *sqliteStorage) Close() error {
 	return db.Close()
 }
 
-func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
+func (s *gormStorage) LoadProjects() (*model.Projects, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -202,15 +193,15 @@ func (s *sqliteStorage) LoadProjects() (*model.Projects, error) {
 	return result, nil
 }
 
-func (s *sqliteStorage) WriteProjects() error {
+func (s *gormStorage) WriteProjects() error {
 	return s.writeProjects(s.projects.ListProjects(model.FilterAll))
 }
 
-func (s *sqliteStorage) WriteProject(proj *model.Project) error {
+func (s *gormStorage) WriteProject(proj *model.Project) error {
 	return s.writeProjects([]*model.Project{proj})
 }
 
-func (s *sqliteStorage) writeProjects(projs []*model.Project) error {
+func (s *gormStorage) writeProjects(projs []*model.Project) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -274,7 +265,7 @@ func (s *sqliteStorage) writeProjects(projs []*model.Project) error {
 	return nil
 }
 
-func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
+func (s *gormStorage) LoadFiles() (*model.Files, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -313,15 +304,15 @@ func (s *sqliteStorage) LoadFiles() (*model.Files, error) {
 	return result, nil
 }
 
-func (s *sqliteStorage) WriteFiles() error {
+func (s *gormStorage) WriteFiles() error {
 	return s.writeFiles(s.files.ListFiles())
 }
 
-func (s *sqliteStorage) WriteFile(file *model.File) error {
+func (s *gormStorage) WriteFile(file *model.File) error {
 	return s.writeFiles([]*model.File{file})
 }
 
-func (s *sqliteStorage) writeFiles(all []*model.File) error {
+func (s *gormStorage) writeFiles(all []*model.File) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -351,7 +342,7 @@ func (s *sqliteStorage) writeFiles(all []*model.File) error {
 	return nil
 }
 
-func (s *sqliteStorage) LoadFileContents(fileID model.UUID) (*model.FileContents, error) {
+func (s *gormStorage) LoadFileContents(fileID model.UUID) (*model.FileContents, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -387,7 +378,7 @@ func (s *sqliteStorage) LoadFileContents(fileID model.UUID) (*model.FileContents
 	return result, nil
 }
 
-func (s *sqliteStorage) WriteFileContents(contents *model.FileContents) error {
+func (s *gormStorage) WriteFileContents(contents *model.FileContents) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -416,7 +407,7 @@ func (s *sqliteStorage) WriteFileContents(contents *model.FileContents) error {
 	return nil
 }
 
-func (s *sqliteStorage) QueryBlamePerAuthor() ([]*storages.BlamePerAuthor, error) {
+func (s *gormStorage) QueryBlamePerAuthor() ([]*storages.BlamePerAuthor, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -437,7 +428,7 @@ group by l.author_id, l.committer_id, l.repository_id, l.commit_id, file_id, typ
 	return result, nil
 }
 
-func (s *sqliteStorage) LoadPeople() (*model.People, error) {
+func (s *gormStorage) LoadPeople() (*model.People, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -494,7 +485,7 @@ func (s *sqliteStorage) LoadPeople() (*model.People, error) {
 	return result, nil
 }
 
-func (s *sqliteStorage) WritePeople() error {
+func (s *gormStorage) WritePeople() error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -545,7 +536,7 @@ func compositeKey(ids ...model.UUID) string {
 	return strings.Join(lo.Map(ids, func(i model.UUID, _ int) string { return string(i) }), "\n")
 }
 
-func (s *sqliteStorage) LoadPeopleRelations() (*model.PeopleRelations, error) {
+func (s *gormStorage) LoadPeopleRelations() (*model.PeopleRelations, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -591,7 +582,7 @@ func (s *sqliteStorage) LoadPeopleRelations() (*model.PeopleRelations, error) {
 	return result, nil
 }
 
-func (s *sqliteStorage) WritePeopleRelations() error {
+func (s *gormStorage) WritePeopleRelations() error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -635,7 +626,7 @@ func (s *sqliteStorage) WritePeopleRelations() error {
 	return nil
 }
 
-func (s *sqliteStorage) LoadRepositories() (*model.Repositories, error) {
+func (s *gormStorage) LoadRepositories() (*model.Repositories, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -708,15 +699,15 @@ func (s *sqliteStorage) LoadRepositories() (*model.Repositories, error) {
 	return result, nil
 }
 
-func (s *sqliteStorage) WriteRepositories() error {
+func (s *gormStorage) WriteRepositories() error {
 	return s.writeRepositories(s.repos.List())
 }
 
-func (s *sqliteStorage) WriteRepository(repo *model.Repository) error {
+func (s *gormStorage) WriteRepository(repo *model.Repository) error {
 	return s.writeRepositories([]*model.Repository{repo})
 }
 
-func (s *sqliteStorage) writeRepositories(repos []*model.Repository) error {
+func (s *gormStorage) writeRepositories(repos []*model.Repository) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -763,7 +754,7 @@ func (s *sqliteStorage) writeRepositories(repos []*model.Repository) error {
 	return nil
 }
 
-func (s *sqliteStorage) WriteCommit(repo *model.Repository, commit *model.RepositoryCommit) error {
+func (s *gormStorage) WriteCommit(repo *model.Repository, commit *model.RepositoryCommit) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -792,7 +783,7 @@ func (s *sqliteStorage) WriteCommit(repo *model.Repository, commit *model.Reposi
 	return nil
 }
 
-func (s *sqliteStorage) LoadRepositoryCommitFiles(repo *model.Repository, commit *model.RepositoryCommit) (*model.RepositoryCommitFiles, error) {
+func (s *gormStorage) LoadRepositoryCommitFiles(repo *model.Repository, commit *model.RepositoryCommit) (*model.RepositoryCommitFiles, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -815,7 +806,7 @@ func (s *sqliteStorage) LoadRepositoryCommitFiles(repo *model.Repository, commit
 	return result, nil
 }
 
-func (s *sqliteStorage) WriteRepositoryCommitFiles(files []*model.RepositoryCommitFiles) error {
+func (s *gormStorage) WriteRepositoryCommitFiles(files []*model.RepositoryCommitFiles) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -843,7 +834,7 @@ func (s *sqliteStorage) WriteRepositoryCommitFiles(files []*model.RepositoryComm
 	return nil
 }
 
-func (s *sqliteStorage) QueryCommits(file string, proj string, repo string, person string) ([]model.UUID, error) {
+func (s *gormStorage) QueryCommits(file string, proj string, repo string, person string) ([]model.UUID, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -882,7 +873,7 @@ where c.ignore = 0
 	return result, nil
 }
 
-func (s *sqliteStorage) LoadMonthlyStats() (*model.MonthlyStats, error) {
+func (s *gormStorage) LoadMonthlyStats() (*model.MonthlyStats, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -913,7 +904,7 @@ func (s *sqliteStorage) LoadMonthlyStats() (*model.MonthlyStats, error) {
 	return result, nil
 }
 
-func (s *sqliteStorage) WriteMonthlyStats() error {
+func (s *gormStorage) WriteMonthlyStats() error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -943,7 +934,7 @@ func (s *sqliteStorage) WriteMonthlyStats() error {
 	return nil
 }
 
-func (s *sqliteStorage) LoadConfig() (*map[string]string, error) {
+func (s *gormStorage) LoadConfig() (*map[string]string, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -971,7 +962,7 @@ func (s *sqliteStorage) LoadConfig() (*map[string]string, error) {
 	return &result, nil
 }
 
-func (s *sqliteStorage) WriteConfig() error {
+func (s *gormStorage) WriteConfig() error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
