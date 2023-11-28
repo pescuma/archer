@@ -22,7 +22,9 @@ func main() {
 		panic(err)
 	}
 
-	err = b.RunTarget("all")
+	b.Targets.Add("gall", []string{"license-check", "generate", "build", "test", "zip"}, nil)
+
+	err = b.RunTarget("gall")
 	if err != nil {
 		panic(err)
 	}
