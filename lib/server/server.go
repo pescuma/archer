@@ -2,9 +2,12 @@ package server
 
 import (
 	"fmt"
+	"io/fs"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/pescuma/archer/frontend"
 	"github.com/pescuma/archer/lib/consoles"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/storages"
@@ -109,6 +112,22 @@ func (s *server) run() error {
 	s.initRepos(r)
 	s.initPeople(r)
 	s.initArch(r)
+
+	assets, err := fs.Sub(frontend.Assets, "dist/assets")
+	if err != nil {
+		return err
+	}
+	r.StaticFS("/assets", http.FS(assets))
+
+	r.NoRoute(func(c *gin.Context) {
+		data, err := frontend.Index.ReadFile("dist/index.html")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
+	})
 
 	return r.Run(fmt.Sprintf(":%v", s.opts.Port))
 }

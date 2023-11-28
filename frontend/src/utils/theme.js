@@ -5,7 +5,7 @@ const LIGHT = 'light'
 const DARK = 'dark'
 
 export const theme = reactive({
-  name: localStorage.getItem(THEME_STORAGE_KEY) || LIGHT,
+  name: localStorage.getItem(THEME_STORAGE_KEY) || DARK,
 })
 
 theme.isDark = () => theme.name === DARK
