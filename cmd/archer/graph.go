@@ -79,7 +79,7 @@ func (c *GraphCmd) generateDot(projects *model.Projects, filter filters.Filter) 
 		return result
 	}
 
-	tg := groupByRoot(ps, filter, true, getProjectName)
+	tg := groupByGroups(ps, filter, true, getProjectName)
 
 	nodes := map[string]*node{}
 	colors := c.computeColors(ps, getProjectName)
@@ -207,7 +207,7 @@ func (c *GraphCmd) computeColors(ps []*model.Project, getProjectName func(p *mod
 	colors := map[string]string{}
 
 	for _, p := range ps {
-		pn := p.Root + ":" + getProjectName(p)
+		pn := getProjectName(p)
 
 		color := p.GetData("color")
 		if color != "" {

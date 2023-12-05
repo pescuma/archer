@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"time"
 
 	"github.com/pescuma/archer/lib/importers/csproj"
@@ -14,7 +15,7 @@ import (
 
 type ImportAllCmd struct {
 	Paths       []string      `arg:"" help:"Paths to recursively search for data." type:"existingpath"`
-	Root        string        `help:"Root name."`
+	Group       string        `help:"Group to use for the projects."`
 	Gitignore   bool          `default:"true" help:"Respect .gitignore file when importing files."`
 	Incremental bool          `default:"true" negatable:"" help:"Don't import commits already imported."`
 	SaveEvery   time.Duration `default:"10m" help:"Save results while processing to avoid losing work."`
@@ -26,7 +27,7 @@ func (c *ImportAllCmd) Run(ctx *context) error {
 	ws.Console().PushPrefix("gomod: ")
 
 	err := ws.ImportGoMod(c.Paths, &gomod.Options{
-		Root:             c.Root,
+		Groups:           strings.Split(c.Group, ":"),
 		RespectGitignore: c.Gitignore,
 	})
 	if err != nil {
@@ -37,7 +38,7 @@ func (c *ImportAllCmd) Run(ctx *context) error {
 	ws.Console().PushPrefix("csproj: ")
 
 	err = ws.ImportCsproj(c.Paths, &csproj.Options{
-		Root:             c.Root,
+		Groups:           strings.Split(c.Group, ":"),
 		RespectGitignore: c.Gitignore,
 	})
 	if err != nil {
@@ -102,40 +103,40 @@ func (c *ImportGradleCmd) Run(ctx *context) error {
 
 type ImportGoModCmd struct {
 	Paths     []string `arg:"" help:"Paths to recursively search for go.mod files." type:"existingpath"`
-	Root      string   `default:"go" help:"Root name for the projects."`
+	Group     string   `help:"Group to use for the projects."`
 	Gitignore bool     `default:"true" help:"Respect .gitignore file when importing files."`
 }
 
 func (c *ImportGoModCmd) Run(ctx *context) error {
 	return ctx.ws.ImportGoMod(c.Paths, &gomod.Options{
-		Root:             c.Root,
+		Groups:           strings.Split(c.Group, ":"),
 		RespectGitignore: c.Gitignore,
 	})
 }
 
 type ImportCsprojCmd struct {
 	Paths     []string `arg:"" help:"Paths to recursively search for csproj files." type:"existingpath"`
-	Root      string   `default:"cs" help:"Root name for the projects."`
+	Group     string   `help:"Group to use for the projects."`
 	Gitignore bool     `default:"true" help:"Respect .gitignore file when importing files."`
 }
 
 func (c *ImportCsprojCmd) Run(ctx *context) error {
 	return ctx.ws.ImportCsproj(c.Paths, &csproj.Options{
-		Root:             c.Root,
+		Groups:           strings.Split(c.Group, ":"),
 		RespectGitignore: c.Gitignore,
 	})
 }
 
 type ImportHibernateCmd struct {
 	Path        []string `arg:"" help:"Path with root of projects to search." type:"existingpath"`
+	Group       string   `help:"Group to use for the projects."`
 	Glob        []string `help:"Glob limiting files to be processed."`
-	Root        string   `default:"db" help:"Root name for the projects."`
 	Incremental bool     `default:"true" negatable:"" help:"Don't import files already imported."`
 }
 
 func (c *ImportHibernateCmd) Run(ctx *context) error {
 	return ctx.ws.ImportHibernate(c.Path, c.Glob, &hibernate.Options{
-		Root:        c.Root,
+		Groups:      strings.Split(c.Group, ":"),
 		Incremental: c.Incremental,
 	})
 }

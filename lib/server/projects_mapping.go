@@ -154,12 +154,10 @@ func (s *server) sortProjects(col []*model.Project, field string, asc *bool) err
 	}
 	if asc == nil {
 		asc = new(bool)
-		*asc = utils.In(field, "root", "name", "type", "rootDir", "projectFile")
+		*asc = utils.In(field, "name", "type", "rootDir", "projectFile")
 	}
 
 	switch field {
-	case "root":
-		return sortBy(col, func(r *model.Project) string { return r.Root }, *asc)
 	case "name":
 		return sortBy(col, func(r *model.Project) string { return r.Name }, *asc)
 	case "type":
@@ -202,9 +200,8 @@ func (s *server) sortProjects(col []*model.Project, field string, asc *bool) err
 func (s *server) toProject(p *model.Project) gin.H {
 	return gin.H{
 		"id":          p.ID,
-		"root":        p.Root,
 		"name":        p.Name,
-		"nameParts":   p.NameParts,
+		"nameParts":   p.Groups,
 		"type":        p.Type.String(),
 		"rootDir":     p.RootDir,
 		"projectFile": p.ProjectFile,
@@ -229,7 +226,6 @@ func (s *server) toProjectReference(id *model.UUID) gin.H {
 
 	return gin.H{
 		"id":   p.ID,
-		"root": p.Root,
 		"name": p.Name,
 		"type": p.String(),
 	}

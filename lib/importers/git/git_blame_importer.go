@@ -2,23 +2,22 @@ package git
 
 import (
 	"fmt"
-	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/hashicorp/go-set/v2"
 	"github.com/hhatto/gocloc"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 
-	"github.com/pescuma/archer/lib/caches"
 	"github.com/pescuma/archer/lib/consoles"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/storages"
@@ -55,7 +54,26 @@ type blameWork struct {
 	lastMod      string
 }
 
+func findExecutable(cmd string) (string, error) {
+	result, err := exec.LookPath(cmd)
+	if err != nil {
+		return "", errors.Wrapf(err, "%v executable not found in PATH", cmd)
+	}
+
+	result, err = filepath.Abs(result)
+	if err != nil {
+		return "", err
+	}
+
+	return result, nil
+}
+
 func (i *BlameImporter) Import(dirs []string, opts *BlameOptions) error {
+	_, err := findExecutable("git")
+	if err != nil {
+		return errors.Wrapf(err, "git executable must be in the path")
+	}
+
 	i.console.Printf("Loading existing data...\n")
 
 	filesDB, err := i.storage.LoadFiles()
@@ -277,17 +295,12 @@ func (i *BlameImporter) importBlame(filesDB *model.Files, peopleDB *model.People
 
 	i.console.Printf("%v: Computing blame of %v files...\n", repo.Name, len(toProcess))
 
-	cache, err := i.newBlameCache(filesDB, repo, gitRepo)
-	if err != nil {
-		return 0, err
-	}
-
 	bar := utils.NewProgressBar(len(toProcess))
 	start := time.Now()
 	for _, w := range toProcess {
 		bar.Describe(utils.TruncateFilename(w.relativePath))
 
-		err = i.computeFileBlame(w, cache)
+		err = i.computeFileBlame(w)
 		if err != nil {
 			return 0, err
 		}
@@ -309,130 +322,8 @@ func (i *BlameImporter) importBlame(filesDB *model.Files, peopleDB *model.People
 	return len(toProcess), nil
 }
 
-type blameCacheImpl struct {
-	storage storages.Storage
-	filesDB *model.Files
-	repo    *model.Repository
-	gitRepo *git.Repository
-	commits caches.Cache[plumbing.Hash, *BlameCommitCache]
-}
-
-func (i *BlameImporter) newBlameCache(filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository) (BlameCache, error) {
-	cache := &blameCacheImpl{
-		storage: i.storage,
-		filesDB: filesDB,
-		repo:    repo,
-		gitRepo: gitRepo,
-		commits: caches.NewUnlimited[plumbing.Hash, *BlameCommitCache](),
-	}
-
-	return cache, nil
-}
-
-func (c *blameCacheImpl) GetFileHash(commit *object.Commit, path string) (plumbing.Hash, error) {
-	tree, err := object.GetTree(c.gitRepo.Storer, commit.TreeHash)
-	if err != nil {
-		return plumbing.ZeroHash, err
-	}
-
-	e, err := tree.FindEntry(path)
-	if err != nil {
-		return plumbing.ZeroHash, err
-	}
-
-	return e.Hash, nil
-}
-
-func (c *blameCacheImpl) GetCommit(hash plumbing.Hash) (*BlameCommitCache, error) {
-	return c.commits.Get(hash, c.loadCommit)
-}
-
-func (c *blameCacheImpl) loadCommit(hash plumbing.Hash) (*BlameCommitCache, error) {
-	result := &BlameCommitCache{
-		Parents: make(map[plumbing.Hash]*BlameParentCache),
-		Changes: make(map[string]*BlameFileCache),
-	}
-
-	repoCommit := c.repo.GetCommit(hash.String())
-
-	for _, repoParentID := range repoCommit.Parents {
-		repoParent := c.repo.GetCommitByID(repoParentID)
-
-		gitParent, err := c.gitRepo.CommitObject(plumbing.NewHash(repoParent.Hash))
-		if err != nil {
-			return nil, err
-		}
-
-		result.Parents[gitParent.Hash] = &BlameParentCache{
-			Commit:  gitParent,
-			Renames: make(map[string]string),
-		}
-	}
-
-	getFilename := func(fileID model.UUID) (string, error) {
-		f := c.filesDB.GetFileByID(fileID)
-
-		rel, err := filepath.Rel(c.repo.RootDir, f.Path)
-		if err != nil {
-			return "", err
-		}
-
-		rel = strings.ReplaceAll(rel, string(filepath.Separator), "/")
-		return rel, nil
-	}
-
-	files, err := c.storage.LoadRepositoryCommitFiles(c.repo, repoCommit)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, commitFile := range files.List() {
-		filename, err := getFilename(commitFile.FileID)
-		if err != nil {
-			return nil, err
-		}
-
-		result.Changes[filename] = &BlameFileCache{
-			Hash:    plumbing.NewHash(commitFile.Hash),
-			Created: commitFile.Change == model.FileCreated,
-		}
-
-		for repoParentID, oldFileID := range commitFile.OldFileIDs {
-			oldFilename, err := getFilename(oldFileID)
-			if err != nil {
-				return nil, err
-			}
-
-			repoParent := c.repo.GetCommitByID(repoParentID)
-
-			parentCache := result.Parents[plumbing.NewHash(repoParent.Hash)]
-			parentCache.Renames[filename] = oldFilename
-		}
-	}
-
-	return result, nil
-}
-
-func (c *blameCacheImpl) GetFile(name string, hash plumbing.Hash) (*object.File, error) {
-	blob, err := object.GetBlob(c.gitRepo.Storer, hash)
-	if err != nil {
-		return nil, err
-	}
-
-	return object.NewFile(name, filemode.Regular, blob), nil
-}
-
 func (i *BlameImporter) listToCompute(filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository, gitTree *object.Tree, gitCommit *object.Commit, opts *BlameOptions) ([]*blameWork, error) {
 	var result []*blameWork
-
-	limit := math.MaxInt
-	if repo.CountCommits() > 50000 {
-		limit = 5000
-	} else if repo.CountCommits() > 10000 {
-		limit = 10000
-	} else if repo.CountCommits() > 1000 {
-		limit = 50000
-	}
 
 	err := gitTree.Files().ForEach(func(gitFile *object.File) error {
 		if !opts.ShouldContinue(len(result)) {
@@ -460,23 +351,13 @@ func (i *BlameImporter) listToCompute(filesDB *model.Files, repo *model.Reposito
 			}
 		}
 
-		isText, err := utils.IsTextReader(gitFile.Reader())
+		reader, err := gitFile.Reader()
 		if err != nil {
 			return err
 		}
 
+		isText := utils.IsTextReader(gitFile.Name, reader)
 		if !isText {
-			return nil
-		}
-
-		lines, err := gitFile.Lines()
-		if err != nil {
-			return err
-		}
-
-		// Otherwise we go out of memory
-		if len(lines) >= limit {
-			i.console.Printf("%v: Skipping %v: too many lines (%v)\n", repo.Name, path, len(lines))
 			return nil
 		}
 
@@ -506,17 +387,49 @@ func (i *BlameImporter) listToCompute(filesDB *model.Files, repo *model.Reposito
 	return result, nil
 }
 
-func (i *BlameImporter) computeFileBlame(w *blameWork, cache BlameCache) error {
-	//now := time.Now()
+type blameLine struct {
+	CommitHash string
+	Text       string
+}
 
-	blame, err := Blame(w.gitCommit, w.relativePath, cache)
+func (i *BlameImporter) computeFileBlame(w *blameWork) error {
+	cmd := exec.Command("git", "blame", "-l", "-s", "-w", "-M", "-C", "-C", "--minimal", "--root", "HEAD", "--", w.file.Path)
+	cmd.Dir = filepath.Dir(w.file.Path)
+
+	outputBytes, err := cmd.Output()
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "error calling %v %v", cmd.Path, cmd.Args)
 	}
 
-	//console.Printf(" %v (in %v)\n", w.relativePath, time.Since(now))
+	output := string(outputBytes)
+	output = strings.TrimRight(output, "\r\n")
 
-	contents := strings.Join(lo.Map(blame.Lines, func(item *Line, _ int) string { return item.Text }), "\n")
+	blameLines := make([]*blameLine, 0, 100)
+	re := regexp.MustCompile(`^([0-9a-z]+) ([^)]*? )?(\d+)\)(.*)$`)
+	for j, line := range strings.Split(output, "\n") {
+		line = strings.TrimRight(line, "\r\n")
+
+		gs := re.FindStringSubmatch(line)
+
+		commitHash := gs[1]
+		lineNum, err := strconv.Atoi(gs[3])
+		if err != nil {
+			return err
+		}
+		text := gs[4]
+
+		if lineNum != j+1 {
+			panic(fmt.Sprintf("wrong line num: %v != %v", lineNum, j+1))
+		}
+
+		blameLines = append(blameLines, &blameLine{
+			CommitHash: commitHash,
+			Text:       text,
+		})
+	}
+
+	contents := strings.Join(lo.Map(blameLines, func(item *blameLine, _ int) string { return item.Text }), "\n")
+
 	lineTypes, err := i.computeLOC(filepath.Base(w.file.Path), contents)
 	if err != nil {
 		return err
@@ -527,26 +440,26 @@ func (i *BlameImporter) computeFileBlame(w *blameWork, cache BlameCache) error {
 		return err
 	}
 
-	for i, blameLine := range blame.Lines {
+	for j, bl := range blameLines {
 		var lt model.FileLineType
-		if i < len(lineTypes) {
-			lt = lineTypes[i]
-		} else if strings.TrimSpace(blameLine.Text) == "" {
+		if j < len(lineTypes) {
+			lt = lineTypes[j]
+		} else if strings.TrimSpace(bl.Text) == "" {
 			lt = model.BlankFileLine
 		} else {
 			lt = model.CodeFileLine
 		}
 
 		var fileLine *model.FileLine
-		if i == len(fileLines.Lines) {
+		if j == len(fileLines.Lines) {
 			fileLine = fileLines.AppendLine()
 		} else {
-			fileLine = fileLines.Lines[i]
+			fileLine = fileLines.Lines[j]
 		}
 
-		commit := w.repo.GetCommit(blameLine.Hash.String())
+		commit := w.repo.GetCommit(bl.CommitHash)
 		if commit == nil {
-			return fmt.Errorf("missing commit '%v':'%v'. run 'import git history' before importing blame", w.repo.Name, blameLine.Hash.String())
+			return fmt.Errorf("missing commit '%v':'%v'. run 'import git history' before importing blame", w.repo.Name, bl.CommitHash)
 		}
 
 		fileLine.ProjectID = w.file.ProjectID
@@ -556,10 +469,10 @@ func (i *BlameImporter) computeFileBlame(w *blameWork, cache BlameCache) error {
 		fileLine.CommitterID = &commit.CommitterID
 		fileLine.Date = commit.Date
 		fileLine.Type = lt
-		fileLine.Text = blameLine.Text
+		fileLine.Text = bl.Text
 	}
 
-	fileLines.Lines = fileLines.Lines[:len(blame.Lines)]
+	fileLines.Lines = fileLines.Lines[:len(blameLines)]
 
 	if w.lastMod != "" {
 		w.file.Data["blame:last_modified"] = w.lastMod

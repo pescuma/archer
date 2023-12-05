@@ -21,7 +21,7 @@ type Importer struct {
 }
 
 type Options struct {
-	Root             string
+	Groups           []string
 	RespectGitignore bool
 }
 
@@ -88,7 +88,8 @@ func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path s
 		return nil
 	}
 
-	proj := projsDB.GetOrCreate(opts.Root, name)
+	proj := projsDB.GetOrCreate(name)
+	proj.Groups = opts.Groups
 	proj.Type = model.CodeType
 	proj.RootDir = filepath.Dir(path)
 	proj.ProjectFile = path
@@ -109,11 +110,11 @@ func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path s
 	}
 
 	for _, req := range ast.Require {
-		i.addDep(projsDB, proj, req.Mod, opts)
+		i.addDep(projsDB, proj, req.Mod)
 	}
 
 	for _, rep := range ast.Replace {
-		i.addDep(projsDB, proj, rep.New, opts)
+		i.addDep(projsDB, proj, rep.New)
 	}
 
 	filter, _ := common.CreateFileFilter(proj.RootDir, opts.RespectGitignore,
@@ -139,12 +140,12 @@ func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path s
 	return nil
 }
 
-func (i *Importer) addDep(projsDB *model.Projects, proj *model.Project, mod module.Version, opts *Options) {
+func (i *Importer) addDep(projsDB *model.Projects, proj *model.Project, mod module.Version) {
 	if mod.Path == "" {
 		return
 	}
 
-	dp := projsDB.GetOrCreate(opts.Root, mod.Path)
+	dp := projsDB.GetOrCreate(mod.Path)
 
 	dep := proj.GetOrCreateDependency(dp)
 	if mod.Version != "" {

@@ -155,7 +155,7 @@ func findMatchingEdges(matches map[string]map[string]int, visited map[string]int
 	src := utils.First(path)
 	dest := utils.Last(path)
 
-	if dest.IsIgnored() {
+	if dest.Ignore {
 		return
 
 	} else if dest != src && destFilter(dest) {
@@ -195,16 +195,6 @@ func parseProjectFilterBool(filter string) (func(proj *model.Project) bool, erro
 			return !f(proj)
 		}, nil
 
-	} else if strings.HasPrefix(filter, "root:") {
-		f, err := ParseStringFilter(strings.TrimPrefix(filter, "root:"))
-		if err != nil {
-			return nil, err
-		}
-
-		return func(proj *model.Project) bool {
-			return f(proj.Root)
-		}, nil
-
 	} else {
 		f, err := ParseStringFilter(filter)
 		if err != nil {
@@ -212,7 +202,7 @@ func parseProjectFilterBool(filter string) (func(proj *model.Project) bool, erro
 		}
 
 		return func(proj *model.Project) bool {
-			return f(proj.Name) || f(proj.SimpleName()) || f(proj.FullName())
+			return f(proj.Name) || f(proj.SimpleName()) || f(proj.Name)
 		}, nil
 	}
 }

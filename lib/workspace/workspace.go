@@ -48,13 +48,9 @@ func NewWorkspace(file string) (*Workspace, error) {
 			return nil, err
 		}
 
-		path := filepath.Dir(file)
-		if _, err := os.Stat(path); err != nil {
-			fmt.Printf("Creating workspace at %v\n", path)
-			err = os.MkdirAll(path, 0o700)
-			if err != nil {
-				return nil, err
-			}
+		err = createWorkspaceDir(file)
+		if err != nil {
+			return nil, err
 		}
 
 		storage, err = orm.NewGormStorage(orm.WithSqlite(file))
@@ -70,6 +66,20 @@ func NewWorkspace(file string) (*Workspace, error) {
 		console: consoles.NewStdOutConsole(),
 		storage: storage,
 	}, nil
+}
+
+func createWorkspaceDir(file string) error {
+	path := filepath.Dir(file)
+
+	if _, err := os.Stat(path); err != nil {
+		fmt.Printf("Creating workspace at %v\n", path)
+		err = os.MkdirAll(path, 0o700)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (w *Workspace) Close() error {

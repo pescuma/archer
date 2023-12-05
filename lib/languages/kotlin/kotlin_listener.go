@@ -94,7 +94,7 @@ func (l *ASTListener) EnterPrimaryConstructor(ctx *kotlin_parser.PrimaryConstruc
 
 	params := make([]string, 0, len(ps))
 	for _, p := range ps {
-		t := GetTypeName(p.Type_())
+		t := l.GetTypeName(p.Type_())
 		params = append(params, t)
 	}
 
@@ -110,7 +110,7 @@ func (l *ASTListener) EnterSecondaryConstructor(ctx *kotlin_parser.SecondaryCons
 
 	params := make([]string, 0, len(ps))
 	for _, p := range ps {
-		t := GetTypeName(p.Parameter().Type_())
+		t := l.GetTypeName(p.Parameter().Type_())
 		params = append(params, t)
 	}
 
@@ -126,11 +126,11 @@ func (l *ASTListener) EnterFunctionDeclaration(ctx *kotlin_parser.FunctionDeclar
 
 	params := make([]string, 0, len(ps))
 	for _, p := range ps {
-		t := GetTypeName(p.Parameter().Type_())
+		t := l.GetTypeName(p.Parameter().Type_())
 		params = append(params, t)
 	}
 
-	result := GetTypeName(ctx.Type_())
+	result := l.GetTypeName(ctx.Type_())
 
 	l.Location.EnterFunction(ctx.SimpleIdentifier().GetText(), params, result)
 }
@@ -150,14 +150,15 @@ func (l *ASTListener) EnterLambdaLiteral(ctx *kotlin_parser.LambdaLiteralContext
 			if p.VariableDeclaration() != nil {
 				vd := p.VariableDeclaration()
 				if vd.Type_() != nil {
-					t = GetTypeName(vd.Type_())
+					t = l.GetTypeName(vd.Type_())
 				}
 
 			} else if p.Type_() != nil {
-				t = GetTypeName(p.Type_())
+				t = l.GetTypeName(p.Type_())
 
 			} else {
-				panic(fmt.Sprintf("Not implemented: %v %t", p, p))
+				panic(fmt.Sprintf("%v %v: %v: not implemented: %v %t",
+					l.Location.Path(), ctx.GetSourceInterval().String(), ctx.GetText(), p, p))
 			}
 
 			params = append(params, t)
@@ -198,7 +199,7 @@ func (l *ASTListener) ExitPropertyDelegate(_ *kotlin_parser.PropertyDelegateCont
 	l.Location.ExitFunction()
 }
 
-func GetTypeName(t kotlin_parser.ITypeContext) string {
+func (l *ASTListener) GetTypeName(t kotlin_parser.ITypeContext) string {
 	if t == nil {
 		return "void"
 
@@ -207,7 +208,7 @@ func GetTypeName(t kotlin_parser.ITypeContext) string {
 		return ft.GetText()
 
 	} else if t.ParenthesizedType() != nil {
-		return GetTypeName(t.ParenthesizedType().Type_())
+		return l.GetTypeName(t.ParenthesizedType().Type_())
 
 	} else if t.NullableType() != nil {
 		tr := t.NullableType().(*kotlin_parser.NullableTypeContext)
@@ -215,13 +216,14 @@ func GetTypeName(t kotlin_parser.ITypeContext) string {
 		if tr.TypeReference() != nil {
 			return tr.TypeReference().GetText()
 		} else {
-			return GetTypeName(tr.ParenthesizedType().Type_())
+			return l.GetTypeName(tr.ParenthesizedType().Type_())
 		}
 
 	} else if t.TypeReference() != nil {
 		return t.TypeReference().GetText()
 
 	} else {
-		panic(fmt.Sprintf("Not implemented: %v %t", t, t))
+		panic(fmt.Sprintf("%v %v: %v: not implemented: %v %t",
+			l.Location.Path(), t.GetSourceInterval().String(), t.GetText(), t, t))
 	}
 }

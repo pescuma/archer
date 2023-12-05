@@ -37,7 +37,7 @@ func (r *RootsFinder) ComputeRootDirs(projectsDB *model.Projects, filesDB *model
 			}
 
 			for _, p := range ps {
-				paths[p.FullName()] = RootDir{
+				paths[p.Name] = RootDir{
 					filesDB: filesDB,
 					Project: p,
 					globs:   r.globs,
@@ -81,7 +81,7 @@ func (r *RootDir) String() string {
 	if r.Dir != nil {
 		return *r.Dir
 	} else {
-		return r.Project.FullName()
+		return r.Project.Name
 	}
 }
 

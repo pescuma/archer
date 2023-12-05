@@ -146,8 +146,8 @@ func (s *gormStorage) LoadProjects() (*model.Projects, error) {
 	})
 
 	for _, sp := range projs {
-		p := result.GetOrCreateEx(sp.Root, sp.ProjectName, &sp.ID)
-		p.NameParts = sp.NameParts
+		p := result.GetOrCreateEx(sp.ProjectName, &sp.ID)
+		p.Groups = sp.Groups
 		p.Type = sp.Type
 
 		p.RootDir = sp.RootDir
@@ -163,6 +163,7 @@ func (s *gormStorage) LoadProjects() (*model.Projects, error) {
 		p.Data = decodeMap(sp.Data)
 		p.FirstSeen = sp.FirstSeen
 		p.LastSeen = sp.LastSeen
+		p.Ignore = sp.Ignore
 	}
 
 	for _, sd := range deps {
@@ -647,6 +648,7 @@ func (s *gormStorage) LoadRepositories() (*model.Repositories, error) {
 	}))
 
 	if len(repos) == 0 {
+		s.repos = result
 		return result, nil
 	}
 
@@ -1154,9 +1156,8 @@ func toSqlProject(p *model.Project) *sqlProject {
 	sp := &sqlProject{
 		ID:           p.ID,
 		Name:         p.String(),
-		Root:         p.Root,
 		ProjectName:  p.Name,
-		NameParts:    p.NameParts,
+		Groups:       p.Groups,
 		Type:         p.Type,
 		RootDir:      p.RootDir,
 		ProjectFile:  p.ProjectFile,
@@ -1168,6 +1169,7 @@ func toSqlProject(p *model.Project) *sqlProject {
 		Data:         encodeMap(p.Data),
 		FirstSeen:    p.FirstSeen,
 		LastSeen:     p.LastSeen,
+		Ignore:       p.Ignore,
 	}
 
 	for k, v := range p.Sizes {

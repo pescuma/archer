@@ -155,13 +155,23 @@ func PathAbs(paths ...string) (string, error) {
 	return path, nil
 }
 
-func IsTextReader(reader io.ReadCloser, err error) (bool, error) {
-	return IsTextReaderOpts(reader, err, 10)
-}
-
-func IsTextReaderOpts(reader io.ReadCloser, err error, sampleLines int) (bool, error) {
+func IsTextFile(path string) (bool, error) {
+	file, err := os.Open(path)
 	if err != nil {
 		return false, err
+	}
+
+	return IsTextReader(filepath.Base(path), file), nil
+}
+
+func IsTextReader(filename string, reader io.ReadCloser) bool {
+	return IsTextReaderOpts(filename, reader, 10)
+}
+
+func IsTextReaderOpts(filename string, reader io.ReadCloser, sampleLines int) bool {
+	// It happens a lot to consider tar files as text files, because they have text files inside
+	if strings.HasSuffix(strings.ToLower(filename), ".tar") {
+		return false
 	}
 
 	defer reader.Close()
@@ -170,19 +180,15 @@ func IsTextReaderOpts(reader io.ReadCloser, err error, sampleLines int) (bool, e
 
 	for i := 0; i < sampleLines; i++ {
 		if !fileScanner.Scan() {
-			return true, nil
+			return true
 		}
 
 		if !utf8.ValidString(fileScanner.Text()) {
-			return false, nil
+			return false
 		}
 	}
 
-	return true, err
-}
-
-func IsTextFile(path string) (bool, error) {
-	return IsTextReader(os.Open(path))
+	return true
 }
 
 func FileExists(path string) (bool, error) {

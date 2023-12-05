@@ -17,24 +17,20 @@ func NewProjects() *Projects {
 	}
 }
 
-func (ps *Projects) GetOrCreate(root, name string) *Project {
-	return ps.GetOrCreateEx(root, name, nil)
+func (ps *Projects) GetOrCreate(name string) *Project {
+	return ps.GetOrCreateEx(name, nil)
 }
 
-func (ps *Projects) GetOrCreateEx(root, name string, id *UUID) *Project {
-	if len(root) == 0 {
-		panic("empty root not supported")
-	}
+func (ps *Projects) GetOrCreateEx(name string, id *UUID) *Project {
 	if len(name) == 0 {
 		panic("empty name not supported")
 	}
 
-	key := root + "\n" + name
-	result, ok := ps.byName[key]
+	result, ok := ps.byName[name]
 
 	if !ok {
-		result = NewProject(root, name, id)
-		ps.byName[key] = result
+		result = NewProject(name, id)
+		ps.byName[name] = result
 		ps.byID[result.ID] = result
 	}
 
@@ -50,26 +46,6 @@ func (ps *Projects) ListProjects(ft FilterType) []*Project {
 
 	for _, v := range ps.byName {
 		if ft == FilterExcludeExternal && v.IsExternalDependency() {
-			continue
-		}
-
-		result = append(result, v)
-	}
-
-	sortProjects(result)
-
-	return result
-}
-
-func (ps *Projects) ListProjectsByRoot(root string, ft FilterType) []*Project {
-	result := make([]*Project, 0, len(ps.byName))
-
-	for _, v := range ps.byName {
-		if ft == FilterExcludeExternal && v.IsExternalDependency() {
-			continue
-		}
-
-		if v.Root != root {
 			continue
 		}
 

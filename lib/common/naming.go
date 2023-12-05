@@ -47,6 +47,6 @@ func CreateTableNameParts(projs []*model.Project) {
 			parts = append(parts, part)
 		}
 
-		proj.NameParts = parts
+		proj.Groups = parts
 	}
 }

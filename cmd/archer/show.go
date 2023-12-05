@@ -33,7 +33,7 @@ func (c *ShowCmd) Run(ctx *context) error {
 func (c *ShowCmd) print(projects *model.Projects, filter filters.Filter) {
 	ps := projects.ListProjects(model.FilterExcludeExternal)
 
-	tg := groupByRoot(ps, filter, false, func(p *model.Project) string {
+	tg := groupByGroups(ps, filter, false, func(p *model.Project) string {
 		return p.LevelSimpleName(c.Levels)
 	})
 

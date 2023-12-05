@@ -17,9 +17,8 @@ type sqlConfig struct {
 type sqlProject struct {
 	ID          model.UUID
 	Name        string
-	Root        string   `gorm:"index:idx_projects_name"`
-	ProjectName string   `gorm:"index:idx_projects_name"`
-	NameParts   []string `gorm:"serializer:json"`
+	ProjectName string   `gorm:"index"`
+	Groups      []string `gorm:"serializer:json"`
 	Type        model.ProjectType
 
 	RootDir     string
@@ -34,6 +33,8 @@ type sqlProject struct {
 	Data      map[string]string    `gorm:"serializer:json"`
 	FirstSeen time.Time
 	LastSeen  time.Time
+
+	Ignore bool
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

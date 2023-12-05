@@ -95,7 +95,8 @@ func (i *Importer) importTables(db *sql.DB, projs *model.Projects) error {
 		fmt.Printf("Importing table %v.%v (%v data, %v indexes)\n", table.schemaName, table.tableName,
 			humanize.Bytes(uint64(table.dataSize)), humanize.Bytes(uint64(table.indexSize)))
 
-		proj := projs.GetOrCreate(table.schemaName, table.tableName)
+		proj := projs.GetOrCreate(table.tableName)
+		proj.Groups = []string{table.schemaName}
 		proj.Type = model.DatabaseType
 
 		proj.AddSize("table", &model.Size{
@@ -149,9 +150,9 @@ func (i *Importer) importFKs(db *sql.DB, projs *model.Projects) error {
 		fmt.Printf("Importing dependency %v.%v => %v.%v\n",
 			fk.schemaName, fk.tableName, fk.schemaName, fk.referencedTableName)
 
-		proj := projs.GetOrCreate(fk.schemaName, fk.tableName)
+		proj := projs.GetOrCreate(fk.tableName)
 
-		dep := projs.GetOrCreate(fk.schemaName, fk.referencedTableName)
+		dep := projs.GetOrCreate(fk.referencedTableName)
 		proj.GetOrCreateDependency(dep)
 
 		toSave[rootAndName{fk.schemaName, fk.tableName}] = true

@@ -27,7 +27,7 @@ type Importer struct {
 }
 
 type Options struct {
-	Root        string
+	Groups      []string
 	Incremental bool
 }
 
@@ -56,7 +56,7 @@ func (i *Importer) Import(rootDirs, globs []string, opts *Options) error {
 		return err
 	}
 
-	lastModifiedKey := fmt.Sprintf("hibernate:%v:last_modified", opts.Root)
+	lastModifiedKey := "hibernate:last_modified"
 
 	type fileInfo struct {
 		root     common.RootDir
@@ -171,7 +171,8 @@ func (i *Importer) Import(rootDirs, globs []string, opts *Options) error {
 
 		root := c.Root[0]
 
-		proj := projectsDB.GetOrCreate(opts.Root, c.Tables[0])
+		proj := projectsDB.GetOrCreate(c.Tables[0])
+		proj.Groups = opts.Groups
 		dbProjs[proj] = true
 
 		proj.Type = model.DatabaseType
@@ -203,7 +204,7 @@ func (i *Importer) Import(rootDirs, globs []string, opts *Options) error {
 				continue
 			}
 
-			dp := projectsDB.GetOrCreate(opts.Root, dc.Tables[0])
+			dp := projectsDB.GetOrCreate(dc.Tables[0])
 			dbProjs[dp] = true
 
 			d := proj.GetOrCreateDependency(dp)

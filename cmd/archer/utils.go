@@ -10,14 +10,14 @@ import (
 	"github.com/pescuma/archer/lib/utils"
 )
 
-func groupByRoot(ps []*model.Project, filter filters.Filter, forceShowDependentProjects bool, projGrouping func(project *model.Project) string) *group {
+func groupByGroups(ps []*model.Project, filter filters.Filter, forceShowDependentProjects bool, projGrouping func(project *model.Project) string) *group {
 	show := computeNodesShow(ps, filter, forceShowDependentProjects)
 
-	ps = lo.Filter(ps, func(p *model.Project, _ int) bool { return show[p.FullName()] })
+	ps = lo.Filter(ps, func(p *model.Project, _ int) bool { return show[p.Name] })
 
-	rs := lo.GroupBy(ps, func(p *model.Project) string { return p.Root })
+	gs := lo.GroupBy(ps, func(p *model.Project) string { return p.FullGroup() })
 
-	keys := lo.Keys(rs)
+	keys := lo.Keys(gs)
 	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 
 	tg := group{
@@ -25,7 +25,7 @@ func groupByRoot(ps []*model.Project, filter filters.Filter, forceShowDependentP
 	}
 
 	for _, k := range keys {
-		rps := rs[k]
+		rps := gs[k]
 
 		rg := &group{
 			category: RootCategory,
@@ -39,17 +39,16 @@ func groupByRoot(ps []*model.Project, filter filters.Filter, forceShowDependentP
 
 		for _, p := range rps {
 			pgn := projGrouping(p)
-			pgfn := p.Root + ":" + pgn
 
-			pg, ok := pgs[pgfn]
+			pg, ok := pgs[pgn]
 			if !ok {
 				pg = &group{
 					category: ProjectCategory,
 					name:     pgn,
-					fullName: pgfn,
+					fullName: pgn,
 					proj:     p,
 				}
-				pgs[pgfn] = pg
+				pgs[pgn] = pg
 				rg.children = append(rg.children, pg)
 			}
 
@@ -60,21 +59,21 @@ func groupByRoot(ps []*model.Project, filter filters.Filter, forceShowDependentP
 
 			for _, d := range filters.FilterDependencies(filter, p.Dependencies) {
 				dgn := projGrouping(d.Target)
-				dgfn := d.Target.Root + ":" + dgn
+				dgfn := dgn
 
-				if pgfn == dgfn {
+				if pgn == dgfn {
 					continue
 				}
 
-				dg, ok := dgs[pgfn+"\n"+dgfn]
+				dg, ok := dgs[pgn+"\n"+dgfn]
 				if !ok {
 					dg = &group{
 						category: DependencyCategory,
-						name:     utils.IIf(p.Root == d.Target.Root, dgn, dgfn),
+						name:     utils.IIf(p.FullGroup() == d.Target.FullGroup(), dgn, dgfn),
 						fullName: dgfn,
 						dep:      d,
 					}
-					dgs[pgfn+"\n"+dgfn] = dg
+					dgs[pgn+"\n"+dgfn] = dg
 					pg.children = append(pg.children, dg)
 				}
 
@@ -106,7 +105,7 @@ func computeNodesShow(ps []*model.Project, filter filters.Filter, forceShowDepen
 
 	for _, p := range ps {
 		if filters.IncludeProject(filter, p) {
-			show[p.FullName()] = true
+			show[p.Name] = true
 		}
 
 		for _, d := range p.ListDependencies(model.FilterExcludeExternal) {
@@ -114,10 +113,10 @@ func computeNodesShow(ps []*model.Project, filter filters.Filter, forceShowDepen
 				continue
 			}
 
-			show[d.Source.FullName()] = true
+			show[d.Source.Name] = true
 
 			if forceShowDependentProjects {
-				show[d.Target.FullName()] = true
+				show[d.Target.Name] = true
 			}
 		}
 	}

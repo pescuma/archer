@@ -24,7 +24,7 @@ type Importer struct {
 }
 
 type Options struct {
-	Root             string
+	Groups           []string
 	RespectGitignore bool
 }
 
@@ -89,7 +89,8 @@ func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path s
 		return nil
 	}
 
-	proj := projsDB.GetOrCreate(opts.Root, i.getProjectName(path))
+	proj := projsDB.GetOrCreate(i.getProjectName(path))
+	proj.Groups = opts.Groups
 	proj.Type = model.CodeType
 	proj.RootDir = filepath.Dir(path)
 	proj.ProjectFile = path
@@ -127,16 +128,16 @@ func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path s
 
 	for _, item := range xmlProj.ItemGroups {
 		for _, pkgRef := range item.PackageReferences {
-			i.addPkgDep(projsDB, proj, pkgRef.Include, pkgRef.Version, opts)
+			i.addPkgDep(projsDB, proj, pkgRef.Include, pkgRef.Version)
 		}
 		for _, projRef := range item.ProjectReferences {
-			err := i.addProjDep(projsDB, proj, projRef.Include, opts)
+			err := i.addProjDep(projsDB, proj, projRef.Include)
 			if err != nil {
 				return err
 			}
 		}
 		for _, ref := range item.References {
-			i.addPkgDep(projsDB, proj, ref.Include, "", opts)
+			i.addPkgDep(projsDB, proj, ref.Include, "")
 		}
 
 		for _, f := range item.Nones {
@@ -194,12 +195,12 @@ func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path s
 	return nil
 }
 
-func (i *Importer) addPkgDep(projsDB *model.Projects, proj *model.Project, pkg string, version string, opts *Options) {
+func (i *Importer) addPkgDep(projsDB *model.Projects, proj *model.Project, pkg string, version string) {
 	if pkg == "" {
 		return
 	}
 
-	dp := projsDB.GetOrCreate(opts.Root, pkg)
+	dp := projsDB.GetOrCreate(pkg)
 
 	dep := proj.GetOrCreateDependency(dp)
 	if version != "" {
@@ -207,7 +208,7 @@ func (i *Importer) addPkgDep(projsDB *model.Projects, proj *model.Project, pkg s
 	}
 }
 
-func (i *Importer) addProjDep(projsDB *model.Projects, proj *model.Project, path string, opts *Options) error {
+func (i *Importer) addProjDep(projsDB *model.Projects, proj *model.Project, path string) error {
 	if path == "" {
 		return nil
 	}
@@ -217,7 +218,7 @@ func (i *Importer) addProjDep(projsDB *model.Projects, proj *model.Project, path
 		return err
 	}
 
-	dp := projsDB.GetOrCreate(opts.Root, i.getProjectName(path))
+	dp := projsDB.GetOrCreate(i.getProjectName(path))
 
 	proj.GetOrCreateDependency(dp)
 

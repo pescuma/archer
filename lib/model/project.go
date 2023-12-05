@@ -10,11 +10,10 @@ import (
 )
 
 type Project struct {
-	Root      string
-	Name      string
-	NameParts []string
-	Type      ProjectType
-	ID        UUID
+	Name   string
+	Groups []string
+	Type   ProjectType
+	ID     UUID
 
 	RootDir     string
 	ProjectFile string
@@ -30,9 +29,11 @@ type Project struct {
 	Data         map[string]string
 	FirstSeen    time.Time
 	LastSeen     time.Time
+
+	Ignore bool
 }
 
-func NewProject(root, name string, id *UUID) *Project {
+func NewProject(name string, id *UUID) *Project {
 	var uuid UUID
 	if id == nil {
 		uuid = NewUUID("p")
@@ -41,9 +42,7 @@ func NewProject(root, name string, id *UUID) *Project {
 	}
 
 	return &Project{
-		Root:         root,
 		Name:         name,
-		NameParts:    []string{name},
 		ID:           uuid,
 		Dirs:         map[string]*ProjectDirectory{},
 		Dependencies: map[string]*ProjectDependency{},
@@ -56,7 +55,7 @@ func NewProject(root, name string, id *UUID) *Project {
 }
 
 func (p *Project) String() string {
-	return fmt.Sprintf("%v:%v[%v]", p.Root, p.Name, p.Type)
+	return fmt.Sprintf("%v[%v]", p.Name, p.Type)
 }
 
 func (p *Project) GetOrCreateDependency(d *Project) *ProjectDependency {
@@ -118,45 +117,30 @@ func (p *Project) GetDirectory(relativePath string) *ProjectDirectory {
 	return result
 }
 
-func (p *Project) FullName() string {
-	return p.Root + ":" + p.Name
-}
-
 func (p *Project) SimpleName() string {
 	return p.LevelSimpleName(0)
 }
 
+func (p *Project) FullGroup() string {
+	return strings.Join(p.Groups, ":")
+}
+
 func (p *Project) LevelSimpleName(level int) string {
-	if len(p.NameParts) == 0 {
+	if len(p.Groups) == 0 {
 		return p.Name
 	}
 
-	parts := p.NameParts
+	parts := p.Groups
 
 	if level > 0 {
 		parts = utils.Take(parts, level)
 	}
 
-	parts = simplifyPrefixes(parts)
-
-	result := strings.Join(parts, ":")
-
-	if len(p.Name) <= len(result) {
-		result = p.Name
+	if level > len(p.Groups) {
+		parts = append(parts, p.Name)
 	}
 
-	return result
-}
-
-func simplifyPrefixes(parts []string) []string {
-	for len(parts) > 1 && strings.HasPrefix(parts[1], parts[0]) {
-		parts = parts[1:]
-	}
-	return parts
-}
-
-func (p *Project) IsIgnored() bool {
-	return utils.IsTrue(p.GetData("ignore"))
+	return strings.Join(parts, ":")
 }
 
 func (p *Project) IsCode() bool {

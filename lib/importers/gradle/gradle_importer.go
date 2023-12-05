@@ -67,7 +67,7 @@ func (i *Importer) Import(rootDir string) error {
 
 	bar = utils.NewProgressBar(len(queue))
 	for _, p := range queue {
-		proj := projsDB.GetOrCreate(rootProj, p)
+		proj := projsDB.GetOrCreate(p)
 
 		err = i.importDirectories(filesDB, proj)
 		if err != nil {
@@ -94,7 +94,7 @@ func (i *Importer) Import(rootDir string) error {
 	}
 
 	for _, p := range queue {
-		proj := projsDB.GetOrCreate(rootProj, p)
+		proj := projsDB.GetOrCreate(p)
 
 		for _, d := range proj.ListDependencies(model.FilterAll) {
 			if d.Source.IsCode() && strings.HasSuffix(d.Source.Name, "-api") {
@@ -134,9 +134,10 @@ func (i *Importer) importBasicInfo(rootDir string, projsDB *model.Projects, file
 		return err
 	}
 
-	proj := projsDB.GetOrCreate(rootProj, projName)
-	proj.NameParts = utils.IIf(projName == rootProj, []string{rootProj}, strings.Split(projName[1:], ":"))
-	proj.Root = rootProj
+	proj := projsDB.GetOrCreate(projName)
+	proj.Groups = utils.IIf(projName == rootProj,
+		[]string{rootProj},
+		simplifyPrefixes(append([]string{rootProj}, strings.Split(projName[1:], ":")...)))
 	proj.Type = model.CodeType
 	proj.RootDir = projDir
 	proj.ProjectFile = projFileName
@@ -286,7 +287,7 @@ func (i *Importer) loadDependencies(rootDir string, projs *model.Projects, projN
 	opt := splitOutputPerTarget(string(output))
 
 	for _, o := range opt {
-		err = parseDeps(projs, o, rootProj, projsInsideRoot)
+		err = parseDeps(projs, o, projsInsideRoot)
 		if err != nil {
 			return err
 		}
@@ -333,4 +334,11 @@ func (i *Importer) needsUpdate(projFile string, depsJson string) (bool, error) {
 	sd, err := os.Stat(depsJson)
 
 	return err != nil || sp.ModTime().After(sd.ModTime()), nil
+}
+
+func simplifyPrefixes(parts []string) []string {
+	for len(parts) > 1 && strings.HasPrefix(parts[1], parts[0]) {
+		parts = parts[1:]
+	}
+	return parts
 }
