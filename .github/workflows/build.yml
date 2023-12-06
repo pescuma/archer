@@ -16,6 +16,8 @@ jobs:
         with:
           go-version: '1.21'
           check-latest: true
+      - name: install vite
+        run: npm install vite
       - name: add build deps
         run: go get github.com/pescuma/go-build
       - name: build and test
