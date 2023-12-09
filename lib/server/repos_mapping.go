@@ -252,8 +252,8 @@ func (s *server) sortCommits(col []RepoAndCommit, field string, asc *bool) error
 		return sortBy(col, func(r RepoAndCommit) string { return s.people.GetPersonByID(r.Commit.CommitterID).Name }, *asc)
 	case "dateAuthored":
 		return sortBy(col, func(r RepoAndCommit) int64 { return r.Commit.DateAuthored.UnixMilli() }, *asc)
-	case "author.name":
-		return sortBy(col, func(r RepoAndCommit) string { return s.people.GetPersonByID(r.Commit.AuthorID).Name }, *asc)
+	case "authors.name":
+		return sortBy(col, func(r RepoAndCommit) string { return s.people.GetPersonByID(r.Commit.AuthorIDs[0]).Name }, *asc)
 	case "modifiedLines":
 		return sortBy(col, func(r RepoAndCommit) int { return r.Commit.LinesModified }, *asc)
 	case "addedLines":
@@ -276,9 +276,9 @@ func (s *server) toCommit(commit *model.RepositoryCommit, repo *model.Repository
 		"date":          commit.Date,
 		"parents":       commit.Parents,
 		"children":      commit.Children,
-		"committer":     s.toPersonReference(&commit.AuthorID),
+		"committer":     s.toPersonReference(&commit.CommitterID),
 		"dateAuthored":  commit.DateAuthored,
-		"author":        s.toPersonReference(&commit.CommitterID),
+		"authors":       lo.Map(commit.AuthorIDs, func(a model.UUID, _ int) gin.H { return s.toPersonReference(&a) }),
 		"modifiedLines": encodeMetric(commit.LinesModified),
 		"addedLines":    encodeMetric(commit.LinesAdded),
 		"deletedLines":  encodeMetric(commit.LinesDeleted),

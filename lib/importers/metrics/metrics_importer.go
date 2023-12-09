@@ -157,7 +157,7 @@ func (i *Importer) Import(filter []string, opts *Options) error {
 
 			} else {
 				_ = bar.Clear()
-				i.console.Printf("Error procesing file %v: %v\n", file.Path, err)
+				i.console.Printf("Error processing file %v: %v\n", file.Path, err)
 			}
 
 			return nil

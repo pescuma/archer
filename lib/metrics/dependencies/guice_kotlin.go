@@ -95,7 +95,7 @@ func (l *guiceTreeListener) ExitSecondaryConstructor(ctx *kotlin_parser.Secondar
 func (l *guiceTreeListener) EnterFunctionValueParameter(ctx *kotlin_parser.FunctionValueParameterContext) {
 	l.ASTListener.EnterFunctionValueParameter(ctx)
 
-	if strings.HasPrefix(l.Location.CurrentFunctionName(), "<constructor:") {
+	if strings.HasPrefix(l.Location.CurrentFunctionName(), "<constructor") {
 		cd := utils.Last(l.classes)
 		cd.constructorArguments++
 	}

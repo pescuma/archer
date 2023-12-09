@@ -408,6 +408,9 @@ func (i *BlameImporter) computeFileBlame(w *blameWork) error {
 	re := regexp.MustCompile(`^([0-9a-z]+) ([^)]*? )?(\d+)\)(.*)$`)
 	for j, line := range strings.Split(output, "\n") {
 		line = strings.TrimRight(line, "\r\n")
+		if line == "" {
+			continue
+		}
 
 		gs := re.FindStringSubmatch(line)
 
@@ -465,7 +468,7 @@ func (i *BlameImporter) computeFileBlame(w *blameWork) error {
 		fileLine.ProjectID = w.file.ProjectID
 		fileLine.RepositoryID = &w.repo.ID
 		fileLine.CommitID = &commit.ID
-		fileLine.AuthorID = &commit.AuthorID
+		fileLine.AuthorID = &commit.AuthorIDs[0]
 		fileLine.CommitterID = &commit.CommitterID
 		fileLine.Date = commit.Date
 		fileLine.Type = lt

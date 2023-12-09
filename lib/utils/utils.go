@@ -2,11 +2,15 @@ package utils
 
 import (
 	"bufio"
+	"golang.org/x/text/runes"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/aquilax/truncate"
@@ -291,4 +295,23 @@ func MapKeysHaveIntersection[K comparable, V1 any, V2 any](m1 map[K]V1, m2 map[K
 	}
 
 	return false
+}
+
+func ToLowerNoAccents(str string) string {
+	t := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+	str, _, _ = transform.String(t, str)
+	return strings.ToLower(str)
+}
+
+func IsEmail(s string) bool {
+	return strings.Contains(s, "@")
+}
+
+func ToBool(s string, def bool) bool {
+	s = strings.ToLower(s)
+	if s == "" {
+		return def
+	}
+
+	return s != "false" && s != "f" && s != "no" && s != "n"
 }

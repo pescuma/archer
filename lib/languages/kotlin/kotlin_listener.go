@@ -74,7 +74,8 @@ func (l *ASTListener) ExitClassDeclaration(ctx *kotlin_parser.ClassDeclarationCo
 }
 
 func (l *ASTListener) EnterAnonymousInitializer(ctx *kotlin_parser.AnonymousInitializerContext) {
-	l.Location.EnterFunction(fmt.Sprintf("<init:%v>", utils.Last(l.inits)), []string{}, "")
+	l.Location.EnterFunction(fmt.Sprintf("<init_%v>", utils.Last(l.inits)), []string{}, "")
+	l.inits[len(l.inits)-1]++
 
 	if l.OnEnterFunction != nil {
 		l.OnEnterFunction(ctx, l.Location.CurrentFunctionName(), l.Location.CurrentFunctionParams(), l.Location.CurrentFunctionResult())
@@ -98,7 +99,8 @@ func (l *ASTListener) EnterPrimaryConstructor(ctx *kotlin_parser.PrimaryConstruc
 		params = append(params, t)
 	}
 
-	l.Location.EnterFunction(fmt.Sprintf("<constructor:%v>", utils.Last(l.inits)), params, l.Location.CurrentClassName())
+	l.Location.EnterFunction(fmt.Sprintf("<constructor_%v>", utils.Last(l.constructors)), params, l.Location.CurrentClassName())
+	l.constructors[len(l.constructors)-1]++
 }
 
 func (l *ASTListener) ExitPrimaryConstructor(_ *kotlin_parser.PrimaryConstructorContext) {
@@ -114,7 +116,8 @@ func (l *ASTListener) EnterSecondaryConstructor(ctx *kotlin_parser.SecondaryCons
 		params = append(params, t)
 	}
 
-	l.Location.EnterFunction(fmt.Sprintf("<constructor:%v>", utils.Last(l.inits)), params, l.Location.CurrentClassName())
+	l.Location.EnterFunction(fmt.Sprintf("<constructor_%v>", utils.Last(l.constructors)), params, l.Location.CurrentClassName())
+	l.constructors[len(l.constructors)-1]++
 }
 
 func (l *ASTListener) ExitSecondaryConstructor(_ *kotlin_parser.SecondaryConstructorContext) {
@@ -145,27 +148,37 @@ func (l *ASTListener) EnterLambdaLiteral(ctx *kotlin_parser.LambdaLiteralContext
 	if ctx.LambdaParameters() != nil {
 		ps := ctx.LambdaParameters().AllLambdaParameter()
 		for _, p := range ps {
-			t := "?"
-
 			if p.VariableDeclaration() != nil {
+				t := "?"
 				vd := p.VariableDeclaration()
 				if vd.Type_() != nil {
 					t = l.GetTypeName(vd.Type_())
 				}
+				params = append(params, t)
+
+			} else if p.MultiVariableDeclaration() != nil {
+				vds := p.MultiVariableDeclaration().AllVariableDeclaration()
+				for _, vd := range vds {
+					t := "?"
+					if vd.Type_() != nil {
+						t = l.GetTypeName(vd.Type_())
+					}
+					params = append(params, t)
+				}
 
 			} else if p.Type_() != nil {
-				t = l.GetTypeName(p.Type_())
+				t := l.GetTypeName(p.Type_())
+				params = append(params, t)
 
 			} else {
 				panic(fmt.Sprintf("%v %v: %v: not implemented: %v %t",
 					l.Location.Path(), ctx.GetSourceInterval().String(), ctx.GetText(), p, p))
 			}
-
-			params = append(params, t)
 		}
 	}
 
-	l.Location.EnterFunction(fmt.Sprintf("<lambda:%v>", utils.Last(l.inits)), params, "")
+	l.Location.EnterFunction(fmt.Sprintf("<lambda_%v>", utils.Last(l.lambdas)), params, "")
+	l.lambdas[len(l.lambdas)-1]++
 }
 
 func (l *ASTListener) ExitLambdaLiteral(_ *kotlin_parser.LambdaLiteralContext) {
@@ -192,7 +205,8 @@ func (l *ASTListener) ExitClassMemberDeclaration(ctx *kotlin_parser.ClassMemberD
 }
 
 func (l *ASTListener) EnterPropertyDelegate(_ *kotlin_parser.PropertyDelegateContext) {
-	l.Location.EnterFunction(fmt.Sprintf("<by delegate:%v>", utils.Last(l.delegates)), []string{}, "")
+	l.Location.EnterFunction(fmt.Sprintf("<by delegate_%v>", utils.Last(l.delegates)), []string{}, "")
+	l.delegates[len(l.delegates)-1]++
 }
 
 func (l *ASTListener) ExitPropertyDelegate(_ *kotlin_parser.PropertyDelegateContext) {

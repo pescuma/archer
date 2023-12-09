@@ -4,8 +4,9 @@ type RepositoryCommitFile struct {
 	FileID UUID
 	Hash   string
 
-	Change     FileChangeType
-	OldFileIDs map[UUID]UUID
+	Change    FileChangeType
+	OldIDs    map[UUID]UUID
+	OldHashes map[UUID]string
 
 	LinesModified int
 	LinesAdded    int
@@ -25,8 +26,9 @@ const (
 func NewRepositoryCommitFile(fileID UUID) *RepositoryCommitFile {
 	return &RepositoryCommitFile{
 		FileID:        fileID,
-		OldFileIDs:    make(map[UUID]UUID),
 		Change:        FileChangeUnknown,
+		OldIDs:        make(map[UUID]UUID),
+		OldHashes:     make(map[UUID]string),
 		LinesModified: -1,
 		LinesAdded:    -1,
 		LinesDeleted:  -1,

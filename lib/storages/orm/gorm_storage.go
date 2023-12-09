@@ -35,18 +35,19 @@ type gormStorage struct {
 	stats           *model.MonthlyStats
 	config          *map[string]string
 
-	sqlConfigs     map[string]*sqlConfig
-	sqlProjs       map[model.UUID]*sqlProject
-	sqlProjDeps    map[model.UUID]*sqlProjectDependency
-	sqlProjDirs    map[model.UUID]*sqlProjectDirectory
-	sqlFiles       map[model.UUID]*sqlFile
-	sqlPeople      map[model.UUID]*sqlPerson
-	sqlPeopleRepos map[string]*sqlPersonRepository
-	sqlPeopleFiles map[string]*sqlPersonFile
-	area           map[model.UUID]*sqlProductArea
-	sqlRepos       map[model.UUID]*sqlRepository
-	sqlRepoCommits map[model.UUID]*sqlRepositoryCommit
-	monthLines     map[model.UUID]*sqlMonthLines
+	sqlConfigs          map[string]*sqlConfig
+	sqlProjs            map[string]*sqlProject
+	sqlProjDeps         map[string]*sqlProjectDependency
+	sqlProjDirs         map[string]*sqlProjectDirectory
+	sqlFiles            map[string]*sqlFile
+	sqlPeople           map[string]*sqlPerson
+	sqlPeopleRepos      map[string]*sqlPersonRepository
+	sqlPeopleFiles      map[string]*sqlPersonFile
+	area                map[string]*sqlProductArea
+	sqlRepos            map[string]*sqlRepository
+	sqlRepoCommits      map[string]*sqlRepositoryCommit
+	sqlRepoCommitPeople map[string]*sqlRepositoryCommitPerson
+	monthLines          map[string]*sqlMonthLines
 }
 
 func NewGormStorage(d gorm.Dialector) (storages.Storage, error) {
@@ -73,7 +74,7 @@ func NewGormStorage(d gorm.Dialector) (storages.Storage, error) {
 		&sqlProject{}, &sqlProjectDependency{}, &sqlProjectDirectory{},
 		&sqlFile{},
 		&sqlPerson{}, &sqlPersonRepository{}, &sqlPersonFile{}, &sqlProductArea{},
-		&sqlRepository{}, &sqlRepositoryCommit{}, &sqlRepositoryCommitFile{},
+		&sqlRepository{}, &sqlRepositoryCommit{}, &sqlRepositoryCommitFile{}, &sqlRepositoryCommitPerson{},
 		&sqlMonthLines{},
 		&sqlFileLine{},
 	)
@@ -82,17 +83,7 @@ func NewGormStorage(d gorm.Dialector) (storages.Storage, error) {
 	}
 
 	return &gormStorage{
-		db:             db,
-		sqlConfigs:     map[string]*sqlConfig{},
-		sqlProjs:       map[model.UUID]*sqlProject{},
-		sqlProjDeps:    map[model.UUID]*sqlProjectDependency{},
-		sqlProjDirs:    map[model.UUID]*sqlProjectDirectory{},
-		sqlFiles:       map[model.UUID]*sqlFile{},
-		sqlPeople:      map[model.UUID]*sqlPerson{},
-		sqlPeopleRepos: map[string]*sqlPersonRepository{},
-		sqlPeopleFiles: map[string]*sqlPersonFile{},
-		sqlRepos:       map[model.UUID]*sqlRepository{},
-		sqlRepoCommits: map[model.UUID]*sqlRepositoryCommit{},
+		db: db,
 	}, nil
 }
 
@@ -103,6 +94,12 @@ func (s *gormStorage) Close() error {
 	}
 
 	return db.Close()
+}
+
+func createCache[T sqlTable](rows []T) map[string]T {
+	return lo.Associate(rows, func(i T) (string, T) {
+		return i.CacheKey(), i
+	})
 }
 
 func (s *gormStorage) LoadProjects() (*model.Projects, error) {
@@ -121,9 +118,7 @@ func (s *gormStorage) LoadProjects() (*model.Projects, error) {
 		return nil, err
 	}
 
-	s.sqlProjs = lo.Associate(projs, func(i *sqlProject) (model.UUID, *sqlProject) {
-		return i.ID, i
-	})
+	s.sqlProjs = createCache(projs)
 
 	var deps []*sqlProjectDependency
 	err = s.db.Find(&deps).Error
@@ -131,9 +126,7 @@ func (s *gormStorage) LoadProjects() (*model.Projects, error) {
 		return nil, err
 	}
 
-	s.sqlProjDeps = lo.Associate(deps, func(i *sqlProjectDependency) (model.UUID, *sqlProjectDependency) {
-		return i.ID, i
-	})
+	s.sqlProjDeps = createCache(deps)
 
 	var dirs []*sqlProjectDirectory
 	err = s.db.Find(&dirs).Error
@@ -141,9 +134,7 @@ func (s *gormStorage) LoadProjects() (*model.Projects, error) {
 		return nil, err
 	}
 
-	s.sqlProjDirs = lo.Associate(dirs, func(i *sqlProjectDirectory) (model.UUID, *sqlProjectDirectory) {
-		return i.ID, i
-	})
+	s.sqlProjDirs = createCache(dirs)
 
 	for _, sp := range projs {
 		p := result.GetOrCreateEx(sp.ProjectName, &sp.ID)
@@ -209,7 +200,7 @@ func (s *gormStorage) writeProjects(projs []*model.Project) error {
 	var sqlProjs []*sqlProject
 	for _, p := range projs {
 		sp := toSqlProject(p)
-		if prepareChange(&s.sqlProjs, sp.ID, sp) {
+		if prepareChange(&s.sqlProjs, sp) {
 			sqlProjs = append(sqlProjs, sp)
 		}
 	}
@@ -218,7 +209,7 @@ func (s *gormStorage) writeProjects(projs []*model.Project) error {
 	for _, p := range projs {
 		for _, d := range p.Dependencies {
 			sd := toSqlProjectDependency(d)
-			if prepareChange(&s.sqlProjDeps, sd.ID, sd) {
+			if prepareChange(&s.sqlProjDeps, sd) {
 				sqlDeps = append(sqlDeps, sd)
 			}
 		}
@@ -228,7 +219,7 @@ func (s *gormStorage) writeProjects(projs []*model.Project) error {
 	for _, p := range projs {
 		for _, d := range p.Dirs {
 			sd := toSqlProjectDirectory(d, p)
-			if prepareChange(&s.sqlProjDirs, sd.ID, sd) {
+			if prepareChange(&s.sqlProjDirs, sd) {
 				sqlDirs = append(sqlDirs, sd)
 			}
 		}
@@ -245,21 +236,21 @@ func (s *gormStorage) writeProjects(projs []*model.Project) error {
 		return err
 	}
 
-	addList(&s.sqlProjs, sqlProjs, func(s *sqlProject) model.UUID { return s.ID })
+	addList(&s.sqlProjs, sqlProjs)
 
 	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlDeps).Error
 	if err != nil {
 		return err
 	}
 
-	addList(&s.sqlProjDeps, sqlDeps, func(s *sqlProjectDependency) model.UUID { return s.ID })
+	addList(&s.sqlProjDeps, sqlDeps)
 
 	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlDirs).Error
 	if err != nil {
 		return err
 	}
 
-	addList(&s.sqlProjDirs, sqlDirs, func(s *sqlProjectDirectory) model.UUID { return s.ID })
+	addList(&s.sqlProjDirs, sqlDirs)
 
 	// TODO delete
 
@@ -282,9 +273,7 @@ func (s *gormStorage) LoadFiles() (*model.Files, error) {
 		return nil, err
 	}
 
-	s.sqlFiles = lo.Associate(files, func(i *sqlFile) (model.UUID, *sqlFile) {
-		return i.ID, i
-	})
+	s.sqlFiles = createCache(files)
 
 	for _, sf := range files {
 		f := result.GetOrCreateFileEx(sf.Name, &sf.ID)
@@ -320,7 +309,7 @@ func (s *gormStorage) writeFiles(all []*model.File) error {
 	var sqlFiles []*sqlFile
 	for _, f := range all {
 		sf := toSqlFile(f)
-		if prepareChange(&s.sqlFiles, sf.ID, sf) {
+		if prepareChange(&s.sqlFiles, sf) {
 			sqlFiles = append(sqlFiles, sf)
 		}
 	}
@@ -336,7 +325,7 @@ func (s *gormStorage) writeFiles(all []*model.File) error {
 		return err
 	}
 
-	addList(&s.sqlFiles, sqlFiles, func(s *sqlFile) model.UUID { return s.ID })
+	addList(&s.sqlFiles, sqlFiles)
 
 	// TODO delete
 
@@ -445,9 +434,7 @@ func (s *gormStorage) LoadPeople() (*model.People, error) {
 		return nil, err
 	}
 
-	s.sqlPeople = lo.Associate(people, func(i *sqlPerson) (model.UUID, *sqlPerson) {
-		return i.ID, i
-	})
+	s.sqlPeople = createCache(people)
 
 	var areas []*sqlProductArea
 	err = s.db.Find(&areas).Error
@@ -455,12 +442,11 @@ func (s *gormStorage) LoadPeople() (*model.People, error) {
 		return nil, err
 	}
 
-	s.area = lo.Associate(areas, func(i *sqlProductArea) (model.UUID, *sqlProductArea) {
-		return i.ID, i
-	})
+	s.area = createCache(areas)
 
 	for _, sp := range people {
-		p := result.GetOrCreatePersonEx(sp.Name, &sp.ID)
+		p := result.GetOrCreatePerson(&sp.ID)
+		p.Name = sp.Name
 		for _, name := range sp.Names {
 			p.AddName(name)
 		}
@@ -494,7 +480,7 @@ func (s *gormStorage) WritePeople() error {
 	people := s.people.ListPeople()
 	for _, p := range people {
 		sp := toSqlPerson(p)
-		if prepareChange(&s.sqlPeople, sp.ID, sp) {
+		if prepareChange(&s.sqlPeople, sp) {
 			sqlPeople = append(sqlPeople, sp)
 		}
 	}
@@ -503,7 +489,7 @@ func (s *gormStorage) WritePeople() error {
 	area := s.people.ListProductAreas()
 	for _, p := range area {
 		sp := toSqlProductArea(p)
-		if prepareChange(&s.area, sp.ID, sp) {
+		if prepareChange(&s.area, sp) {
 			sqlAreas = append(sqlAreas, sp)
 		}
 	}
@@ -519,22 +505,18 @@ func (s *gormStorage) WritePeople() error {
 		return err
 	}
 
-	addList(&s.sqlPeople, sqlPeople, func(s *sqlPerson) model.UUID { return s.ID })
+	addList(&s.sqlPeople, sqlPeople)
 
 	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlAreas).Error
 	if err != nil {
 		return err
 	}
 
-	addList(&s.area, sqlAreas, func(s *sqlProductArea) model.UUID { return s.ID })
+	addList(&s.area, sqlAreas)
 
 	// TODO delete
 
 	return nil
-}
-
-func compositeKey(ids ...model.UUID) string {
-	return strings.Join(lo.Map(ids, func(i model.UUID, _ int) string { return string(i) }), "\n")
 }
 
 func (s *gormStorage) LoadPeopleRelations() (*model.PeopleRelations, error) {
@@ -553,9 +535,7 @@ func (s *gormStorage) LoadPeopleRelations() (*model.PeopleRelations, error) {
 		return nil, err
 	}
 
-	s.sqlPeopleRepos = lo.Associate(rs, func(i *sqlPersonRepository) (string, *sqlPersonRepository) {
-		return compositeKey(i.PersonID, i.RepositoryID), i
-	})
+	s.sqlPeopleRepos = createCache(rs)
 
 	var fs []*sqlPersonFile
 	err = s.db.Find(&fs).Error
@@ -563,9 +543,7 @@ func (s *gormStorage) LoadPeopleRelations() (*model.PeopleRelations, error) {
 		return nil, err
 	}
 
-	s.sqlPeopleFiles = lo.Associate(fs, func(i *sqlPersonFile) (string, *sqlPersonFile) {
-		return compositeKey(i.PersonID, i.FileID), i
-	})
+	s.sqlPeopleFiles = createCache(fs)
 
 	for _, r := range rs {
 		pr := result.GetOrCreatePersonRepo(r.PersonID, r.RepositoryID)
@@ -590,7 +568,7 @@ func (s *gormStorage) WritePeopleRelations() error {
 	var rs []*sqlPersonRepository
 	for _, r := range s.peopleRelations.ListRepositories() {
 		pr := toSqlPersonRepository(r)
-		if prepareChange(&s.sqlPeopleRepos, compositeKey(r.PersonID, r.RepositoryID), pr) {
+		if prepareChange(&s.sqlPeopleRepos, pr) {
 			rs = append(rs, pr)
 		}
 	}
@@ -598,7 +576,7 @@ func (s *gormStorage) WritePeopleRelations() error {
 	var fs []*sqlPersonFile
 	for _, f := range s.peopleRelations.ListFiles() {
 		pf := toSqlPersonFile(f)
-		if prepareChange(&s.sqlPeopleFiles, compositeKey(f.PersonID, f.FileID), pf) {
+		if prepareChange(&s.sqlPeopleFiles, pf) {
 			fs = append(fs, pf)
 		}
 	}
@@ -621,8 +599,8 @@ func (s *gormStorage) WritePeopleRelations() error {
 
 	// TODO delete
 
-	addList(&s.sqlPeopleRepos, rs, func(pr *sqlPersonRepository) string { return compositeKey(pr.PersonID, pr.RepositoryID) })
-	addList(&s.sqlPeopleFiles, fs, func(pr *sqlPersonFile) string { return compositeKey(pr.PersonID, pr.FileID) })
+	addList(&s.sqlPeopleRepos, rs)
+	addList(&s.sqlPeopleFiles, fs)
 
 	return nil
 }
@@ -643,14 +621,7 @@ func (s *gormStorage) LoadRepositories() (*model.Repositories, error) {
 		return nil, err
 	}
 
-	addMap(&s.sqlRepos, lo.Associate(repos, func(i *sqlRepository) (model.UUID, *sqlRepository) {
-		return i.ID, i
-	}))
-
-	if len(repos) == 0 {
-		s.repos = result
-		return result, nil
-	}
+	s.sqlRepos = createCache(repos)
 
 	var commits []*sqlRepositoryCommit
 	err = s.db.Find(&commits).Error
@@ -658,9 +629,15 @@ func (s *gormStorage) LoadRepositories() (*model.Repositories, error) {
 		return nil, err
 	}
 
-	addMap(&s.sqlRepoCommits, lo.Associate(commits, func(i *sqlRepositoryCommit) (model.UUID, *sqlRepositoryCommit) {
-		return i.ID, i
-	}))
+	s.sqlRepoCommits = createCache(commits)
+
+	var cps []*sqlRepositoryCommitPerson
+	err = s.db.Find(&cps).Error
+	if err != nil {
+		return nil, err
+	}
+
+	s.sqlRepoCommitPeople = createCache(cps)
 
 	for _, sr := range repos {
 		r := result.GetOrCreateEx(sr.RootDir, &sr.ID)
@@ -682,9 +659,7 @@ func (s *gormStorage) LoadRepositories() (*model.Repositories, error) {
 		c.Parents = sc.Parents
 		c.Children = sc.Children
 		c.Date = sc.Date
-		c.CommitterID = sc.CommitterID
 		c.DateAuthored = sc.DateAuthored
-		c.AuthorID = sc.AuthorID
 		c.Ignore = sc.Ignore
 		c.FilesModified = decodeMetric(sc.FilesModified)
 		c.FilesCreated = decodeMetric(sc.FilesCreated)
@@ -695,6 +670,22 @@ func (s *gormStorage) LoadRepositories() (*model.Repositories, error) {
 		c.Blame = toModelBlame(sc.Blame)
 
 		commitsById[c.ID] = c
+	}
+
+	sort.Slice(cps, func(i, j int) bool {
+		return cps[i].Order < cps[j].Order
+	})
+	for _, cp := range cps {
+		commit := commitsById[cp.CommitID]
+
+		switch cp.Role {
+		case CommitRoleAuthor:
+			commit.AuthorIDs = append(commit.AuthorIDs, cp.PersonID)
+		case CommitRoleCommitter:
+			commit.CommitterID = cp.PersonID
+		default:
+			panic(fmt.Sprintf("invalid role: %v", cp.Role))
+		}
 	}
 
 	s.repos = result
@@ -716,17 +707,30 @@ func (s *gormStorage) writeRepositories(repos []*model.Repository) error {
 	var sqlRepos []*sqlRepository
 	for _, repo := range repos {
 		sr := toSqlRepository(repo)
-		if prepareChange(&s.sqlRepos, sr.ID, sr) {
+		if prepareChange(&s.sqlRepos, sr) {
 			sqlRepos = append(sqlRepos, sr)
 		}
 	}
 
 	var sqlCommits []*sqlRepositoryCommit
+	var sqlCommitPeople []*sqlRepositoryCommitPerson
 	for _, repo := range repos {
 		for _, c := range repo.ListCommits() {
 			sc := toSqlRepositoryCommit(repo, c)
-			if prepareChange(&s.sqlRepoCommits, sc.ID, sc) {
+			if prepareChange(&s.sqlRepoCommits, sc) {
 				sqlCommits = append(sqlCommits, sc)
+			}
+
+			cp := toSqlRepositoryCommitPerson(c, c.CommitterID, CommitRoleCommitter, 1)
+			if prepareChange(&s.sqlRepoCommitPeople, cp) {
+				sqlCommitPeople = append(sqlCommitPeople, cp)
+			}
+
+			for i, a := range c.AuthorIDs {
+				cp = toSqlRepositoryCommitPerson(c, a, CommitRoleAuthor, i+1)
+				if prepareChange(&s.sqlRepoCommitPeople, cp) {
+					sqlCommitPeople = append(sqlCommitPeople, cp)
+				}
 			}
 		}
 	}
@@ -742,14 +746,21 @@ func (s *gormStorage) writeRepositories(repos []*model.Repository) error {
 		return err
 	}
 
-	addList(&s.sqlRepos, sqlRepos, func(s *sqlRepository) model.UUID { return s.ID })
+	addList(&s.sqlRepos, sqlRepos)
 
 	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommits).Error
 	if err != nil {
 		return err
 	}
 
-	addList(&s.sqlRepoCommits, sqlCommits, func(s *sqlRepositoryCommit) model.UUID { return s.ID })
+	addList(&s.sqlRepoCommits, sqlCommits)
+
+	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommitPeople).Error
+	if err != nil {
+		return err
+	}
+
+	addList(&s.sqlRepoCommitPeople, sqlCommitPeople)
 
 	// TODO delete
 
@@ -761,10 +772,23 @@ func (s *gormStorage) WriteCommit(repo *model.Repository, commit *model.Reposito
 	defer s.mutex.Unlock()
 
 	var sqlCommits []*sqlRepositoryCommit
+	var sqlCommitPeople []*sqlRepositoryCommitPerson
 
 	sc := toSqlRepositoryCommit(repo, commit)
-	if prepareChange(&s.sqlRepoCommits, sc.ID, sc) {
+	if prepareChange(&s.sqlRepoCommits, sc) {
 		sqlCommits = append(sqlCommits, sc)
+	}
+
+	cp := toSqlRepositoryCommitPerson(commit, commit.CommitterID, CommitRoleCommitter, 1)
+	if prepareChange(&s.sqlRepoCommitPeople, cp) {
+		sqlCommitPeople = append(sqlCommitPeople, cp)
+	}
+
+	for i, a := range commit.AuthorIDs {
+		cp = toSqlRepositoryCommitPerson(commit, a, CommitRoleAuthor, i+1)
+		if prepareChange(&s.sqlRepoCommitPeople, cp) {
+			sqlCommitPeople = append(sqlCommitPeople, cp)
+		}
 	}
 
 	now := time.Now().Local()
@@ -778,7 +802,14 @@ func (s *gormStorage) WriteCommit(repo *model.Repository, commit *model.Reposito
 		return err
 	}
 
-	addList(&s.sqlRepoCommits, sqlCommits, func(s *sqlRepositoryCommit) model.UUID { return s.ID })
+	addList(&s.sqlRepoCommits, sqlCommits)
+
+	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommitPeople).Error
+	if err != nil {
+		return err
+	}
+
+	addList(&s.sqlRepoCommitPeople, sqlCommitPeople)
 
 	// TODO delete
 
@@ -799,8 +830,9 @@ func (s *gormStorage) LoadRepositoryCommitFiles(repo *model.Repository, commit *
 	for _, sf := range commitFiles {
 		file := result.GetOrCreate(sf.FileID)
 		file.Hash = sf.Hash
-		file.OldFileIDs = decodeOldFileIDs(sf.OldFileIDs)
 		file.Change = sf.Change
+		file.OldIDs = decodeOldFileIDs(sf.OldIDs)
+		file.OldHashes = decodeOldFileHashes(sf.OldHashes)
 		file.LinesModified = decodeMetric(sf.LinesModified)
 		file.LinesAdded = decodeMetric(sf.LinesAdded)
 		file.LinesDeleted = decodeMetric(sf.LinesDeleted)
@@ -891,9 +923,7 @@ func (s *gormStorage) LoadMonthlyStats() (*model.MonthlyStats, error) {
 		return nil, err
 	}
 
-	s.monthLines = lo.Associate(sqlLines, func(i *sqlMonthLines) (model.UUID, *sqlMonthLines) {
-		return i.ID, i
-	})
+	s.monthLines = createCache(sqlLines)
 
 	for _, sl := range sqlLines {
 		l := result.GetOrCreateLines(sl.Month, sl.RepositoryID, sl.AuthorID, sl.CommitterID, sl.FileID, sl.ProjectID)
@@ -913,7 +943,7 @@ func (s *gormStorage) WriteMonthlyStats() error {
 	var sqlLines []*sqlMonthLines
 	for _, f := range s.stats.ListLines() {
 		sf := toSqlMonthLines(f)
-		if prepareChange(&s.monthLines, sf.ID, sf) {
+		if prepareChange(&s.monthLines, sf) {
 			sqlLines = append(sqlLines, sf)
 		}
 	}
@@ -929,7 +959,7 @@ func (s *gormStorage) WriteMonthlyStats() error {
 		return err
 	}
 
-	addList(&s.monthLines, sqlLines, func(s *sqlMonthLines) model.UUID { return s.ID })
+	addList(&s.monthLines, sqlLines)
 
 	// TODO delete
 
@@ -952,9 +982,7 @@ func (s *gormStorage) LoadConfig() (*map[string]string, error) {
 		return nil, err
 	}
 
-	s.sqlConfigs = lo.Associate(sqlConfigs, func(i *sqlConfig) (string, *sqlConfig) {
-		return i.Key, i
-	})
+	s.sqlConfigs = createCache(sqlConfigs)
 
 	for _, sc := range sqlConfigs {
 		result[sc.Key] = sc.Value
@@ -971,7 +999,7 @@ func (s *gormStorage) WriteConfig() error {
 	var sqlConfigs []*sqlConfig
 	for k, v := range *s.config {
 		sc := toSqlConfig(k, v)
-		if prepareChange(&s.sqlConfigs, sc.Key, sc) {
+		if prepareChange(&s.sqlConfigs, sc) {
 			sqlConfigs = append(sqlConfigs, sc)
 		}
 	}
@@ -987,7 +1015,7 @@ func (s *gormStorage) WriteConfig() error {
 		return err
 	}
 
-	addList(&s.sqlConfigs, sqlConfigs, func(s *sqlConfig) string { return s.Key })
+	addList(&s.sqlConfigs, sqlConfigs)
 
 	// TODO delete
 
@@ -1311,9 +1339,7 @@ func toSqlRepositoryCommit(r *model.Repository, c *model.RepositoryCommit) *sqlR
 		Parents:       c.Parents,
 		Children:      c.Children,
 		Date:          c.Date,
-		CommitterID:   c.CommitterID,
 		DateAuthored:  c.DateAuthored,
-		AuthorID:      c.AuthorID,
 		Ignore:        c.Ignore,
 		FilesModified: encodeMetric(c.FilesModified),
 		FilesCreated:  encodeMetric(c.FilesCreated),
@@ -1325,13 +1351,23 @@ func toSqlRepositoryCommit(r *model.Repository, c *model.RepositoryCommit) *sqlR
 	}
 }
 
+func toSqlRepositoryCommitPerson(commit *model.RepositoryCommit, personID model.UUID, role CommitRole, order int) *sqlRepositoryCommitPerson {
+	return &sqlRepositoryCommitPerson{
+		CommitID: commit.ID,
+		PersonID: personID,
+		Role:     role,
+		Order:    order,
+	}
+}
+
 func toSqlRepositoryCommitFile(c model.UUID, f *model.RepositoryCommitFile) *sqlRepositoryCommitFile {
 	return &sqlRepositoryCommitFile{
 		CommitID:      c,
 		FileID:        f.FileID,
 		Hash:          f.Hash,
 		Change:        f.Change,
-		OldFileIDs:    encodeOldFileIDs(f.OldFileIDs),
+		OldIDs:        encodeOldFileIDs(f.OldIDs),
+		OldHashes:     encodeOldFileHashes(f.OldHashes),
 		LinesModified: encodeMetric(f.LinesModified),
 		LinesAdded:    encodeMetric(f.LinesAdded),
 		LinesDeleted:  encodeMetric(f.LinesDeleted),
@@ -1366,19 +1402,47 @@ func decodeOldFileIDs(v string) map[model.UUID]model.UUID {
 	return result
 }
 
+func encodeOldFileHashes(v map[model.UUID]string) string {
+	var sb strings.Builder
+
+	for k, v := range v {
+		if sb.Len() > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(string(k))
+		sb.WriteString(":")
+		sb.WriteString(v)
+	}
+
+	return sb.String()
+}
+func decodeOldFileHashes(v string) map[model.UUID]string {
+	result := make(map[model.UUID]string)
+	if v == "" {
+		return result
+	}
+
+	for _, line := range strings.Split(v, "\n") {
+		cols := strings.Split(line, ":")
+		result[model.UUID(cols[0])] = cols[1]
+	}
+
+	return result
+}
+
 func addMap[K comparable, V any](target *map[K]V, toAdd map[K]V) {
 	for k, v := range toAdd {
 		(*target)[k] = v
 	}
 }
-func addList[K comparable, V any](target *map[K]V, toAdd []V, key func(V) K) {
+func addList[T sqlTable](target *map[string]T, toAdd []T) {
 	for _, v := range toAdd {
-		(*target)[key(v)] = v
+		(*target)[v.CacheKey()] = v
 	}
 }
 
-func prepareChange[K comparable, V any](byID *map[K]V, id K, n V) bool {
-	o, ok := (*byID)[id]
+func prepareChange[T sqlTable](byID *map[string]T, n T) bool {
+	o, ok := (*byID)[n.CacheKey()]
 	if ok {
 		ro := reflect.Indirect(reflect.ValueOf(o))
 		rn := reflect.Indirect(reflect.ValueOf(n))
@@ -1390,7 +1454,7 @@ func prepareChange[K comparable, V any](byID *map[K]V, id K, n V) bool {
 	if reflect.DeepEqual(n, o) {
 		return false
 	} else {
-		(*byID)[id] = n
+		(*byID)[n.CacheKey()] = n
 		return true
 	}
 }

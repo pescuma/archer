@@ -14,7 +14,7 @@ type RepositoryCommit struct {
 	Date         time.Time
 	CommitterID  UUID
 	DateAuthored time.Time
-	AuthorID     UUID
+	AuthorIDs    []UUID
 
 	FilesModified int
 	FilesCreated  int

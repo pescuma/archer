@@ -1,10 +1,10 @@
 <script setup>
+import _ from 'lodash'
+import moment from 'moment/moment'
 import { ref, watch } from 'vue'
 import { sortParams } from '@/components/utils'
 import { filters } from '@/utils/filters'
 import DataGrid from '@/components/DataGrid.vue'
-import _ from 'lodash'
-import moment from 'moment/moment'
 
 const props = defineProps({
   size: {
@@ -123,6 +123,7 @@ async function loadChart() {
   let min = moment(months.min().value(), format)
   let max = moment(months.max().value(), format)
   let now = moment().format(format)
+  let limitLastSeen = moment().subtract(2, 'months').format(format)
   for (let i = min; i <= max; i = i.add(1, 'month')) {
     let month = i.format(format)
 
@@ -132,7 +133,9 @@ async function loadChart() {
 
     prev += fs.firstSeen || 0
     sum.push(prev)
-    prev -= fs.lastSeen || 0
+    if (month <= limitLastSeen) {
+      prev -= fs.lastSeen || 0
+    }
 
     add.push(fs.firstSeen || 0)
     del.push(month === now ? 0 : -(fs.lastSeen || 0))

@@ -1,7 +1,8 @@
 package git
 
 import (
-	"sort"
+	"fmt"
+	"github.com/pescuma/archer/lib/utils"
 	"strings"
 
 	"github.com/hashicorp/go-set/v2"
@@ -11,12 +12,17 @@ import (
 )
 
 type nameEmailGrouper struct {
-	byName  map[string]*namesEmails
-	byEmail map[string]*namesEmails
+	peopleDB      *model.People
+	auto          bool
+	ignoredEmails map[string]bool
+
+	byOne   map[string]*namesEmails
+	byBoth  map[string]*namesEmails
+	removed *set.Set[*namesEmails]
 }
 
-func newNameEmailGrouperFrom(peopleDB *model.People) *nameEmailGrouper {
-	grouper := newNameEmailGrouper()
+func newNameEmailGrouperFrom(configDB *map[string]string, peopleDB *model.People) *nameEmailGrouper {
+	grouper := newNameEmailGrouper(configDB, peopleDB)
 
 	for _, p := range peopleDB.ListPeople() {
 		emails := p.ListEmails()
@@ -24,116 +30,246 @@ func newNameEmailGrouperFrom(peopleDB *model.People) *nameEmailGrouper {
 			continue
 		}
 
-		for _, email := range emails {
-			grouper.add(p.Name, email, p)
-		}
-		for _, name := range p.ListNames() {
-			grouper.add(name, emails[0], p)
-		}
-	}
+		r := newNamesEmails()
+		r.Person = p
+		r.people.Insert(p)
 
-	grouper.prepare()
+		r.Name = p.Name
+		for _, n := range p.ListNames() {
+			r.Names.Insert(n)
+		}
+		for _, e := range p.ListEmails() {
+			r.Emails.Insert(e)
+		}
+
+		grouper.store(r)
+	}
 
 	return grouper
 }
 
-func newNameEmailGrouper() *nameEmailGrouper {
-	return &nameEmailGrouper{
-		byName:  map[string]*namesEmails{},
-		byEmail: map[string]*namesEmails{},
+func newNameEmailGrouper(configDB *map[string]string, peopleDB *model.People) *nameEmailGrouper {
+	result := &nameEmailGrouper{
+		peopleDB:      peopleDB,
+		ignoredEmails: map[string]bool{},
+		byOne:         map[string]*namesEmails{},
+		byBoth:        map[string]*namesEmails{},
+		removed:       set.New[*namesEmails](10),
+	}
+
+	ignoreEmails := strings.Split((*configDB)["people:grouper:ignore-emails"], ",")
+	for _, e := range ignoreEmails {
+		e = strings.TrimSpace(e)
+		if e != "" {
+			result.addIgnoredEmail(e)
+		}
+	}
+
+	result.auto = utils.ToBool((*configDB)["people:grouper:auto"], true)
+
+	return result
+}
+
+func (g *nameEmailGrouper) store(r *namesEmails) {
+	for _, n := range r.Names.Slice() {
+		g.byOne[g.keyOne(n)] = r
+	}
+	for _, e := range r.Emails.Slice() {
+		e = g.keyOne(e)
+		if !g.ignoredEmails[e] {
+			g.byOne[e] = r
+		}
+	}
+	for _, n := range r.Names.Slice() {
+		for _, e := range r.Emails.Slice() {
+			g.byBoth[g.keyBoth(n, e)] = r
+		}
 	}
 }
 
-func (g *nameEmailGrouper) add(name string, email string, person *model.Person) {
-	if name == "" {
-		name = email
-	}
+func (g *nameEmailGrouper) addIgnoredEmail(email string) {
+	g.ignoredEmails[g.keyOne(email)] = true
+}
+
+func (g *nameEmailGrouper) add(name string, email string) {
+	name = strings.TrimSpace(name)
+	email = strings.TrimSpace(email)
 
 	var r *namesEmails
-	n := g.byName[name]
-	e := g.byEmail[email]
 
-	if n == nil && e == nil {
-		r = &namesEmails{
-			Names:  set.New[string](10),
-			Emails: set.New[string](10),
-			people: set.New[*model.Person](10),
-		}
+	isGithubEmail := strings.HasSuffix(email, "@users.noreply.github.com")
 
-	} else if n == nil && e != nil {
-		r = e
-
-	} else if n != nil && e == nil {
-		r = n
+	if !g.auto && !isGithubEmail && name != "" {
+		r = g.byBoth[g.keyBoth(name, email)]
 
 	} else {
-		r = n
+		var n, e *namesEmails
 
-		if n != e {
-			n.people.InsertSet(e.people)
-			n.Names.InsertSet(e.Names)
-			n.Emails.InsertSet(e.Emails)
+		if name != "" {
+			n = g.byOne[g.keyOne(name)]
+		}
+		if !g.ignoredEmails[g.keyOne(email)] {
+			e = g.byOne[g.keyOne(email)]
+		}
+
+		if n == nil && e == nil {
+			r = g.byBoth[g.keyBoth(name, email)]
+
+		} else if n == nil && e != nil {
+			r = e
+
+		} else if n != nil && e == nil {
+			r = n
+
+		} else {
+			r = n
+
+			if n != e {
+				n.people.InsertSet(e.people)
+				n.Names.InsertSet(e.Names)
+				n.Emails.InsertSet(e.Emails)
+				g.removed.Insert(e)
+			}
 		}
 	}
 
-	r.Names.Insert(name)
-	g.byName[name] = r
-
-	r.Emails.Insert(email)
-	g.byEmail[email] = r
-
-	if person != nil {
-		r.people.Insert(person)
+	if r == nil {
+		r = newNamesEmails()
 	}
+
+	if name != "" {
+		r.Names.Insert(name)
+	}
+	r.Emails.Insert(email)
+
+	g.store(r)
 }
 
-func (g *nameEmailGrouper) prepare() {
+func (g *nameEmailGrouper) copyToPeopleDB() {
 	nes := g.list()
 
 	for _, ne := range nes {
-		names := ne.Names.Slice()
-		sort.Slice(names, func(i, j int) bool {
-			return names[i] < names[j]
-		})
-		ne.Name = lo.MaxBy(names, func(a string, b string) bool {
-			ignoreA := strings.Contains(a, "@")
-			ignoreB := strings.Contains(b, "@")
-			if ignoreA != ignoreB {
-				return ignoreB
-			}
+		g.removeNamesThatAreEmails(ne, ne.Names.Slice())
+		ne.Name = g.findBestName(ne.Names.Slice())
+		if ne.Person == nil {
+			ne.Person = g.findBestPerson(ne.people.Slice(), ne.Name)
+		}
 
-			ignoreA = strings.Contains(a, "-")
-			ignoreB = strings.Contains(b, "-")
-			if ignoreA != ignoreB {
-				return ignoreB
-			}
-
-			return len(a) > len(b)
-		})
+		ne.Person.Name = ne.Name
+		for _, n := range ne.Names.Slice() {
+			ne.Person.AddName(n)
+		}
+		for _, e := range ne.Emails.Slice() {
+			ne.Person.AddEmail(e)
+		}
 	}
 }
 
-func (g *nameEmailGrouper) getName(email string, name string) string {
-	if p, ok := g.byEmail[email]; ok {
-		return p.Name
+func (g *nameEmailGrouper) removeNamesThatAreEmails(ne *namesEmails, names []string) {
+	es := lo.Filter(names, func(i string, index int) bool { return utils.IsEmail(i) })
+	if len(names) > len(es) {
+		for _, name := range es {
+			ne.Names.Remove(name)
+		}
+	}
+}
+
+func (g *nameEmailGrouper) findBestName(names []string) string {
+	return lo.MaxBy(names, func(a string, b string) bool {
+		ignoreA := utils.IsEmail(a)
+		ignoreB := utils.IsEmail(b)
+		if ignoreA != ignoreB {
+			return ignoreB
+		}
+
+		ignoreA = strings.Contains(a, "-")
+		ignoreB = strings.Contains(b, "-")
+		if ignoreA != ignoreB {
+			return ignoreB
+		}
+
+		return len(a) > len(b)
+	})
+}
+
+func (g *nameEmailGrouper) findBestPerson(people []*model.Person, name string) *model.Person {
+	if len(people) == 0 {
+		return g.peopleDB.GetOrCreatePerson(nil)
+	}
+
+	sameName := lo.Filter(people, func(p *model.Person, _ int) bool { return p.Name == name })
+	if len(sameName) > 0 {
+		return sameName[0]
 	} else {
-		return name
+		return people[0]
+	}
+}
+
+func (g *nameEmailGrouper) getPerson(name string, email string) *model.Person {
+	name = strings.TrimSpace(name)
+	email = strings.TrimSpace(email)
+
+	if !g.auto {
+		key := g.keyBoth(name, email)
+
+		r := g.byBoth[key]
+		if r == nil {
+			panic(fmt.Sprintf("Could not find person for %s <%s>", name, email))
+		}
+
+		return r.Person
+
+	} else if !g.ignoredEmails[g.keyOne(email)] {
+		e := g.byOne[g.keyOne(email)]
+		if e == nil {
+			panic(fmt.Sprintf("Could not find person for %s <%s>", name, email))
+		}
+
+		return e.Person
+	} else {
+		n := g.byOne[g.keyOne(name)]
+		if n == nil {
+			panic(fmt.Sprintf("Could not find person for %s <%s>", name, email))
+		}
+
+		return n.Person
 	}
 }
 
 func (g *nameEmailGrouper) list() []*namesEmails {
 	result := map[*namesEmails]bool{}
 
-	for _, v := range g.byName {
+	for _, v := range g.byOne {
+		result[v] = true
+	}
+	for _, v := range g.byBoth {
 		result[v] = true
 	}
 
 	return lo.Keys(result)
 }
 
+func (g *nameEmailGrouper) keyOne(n string) string {
+	return strings.TrimSpace(utils.ToLowerNoAccents(n))
+}
+
+func (g *nameEmailGrouper) keyBoth(n string, e string) string {
+	return g.keyOne(n) + "\n" + g.keyOne(e)
+}
+
 type namesEmails struct {
+	Person *model.Person
 	Name   string
+
 	Names  *set.Set[string]
 	Emails *set.Set[string]
 	people *set.Set[*model.Person]
+}
+
+func newNamesEmails() *namesEmails {
+	return &namesEmails{
+		Names:  set.New[string](10),
+		Emails: set.New[string](10),
+		people: set.New[*model.Person](10),
+	}
 }

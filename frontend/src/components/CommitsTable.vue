@@ -60,14 +60,16 @@ const columns = [
   },
   {
     name: 'Author',
-    field: 'author.name',
+    field: 'authors.name',
     type: 'text',
+    format: (v) => _.chain(v.authors).map(a => a.name).join(", ").value(),
+    tooltip: (v) => _.chain(v.authors).map(a => a.name).join("\n").value(),
     actions: [
       {
         name: 'Filter',
         icon: 'filter',
         onClick: function (v) {
-          filters.data.person = v.author.name
+          filters.data.person = v.authors[0].name
         },
       },
     ],
@@ -78,14 +80,14 @@ const columns = [
     type: 'text',
     show: props.size === 'lg',
     format: (v) => {
-      if (v.committer.id === v.author.id) return ''
+      if (v.authors.length === 1 && v.committer.id === v.authors[0].id) return ''
       return v.committer.name
     },
     actions: [
       {
         name: 'Filter',
         icon: 'filter',
-        show: (v) => v.committer.id !== v.author.id,
+        show: (v) => !(v.authors.length === 1 && v.committer.id === v.authors[0].id),
         onClick: function (v) {
           filters.data.person = v.committer.name
         },

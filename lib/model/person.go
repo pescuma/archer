@@ -20,7 +20,7 @@ type Person struct {
 	LastSeen  time.Time
 }
 
-func NewPerson(name string, id *UUID) *Person {
+func NewPerson(id *UUID) *Person {
 	var uuid UUID
 	if id == nil {
 		uuid = NewUUID("i")
@@ -29,7 +29,6 @@ func NewPerson(name string, id *UUID) *Person {
 	}
 
 	return &Person{
-		Name:    name,
 		ID:      uuid,
 		names:   map[string]bool{},
 		emails:  map[string]bool{},

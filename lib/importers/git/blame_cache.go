@@ -1,0 +1,158 @@
+package git
+
+import (
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/filemode"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/pescuma/archer/lib/caches"
+	"github.com/pescuma/archer/lib/model"
+	"github.com/pescuma/archer/lib/storages"
+	"path/filepath"
+	"strings"
+)
+
+type BlameCache interface {
+	GetFile(name string, hash plumbing.Hash) (*object.File, error)
+	GetCommit(hash plumbing.Hash) (*BlameCommitCache, error)
+	GetFileHash(commit *object.Commit, path string) (plumbing.Hash, error)
+}
+
+type BlameCommitCache struct {
+	Hash    plumbing.Hash
+	Parents map[plumbing.Hash]*BlameParentCache
+	Changes map[string]*BlameFileCache
+}
+
+func (c *BlameCommitCache) Touched(file string) bool {
+	_, ok := c.Changes[file]
+	return ok
+}
+
+type BlameFileCache struct {
+	Hash    plumbing.Hash
+	Created bool
+}
+
+type BlameParentCache struct {
+	Commit     *object.Commit
+	Renames    map[string]string
+	FileHashes map[string]plumbing.Hash
+}
+
+type blameCacheImpl struct {
+	storage storages.Storage
+	filesDB *model.Files
+	repo    *model.Repository
+	gitRepo *git.Repository
+	commits caches.Cache[plumbing.Hash, *BlameCommitCache]
+}
+
+func newBlameCache(storage storages.Storage, filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository) (BlameCache, error) {
+	cache := &blameCacheImpl{
+		storage: storage,
+		filesDB: filesDB,
+		repo:    repo,
+		gitRepo: gitRepo,
+		commits: caches.NewUnlimited[plumbing.Hash, *BlameCommitCache](),
+	}
+
+	return cache, nil
+}
+
+func (c *blameCacheImpl) GetFileHash(commit *object.Commit, path string) (plumbing.Hash, error) {
+	tree, err := object.GetTree(c.gitRepo.Storer, commit.TreeHash)
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+
+	e, err := tree.FindEntry(path)
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+
+	return e.Hash, nil
+}
+
+func (c *blameCacheImpl) GetCommit(hash plumbing.Hash) (*BlameCommitCache, error) {
+	return c.commits.Get(hash, c.loadCommit)
+}
+
+func (c *blameCacheImpl) loadCommit(hash plumbing.Hash) (*BlameCommitCache, error) {
+	result := &BlameCommitCache{
+		Hash:    hash,
+		Parents: make(map[plumbing.Hash]*BlameParentCache),
+		Changes: make(map[string]*BlameFileCache),
+	}
+
+	repoCommit := c.repo.GetCommit(hash.String())
+
+	getFilename := func(fileID model.UUID) (string, error) {
+		f := c.filesDB.GetFileByID(fileID)
+
+		rel, err := filepath.Rel(c.repo.RootDir, f.Path)
+		if err != nil {
+			return "", err
+		}
+
+		rel = strings.ReplaceAll(rel, string(filepath.Separator), "/")
+		return rel, nil
+	}
+
+	files, err := c.storage.LoadRepositoryCommitFiles(c.repo, repoCommit)
+	if err != nil {
+		return nil, err
+	}
+
+	filesList := files.List()
+
+	for _, repoParentID := range repoCommit.Parents {
+		repoParent := c.repo.GetCommitByID(repoParentID)
+
+		gitParent, err := c.gitRepo.CommitObject(plumbing.NewHash(repoParent.Hash))
+		if err != nil {
+			return nil, err
+		}
+
+		result.Parents[gitParent.Hash] = &BlameParentCache{
+			Commit:     gitParent,
+			Renames:    make(map[string]string, len(filesList)),
+			FileHashes: make(map[string]plumbing.Hash, len(filesList)),
+		}
+	}
+
+	for _, commitFile := range filesList {
+		filename, err := getFilename(commitFile.FileID)
+		if err != nil {
+			return nil, err
+		}
+
+		result.Changes[filename] = &BlameFileCache{
+			Hash:    plumbing.NewHash(commitFile.Hash),
+			Created: commitFile.Change == model.FileCreated,
+		}
+
+		for repoParentID, oldFileID := range commitFile.OldIDs {
+			oldFilename, err := getFilename(oldFileID)
+			if err != nil {
+				return nil, err
+			}
+
+			repoParent := c.repo.GetCommitByID(repoParentID)
+
+			parentCache := result.Parents[plumbing.NewHash(repoParent.Hash)]
+			parentCache.Renames[filename] = oldFilename
+		}
+	}
+
+	return result, nil
+}
+
+func (c *blameCacheImpl) GetFile(name string, hash plumbing.Hash) (*object.File, error) {
+	blob, err := object.GetBlob(c.gitRepo.Storer, hash)
+	if err != nil {
+		return nil, err
+	}
+
+	return object.NewFile(name, filemode.Regular, blob), nil
+}

@@ -2,6 +2,7 @@ package stucture
 
 import (
 	"fmt"
+	"strings"
 )
 
 type StructureElement interface {
@@ -154,7 +155,7 @@ func NewFunctionStructure(root *FileStructure, parent StructureElement, name str
 }
 
 func (s *FunctionStructure) FullName() string {
-	return s.Name
+	return s.BaseStructure.parent.FullName() + ":" + s.Name + " (" + strings.Join(s.Params, ", ") + ") -> " + s.Result
 }
 
 func (s *FunctionStructure) AddClass(pkg string, name string) *ClassStructure {

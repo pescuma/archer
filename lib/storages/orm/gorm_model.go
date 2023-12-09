@@ -1,10 +1,16 @@
 package orm
 
 import (
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pescuma/archer/lib/model"
 )
+
+type sqlTable interface {
+	CacheKey() string
+}
 
 type sqlConfig struct {
 	Key   string `gorm:"primaryKey"`
@@ -12,6 +18,10 @@ type sqlConfig struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+func (s *sqlConfig) CacheKey() string {
+	return s.Key
 }
 
 type sqlProject struct {
@@ -45,6 +55,10 @@ type sqlProject struct {
 	Files             []sqlFile              `gorm:"foreignKey:ProjectID"`
 }
 
+func (s *sqlProject) CacheKey() string {
+	return string(s.ID)
+}
+
 type sqlProjectDependency struct {
 	ID       model.UUID
 	Name     string
@@ -56,6 +70,10 @@ type sqlProjectDependency struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+func (s *sqlProjectDependency) CacheKey() string {
+	return string(s.ID)
 }
 
 type sqlProjectDirectory struct {
@@ -75,6 +93,10 @@ type sqlProjectDirectory struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+func (s *sqlProjectDirectory) CacheKey() string {
+	return string(s.ID)
 }
 
 type sqlFile struct {
@@ -100,6 +122,10 @@ type sqlFile struct {
 
 	CommitFiles []sqlRepositoryCommitFile `gorm:"foreignKey:FileID"`
 	People      []sqlPersonFile           `gorm:"foreignKey:FileID"`
+}
+
+func (s *sqlFile) CacheKey() string {
+	return string(s.ID)
 }
 
 type sqlFileLine struct {
@@ -134,6 +160,10 @@ type sqlMonthLines struct {
 	UpdatedAt time.Time
 }
 
+func (s *sqlMonthLines) CacheKey() string {
+	return string(s.ID)
+}
+
 type sqlPerson struct {
 	ID   model.UUID
 	Name string
@@ -149,9 +179,12 @@ type sqlPerson struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	CommitAuthors    []sqlRepositoryCommit `gorm:"foreignKey:AuthorID"`
-	CommitCommitters []sqlRepositoryCommit `gorm:"foreignKey:CommitterID"`
-	Repositories     []sqlPersonRepository `gorm:"foreignKey:PersonID"`
+	Commits      []sqlRepositoryCommitPerson `gorm:"foreignKey:PersonID"`
+	Repositories []sqlPersonRepository       `gorm:"foreignKey:PersonID"`
+}
+
+func (s *sqlPerson) CacheKey() string {
+	return string(s.ID)
 }
 
 type sqlPersonRepository struct {
@@ -165,6 +198,10 @@ type sqlPersonRepository struct {
 	UpdatedAt time.Time
 }
 
+func (s *sqlPersonRepository) CacheKey() string {
+	return compositeKey(string(s.PersonID), string(s.RepositoryID))
+}
+
 type sqlPersonFile struct {
 	PersonID model.UUID `gorm:"primaryKey"`
 	FileID   model.UUID `gorm:"primaryKey"`
@@ -174,6 +211,10 @@ type sqlPersonFile struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+func (s *sqlPersonFile) CacheKey() string {
+	return compositeKey(string(s.PersonID), string(s.FileID))
 }
 
 type sqlProductArea struct {
@@ -187,6 +228,10 @@ type sqlProductArea struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+func (s *sqlProductArea) CacheKey() string {
+	return string(s.ID)
 }
 
 type sqlRepository struct {
@@ -211,6 +256,10 @@ type sqlRepository struct {
 	People  []sqlPersonRepository `gorm:"foreignKey:RepositoryID"`
 }
 
+func (s *sqlRepository) CacheKey() string {
+	return string(s.ID)
+}
+
 type sqlRepositoryCommit struct {
 	ID           model.UUID
 	RepositoryID model.UUID `gorm:"index"`
@@ -219,9 +268,7 @@ type sqlRepositoryCommit struct {
 	Parents      []model.UUID `gorm:"serializer:json"`
 	Children     []model.UUID `gorm:"serializer:json"`
 	Date         time.Time    `gorm:"index"`
-	CommitterID  model.UUID   `gorm:"index"`
 	DateAuthored time.Time
-	AuthorID     model.UUID
 	Ignore       bool
 
 	FilesModified *int
@@ -235,7 +282,37 @@ type sqlRepositoryCommit struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	CommitFiles []sqlRepositoryCommitFile `gorm:"foreignKey:CommitID"`
+	People []sqlRepositoryCommitPerson `gorm:"foreignKey:CommitID"`
+	Files  []sqlRepositoryCommitFile   `gorm:"foreignKey:CommitID"`
+}
+
+func (s *sqlRepositoryCommit) CacheKey() string {
+	return string(s.ID)
+}
+
+type CommitRole int
+
+const (
+	CommitRoleAuthor    CommitRole = iota
+	CommitRoleCommitter CommitRole = iota
+)
+
+func (r CommitRole) String() string {
+	return strconv.Itoa(int(r))
+}
+
+type sqlRepositoryCommitPerson struct {
+	CommitID model.UUID `gorm:"primaryKey"`
+	PersonID model.UUID `gorm:"primaryKey"`
+	Role     CommitRole `gorm:"primaryKey"`
+	Order    int
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+func (s *sqlRepositoryCommitPerson) CacheKey() string {
+	return compositeKey(string(s.CommitID), string(s.PersonID), s.Role.String())
 }
 
 type sqlRepositoryCommitFile struct {
@@ -243,7 +320,8 @@ type sqlRepositoryCommitFile struct {
 	FileID        model.UUID `gorm:"primaryKey"`
 	Hash          string
 	Change        model.FileChangeType
-	OldFileIDs    string
+	OldIDs        string
+	OldHashes     string
 	LinesModified *int
 	LinesAdded    *int
 	LinesDeleted  *int
@@ -287,4 +365,8 @@ type sqlBlame struct {
 	Code    *int
 	Comment *int
 	Blank   *int
+}
+
+func compositeKey(ids ...string) string {
+	return strings.Join(ids, "\n")
 }

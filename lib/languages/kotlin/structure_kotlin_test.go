@@ -27,3 +27,12 @@ func TestEmptyFile(t *testing.T) {
 	assert.Equal(t, 0, len(structure.AllClasses))
 	assert.Equal(t, 0, len(structure.AllFunctions))
 }
+
+func TestTwoInits(t *testing.T) {
+	t.Parallel()
+
+	structure := computeStructure("class A { init{} init{} }")
+
+	assert.Equal(t, 1, len(structure.AllClasses))
+	assert.Equal(t, 2, len(structure.AllFunctions))
+}
