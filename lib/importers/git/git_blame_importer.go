@@ -3,7 +3,6 @@ package git
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -52,26 +51,7 @@ type blameWork struct {
 	lastMod      string
 }
 
-func findExecutable(cmd string) (string, error) {
-	result, err := exec.LookPath(cmd)
-	if err != nil {
-		return "", errors.Wrapf(err, "%v executable not found in PATH", cmd)
-	}
-
-	result, err = filepath.Abs(result)
-	if err != nil {
-		return "", err
-	}
-
-	return result, nil
-}
-
 func (i *BlameImporter) Import(dirs []string, opts *BlameOptions) error {
-	//_, err := findExecutable("git")
-	//if err != nil {
-	//	return errors.Wrapf(err, "git executable must be in the path")
-	//}
-	//
 	i.console.Printf("Loading existing data...\n")
 
 	filesDB, err := i.storage.LoadFiles()
@@ -155,7 +135,7 @@ func (i *BlameImporter) Import(dirs []string, opts *BlameOptions) error {
 		}
 
 		if opts.SaveEvery != nil && imported > 0 {
-			err = i.writeResults(filesDB, peopleDB, reposDB, statsDB, opts)
+			err = i.writeResults(filesDB, peopleDB, reposDB, statsDB)
 			if err != nil {
 				return err
 			}
@@ -167,7 +147,7 @@ func (i *BlameImporter) Import(dirs []string, opts *BlameOptions) error {
 	}
 
 	if !justWroteResults {
-		err = i.writeResults(filesDB, peopleDB, reposDB, statsDB, opts)
+		err = i.writeResults(filesDB, peopleDB, reposDB, statsDB)
 		if err != nil {
 			return err
 		}
@@ -176,7 +156,7 @@ func (i *BlameImporter) Import(dirs []string, opts *BlameOptions) error {
 	return nil
 }
 
-func (i *BlameImporter) writeResults(filesDB *model.Files, peopleDB *model.People, reposDB *model.Repositories, statsDB *model.MonthlyStats, opts *BlameOptions) error {
+func (i *BlameImporter) writeResults(filesDB *model.Files, peopleDB *model.People, reposDB *model.Repositories, statsDB *model.MonthlyStats) error {
 	i.console.Printf("Propagating changes to parents...\n")
 
 	err := i.propagateChangesToParents(filesDB, peopleDB, reposDB, statsDB)
@@ -308,7 +288,7 @@ func (i *BlameImporter) importBlame(filesDB *model.Files, peopleDB *model.People
 		if opts.SaveEvery != nil && time.Since(start) >= *opts.SaveEvery {
 			_ = bar.Clear()
 
-			err = i.writeResults(filesDB, peopleDB, reposDB, statsDB, opts)
+			err = i.writeResults(filesDB, peopleDB, reposDB, statsDB)
 			if err != nil {
 				return 0, err
 			}
@@ -392,44 +372,6 @@ func (i *BlameImporter) computeFileBlame(w *blameWork, cache BlameCache) error {
 	if err != nil {
 		return err
 	}
-
-	//cmd := exec.Command("git", "blame", "-l", "-s", "-w", "-M", "-C", "-C", "--minimal", "--root", "HEAD", "--", w.file.Path)
-	//cmd.Dir = filepath.Dir(w.file.Path)
-	//
-	//outputBytes, err := cmd.Output()
-	//if err != nil {
-	//	return errors.Wrapf(err, "error calling %v %v", cmd.Path, cmd.Args)
-	//}
-	//
-	//output := string(outputBytes)
-	//output = strings.TrimRight(output, "\r\n")
-	//
-	//blameLines := make([]*blameLine, 0, 100)
-	//re := regexp.MustCompile(`^([0-9a-z]+) ([^)]*? )?(\d+)\)(.*)$`)
-	//for j, line := range strings.Split(output, "\n") {
-	//	line = strings.TrimRight(line, "\r\n")
-	//	if line == "" {
-	//		continue
-	//	}
-	//
-	//	gs := re.FindStringSubmatch(line)
-	//
-	//	commitHash := gs[1]
-	//	lineNum, err := strconv.Atoi(gs[3])
-	//	if err != nil {
-	//		return err
-	//	}
-	//	text := gs[4]
-	//
-	//	if lineNum != j+1 {
-	//		panic(fmt.Sprintf("wrong line num: %v != %v", lineNum, j+1))
-	//	}
-	//
-	//	blameLines = append(blameLines, &blameLine{
-	//		CommitHash: commitHash,
-	//		Text:       text,
-	//	})
-	//}
 
 	contents := strings.Join(lo.Map(blameLines, func(item *blameLine, _ int) string { return item.Text }), "\n")
 

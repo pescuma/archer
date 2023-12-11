@@ -103,9 +103,16 @@ func computeBlame(result []*blameLine, i *blameItem, queue chan *blameItem, cach
 
 	fill(result, changed, commit.Hash)
 
-	if len(notChanged) > 0 {
-		for _, parent := range parentsInfo {
-			rs := updateRanges(notChanged, parent.Diff)
+	for _, parent := range parentsInfo {
+		fromParent := make([]linesRange, 0, len(notChanged))
+		for _, c := range notChanged {
+			if c.source.Contains(parent.Hash) {
+				fromParent = append(fromParent, c.linesRange)
+			}
+		}
+
+		if len(fromParent) > 0 {
+			rs := updateRanges(fromParent, parent.Diff)
 			queue <- newBlameItem(parent.Hash, parent.File, parent.FileHash, parent.Contents, rs)
 		}
 	}
@@ -141,6 +148,10 @@ func computeParentsInfo(i *blameItem, commit *BlameCommitCache, cache BlameCache
 		fileName := parent.FileName(i.FileName)
 		fileHash := parent.FileHash(i.FileName, i.FileHash)
 
+		if fileHash == plumbing.ZeroHash {
+			continue
+		}
+
 		if fileHash == i.FileHash {
 			panic("should be different")
 		}
@@ -168,18 +179,32 @@ func computeParentsInfo(i *blameItem, commit *BlameCommitCache, cache BlameCache
 	return result, nil
 }
 
-func mergeParentChanges(parents []*parentItem) []linediff.Diff {
-	if len(parents) == 1 {
-		return parents[0].Diff
-	}
+type mergedDiff struct {
+	linediff.Diff
+	sources *set.Set[plumbing.Hash]
+}
 
-	diffs := lo.Map(parents, func(p *parentItem, _ int) []linediff.Diff {
-		return lo.Filter(p.Diff, func(d linediff.Diff, _ int) bool { return d.Type != linediff.DiffDelete })
+func mergeParentChanges(parents []*parentItem) []*mergedDiff {
+	diffs := lo.Map(parents, func(p *parentItem, _ int) []*mergedDiff {
+		result := make([]*mergedDiff, 0, len(p.Diff))
+		for _, d := range p.Diff {
+			if d.Type == linediff.DiffDelete {
+				continue
+			}
+
+			md := &mergedDiff{
+				Diff:    d,
+				sources: set.New[plumbing.Hash](1),
+			}
+			md.sources.Insert(p.Hash)
+			result = append(result, md)
+		}
+		return result
 	})
 
-	result := make([]linediff.Diff, 0, len(diffs[0]))
+	result := make([]*mergedDiff, 0, len(diffs[0]))
 	for {
-		finished := lo.CountBy(diffs, func(d []linediff.Diff) bool { return len(d) == 0 })
+		finished := lo.CountBy(diffs, func(d []*mergedDiff) bool { return len(d) == 0 })
 		if finished > 0 {
 			if finished < len(diffs) {
 				panic("should finish all at same time")
@@ -187,51 +212,74 @@ func mergeParentChanges(parents []*parentItem) []linediff.Diff {
 			break
 		}
 
-		lines, dt := getNextBlock(diffs)
+		block := getNextBlock(diffs)
 
-		removeBlocks(diffs, lines)
+		removeBlocks(diffs, block)
 
-		result = addBlock(result, dt, lines)
+		result = addBlock(result, block)
 	}
 
 	return result
 }
 
-func getNextBlock(diffs [][]linediff.Diff) (int, linediff.Operation) {
-	lines := diffs[0][0].Lines
-	dt := diffs[0][0].Type
+func getNextBlock(parentDiffs [][]*mergedDiff) *mergedDiff {
+	lines := parentDiffs[0][0].Lines
+	dt := parentDiffs[0][0].Type
+	sources := set.New[plumbing.Hash](len(parentDiffs))
 
-	for _, d := range diffs[1:] {
-		lines = min(lines, d[0].Lines)
-		if d[0].Type != dt {
+	for _, diffs := range parentDiffs {
+		d := diffs[0]
+
+		lines = min(lines, d.Lines)
+
+		if d.Type == linediff.DiffEqual {
+			sources.InsertSet(d.sources)
+		}
+
+		if d.Type != dt {
 			// One is equal and the other is insert
 			dt = linediff.DiffEqual
 		}
 	}
 
-	return lines, dt
+	return &mergedDiff{
+		Diff: linediff.Diff{
+			Type:  dt,
+			Lines: lines,
+		},
+		sources: sources,
+	}
 }
 
-func removeBlocks(diffs [][]linediff.Diff, lines int) {
+func removeBlocks(diffs [][]*mergedDiff, block *mergedDiff) {
 	for i, d := range diffs {
-		if d[0].Lines != lines {
-			d[0].Lines = d[0].Lines - lines
+		if d[0].Lines > block.Lines {
+			d[0].Lines = d[0].Lines - block.Lines
 		} else {
 			diffs[i] = d[1:]
 		}
 	}
 }
 
-func addBlock(result []linediff.Diff, dt linediff.Operation, lines int) []linediff.Diff {
-	if len(result) > 0 && result[len(result)-1].Type == dt {
-		result[len(result)-1].Lines += lines
-	} else {
-		result = append(result, linediff.Diff{Type: dt, Lines: lines})
+func addBlock(result []*mergedDiff, block *mergedDiff) []*mergedDiff {
+	if len(result) > 0 {
+		last := result[len(result)-1]
+		if last.Type == block.Type && last.sources.Equal(block.sources) {
+			last.Lines += block.Lines
+			return result
+		}
 	}
+
+	result = append(result, block)
 	return result
 }
 
-func computeAffected(ranges []linesRange, changes []linediff.Diff) (changed []linesRange, notChanged []linesRange) {
+type linesRangeWithSource struct {
+	linesRange
+	source *set.Set[plumbing.Hash]
+}
+
+func computeAffected(ranges []linesRange, changes []*mergedDiff) (changed []linesRange, notChanged []*linesRangeWithSource) {
 	// ranges will be changed, so make a copy
 	tmp := make([]linesRange, len(ranges))
 	copy(tmp, ranges)
@@ -268,9 +316,13 @@ func computeAffected(ranges []linesRange, changes []linediff.Diff) (changed []li
 
 			switch change.Type {
 			case linediff.DiffEqual:
-				notChanged = appendRange(notChanged, result)
+				notChanged = append(notChanged,
+					&linesRangeWithSource{
+						linesRange: result,
+						source:     change.sources,
+					})
 			case linediff.DiffInsert:
-				changed = appendRange(changed, result)
+				changed = append(changed, result)
 			default:
 				panic("unexpected change type")
 			}
@@ -281,11 +333,6 @@ func computeAffected(ranges []linesRange, changes []linediff.Diff) (changed []li
 }
 
 func updateRanges(ranges []linesRange, diffs []linediff.Diff) []linesRange {
-	// ranges will be changed, so make a copy
-	tmp := make([]linesRange, len(ranges))
-	copy(tmp, ranges)
-	ranges = tmp
-
 	result := make([]linesRange, 0, len(ranges))
 
 	lineNew := 0

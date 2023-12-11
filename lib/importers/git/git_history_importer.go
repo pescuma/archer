@@ -688,7 +688,9 @@ func (i *HistoryImporter) fillHashesAndIDS(cf *model.RepositoryCommitFile, gitFi
 ) error {
 	cf.Hash = gitFile.File.Hash.String()
 
-	if gitFile.File.Hash != gitFile.OldFile.Hash {
+	if gitFile.Type == model.FileCreated {
+		cf.OldHashes[parentCommit.ID] = "-"
+	} else if gitFile.File.Hash != gitFile.OldFile.Hash {
 		cf.OldHashes[parentCommit.ID] = gitFile.OldFile.Hash.String()
 	}
 

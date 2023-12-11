@@ -18,9 +18,6 @@ func NewPeopleRelations() *PeopleRelations {
 }
 
 func (p *PeopleRelations) GetOrCreatePersonFile(personID UUID, fileID UUID) *PersonFile {
-	if personID == "E3WyoUhn9Fki" && fileID == "8jXsOUnhywf" {
-		println()
-	}
 	pf, ok := p.personFile[personID]
 	if !ok {
 		pf = make(map[UUID]*PersonFile)

@@ -2,19 +2,19 @@
 import _ from 'lodash'
 import LinesChangedCard from '@/components/LinesChangedCard.vue'
 import LinesSurvivedCard from '@/components/LinesSurvivedCard.vue'
-import {computed} from "vue";
+import { computed } from 'vue'
 
 const props = defineProps({
   person: Object,
 })
 
-const name = computed(()=>{
+const name = computed(() => {
   let names = []
   names.push(props.person.name)
   for (let name of props.person.names) {
-      names.push(name)
+    names.push(name)
   }
-  return _.join(names, ', ')
+  return _.join(props.person.names, ', ') + ' <' + _.join(props.person.emails, ', ') + '>'
 })
 </script>
 

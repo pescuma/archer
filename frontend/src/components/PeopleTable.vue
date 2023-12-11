@@ -20,16 +20,8 @@ const columns = [
     name: 'Names',
     field: 'names',
     type: 'text',
-    format: (v) => {
-      let names = []
-      names.push(v.name)
-      for (let name of v.names) {
-        if (name !== v.name) {
-          names.push(name)
-        }
-      }
-      return _.join(names, '\n')
-    },
+    format: (v) => _.join(v.names, ', '),
+    tooltip: (v) => _.join(v.names, '\n'),
     actions: [
       {
         name: 'Filter',

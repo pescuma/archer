@@ -4,6 +4,9 @@ import (
 	"testing"
 
 	"github.com/bloomberg/go-testgroup"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/hashicorp/go-set/v2"
+	"github.com/samber/lo"
 
 	"github.com/pescuma/archer/lib/linediff"
 )
@@ -95,16 +98,25 @@ type ComputeAffectedTests struct {
 }
 
 func (g *ComputeAffectedTests) OneChange(t *testgroup.T) {
-	changed, notChanged := computeAffected(newLinesRangesAll(10), []linediff.Diff{
-		{Type: linediff.DiffEqual, Lines: 1},
-		{Type: linediff.DiffInsert, Lines: 2},
-		{Type: linediff.DiffEqual, Lines: 7},
+	changed, notChanged := computeAffected(newLinesRangesAll(10), []*mergedDiff{
+		{
+			Diff:    linediff.Diff{Type: linediff.DiffEqual, Lines: 1},
+			sources: set.New[plumbing.Hash](1),
+		},
+		{
+			Diff:    linediff.Diff{Type: linediff.DiffInsert, Lines: 2},
+			sources: set.New[plumbing.Hash](1),
+		},
+		{
+			Diff:    linediff.Diff{Type: linediff.DiffEqual, Lines: 7},
+			sources: set.New[plumbing.Hash](1),
+		},
 	})
 
 	t.Equal([]linesRange{newLinesRange(1, 2, 0)}, changed)
 
 	t.Equal([]linesRange{newLinesRange(0, 0, 0), newLinesRange(3, 9, 0)},
-		notChanged)
+		lo.Map(notChanged, func(r *linesRangeWithSource, _ int) linesRange { return r.linesRange }))
 }
 
 func TestUpdateRanges(t *testing.T) {

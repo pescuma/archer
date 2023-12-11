@@ -169,7 +169,12 @@ func (c *blameCacheImpl) loadCommit(hash plumbing.Hash) (*BlameCommitCache, erro
 			repoParent := c.repo.GetCommitByID(repoParentID)
 
 			parentCache := result.Parents[plumbing.NewHash(repoParent.Hash)]
-			parentCache.FileHashes[filename] = plumbing.NewHash(oldFileHash)
+
+			if oldFileHash == "-" {
+				parentCache.FileHashes[filename] = plumbing.ZeroHash
+			} else {
+				parentCache.FileHashes[filename] = plumbing.NewHash(oldFileHash)
+			}
 		}
 	}
 
