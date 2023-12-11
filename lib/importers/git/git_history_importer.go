@@ -460,6 +460,8 @@ func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Pro
 
 		for _, cf := range commitFiles.List() {
 			switch cf.Change {
+			case model.FileNotChanged:
+				// Nothing to do
 			case model.FileModified:
 				commit.FilesModified++
 			case model.FileRenamed:
@@ -468,6 +470,8 @@ func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Pro
 				commit.FilesCreated++
 			case model.FileDeleted:
 				commit.FilesDeleted++
+			default:
+				panic("unhandled default case")
 			}
 
 			if cf.LinesModified != -1 {
@@ -596,13 +600,7 @@ func (i *HistoryImporter) computeChangesMergeCommit(filesDB *model.Files, repo *
 		return err
 	}
 
-	// Only consider files changes by this commit, meaning that they didn't come from any parent
-	// That is the same to say that the file was changed in all parents
 	for filePath, parentCommits := range changesPerFile {
-		if len(parentCommits) != parents {
-			continue
-		}
-
 		file := filesDB.GetOrCreateFile(filePath)
 		cf := commitFiles.GetOrCreate(file.ID)
 		var minChange *gitFileChange
@@ -615,23 +613,30 @@ func (i *HistoryImporter) computeChangesMergeCommit(filesDB *model.Files, repo *
 				return err
 			}
 
-			if cf.Change == model.FileChangeUnknown {
-				cf.Change = gitFile.Type
-			} else if cf.Change != gitFile.Type {
-				cf.Change = model.FileModified
-			}
+			// Only consider files changes by this commit, meaning that they didn't come from any parent
+			// That is the same to say that the file was changed in all parents
+			if len(parentCommits) != parents {
+				cf.Change = model.FileNotChanged
 
-			err = i.computeLinesChanged(gitFile)
-			if err != nil {
-				return err
-			}
+			} else {
+				if cf.Change == model.FileChangeUnknown {
+					cf.Change = gitFile.Type
+				} else if cf.Change != gitFile.Type {
+					cf.Change = model.FileModified
+				}
 
-			if minChange == nil || minChange.Total() > gitFile.Total() {
-				minChange = gitFile
+				err = i.computeLinesChanged(gitFile)
+				if err != nil {
+					return err
+				}
+
+				if minChange == nil || minChange.Total() > gitFile.Total() {
+					minChange = gitFile
+				}
 			}
 		}
 
-		if minChange.Modified != -1 {
+		if minChange != nil && minChange.Modified != -1 {
 			cf.LinesModified = minChange.Modified
 			cf.LinesAdded = minChange.Added
 			cf.LinesDeleted = minChange.Deleted
@@ -747,16 +752,24 @@ func (i *HistoryImporter) computeChangesNoLines(commit *object.Commit, parent *o
 		}
 	}
 
-	changes, err := commitTree.DiffContext(context.Background(), parentTree)
+	changes, err := parentTree.DiffContext(context.Background(), commitTree)
 	if err != nil {
 		return nil, err
 	}
 
 	var result []*gitFileChange
 	for _, change := range changes {
-		commitFile, parentFile, err := change.Files()
+		parentFile, commitFile, err := change.Files()
 		if err != nil {
 			return nil, err
+		}
+
+		// Names are wrong for unknown reason
+		if parentFile != nil {
+			parentFile.Name = change.From.Name
+		}
+		if commitFile != nil {
+			commitFile.Name = change.To.Name
 		}
 
 		gitChange := gitFileChange{}
@@ -806,21 +819,22 @@ func (i *HistoryImporter) computeChanges(commit *object.Commit, parent *object.C
 }
 
 func (i *HistoryImporter) computeLinesChanged(gitChange *gitFileChange) error {
-	if gitChange.File.Hash == gitChange.OldFile.Hash {
-		gitChange.Modified = 0
-		gitChange.Added = 0
-		gitChange.Deleted = 0
-		return nil
-	}
-
 	commitContent, commitIsBinary, err := i.fileContent(gitChange.File)
 	if err != nil {
 		return err
 	}
 
-	parentContent, parentIsBinary, err := i.fileContent(gitChange.OldFile)
-	if err != nil {
-		return err
+	var parentContent string
+	var parentIsBinary bool
+
+	if gitChange.OldFile.Hash == gitChange.File.Hash {
+		parentContent = commitContent
+		parentIsBinary = commitIsBinary
+	} else {
+		parentContent, parentIsBinary, err = i.fileContent(gitChange.OldFile)
+		if err != nil {
+			return err
+		}
 	}
 
 	if commitIsBinary || parentIsBinary {
@@ -830,17 +844,17 @@ func (i *HistoryImporter) computeLinesChanged(gitChange *gitFileChange) error {
 		return nil
 	}
 
-	commitLines := i.countLines(commitContent)
-	parentLines := i.countLines(parentContent)
-
 	gitChange.Modified = 0
 	gitChange.Added = 0
 	gitChange.Deleted = 0
 
-	if parentLines == 0 {
+	commitLines := i.countLines(commitContent)
+	parentLines := i.countLines(parentContent)
+
+	if gitChange.Type == model.FileCreated || parentLines == 0 {
 		gitChange.Added += commitLines
 
-	} else if commitLines == 0 {
+	} else if gitChange.Type == model.FileDeleted || commitLines == 0 {
 		gitChange.Deleted += parentLines
 
 	} else {

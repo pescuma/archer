@@ -17,7 +17,8 @@ type FileChangeType int
 
 const (
 	FileChangeUnknown FileChangeType = -1
-	FileModified      FileChangeType = iota
+	FileNotChanged    FileChangeType = iota
+	FileModified
 	FileRenamed
 	FileCreated
 	FileDeleted

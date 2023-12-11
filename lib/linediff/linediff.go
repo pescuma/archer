@@ -50,7 +50,7 @@ func lineIndexesToDiff(diffs []diffmatchpatch.Diff) []Diff {
 	for _, aDiff := range diffs {
 		result = append(result, Diff{
 			Type:  Operation(aDiff.Type),
-			Lines: len(aDiff.Text),
+			Lines: len([]rune(aDiff.Text)),
 		})
 	}
 	return result
@@ -68,8 +68,8 @@ func textToLineIndexes(text string, lineToIndex map[string]int, ignoreWhitespace
 
 	result := make([]rune, len(lines))
 	for i, line := range lines {
-		line = strings.TrimRight(line, "\r")
 		if ignoreWhitespace {
+			line = strings.Trim(line, "\r\n")
 			line = strings.TrimSpace(line)
 			line = strings.Join(strings.Fields(line), " ")
 		}
@@ -77,7 +77,7 @@ func textToLineIndexes(text string, lineToIndex map[string]int, ignoreWhitespace
 		lineValue, ok := lineToIndex[line]
 
 		if !ok {
-			lineValue = len(lineToIndex)
+			lineValue = len(lineToIndex) + 1
 			lineToIndex[line] = lineValue
 		}
 

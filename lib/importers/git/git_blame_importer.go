@@ -5,9 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -69,11 +67,11 @@ func findExecutable(cmd string) (string, error) {
 }
 
 func (i *BlameImporter) Import(dirs []string, opts *BlameOptions) error {
-	_, err := findExecutable("git")
-	if err != nil {
-		return errors.Wrapf(err, "git executable must be in the path")
-	}
-
+	//_, err := findExecutable("git")
+	//if err != nil {
+	//	return errors.Wrapf(err, "git executable must be in the path")
+	//}
+	//
 	i.console.Printf("Loading existing data...\n")
 
 	filesDB, err := i.storage.LoadFiles()
@@ -295,12 +293,14 @@ func (i *BlameImporter) importBlame(filesDB *model.Files, peopleDB *model.People
 
 	i.console.Printf("%v: Computing blame of %v files...\n", repo.Name, len(toProcess))
 
+	cache := newBlameCache(i.storage, filesDB, repo, gitRepo)
+
 	bar := utils.NewProgressBar(len(toProcess))
 	start := time.Now()
 	for _, w := range toProcess {
 		bar.Describe(utils.TruncateFilename(w.relativePath))
 
-		err = i.computeFileBlame(w)
+		err = i.computeFileBlame(w, cache)
 		if err != nil {
 			return 0, err
 		}
@@ -387,49 +387,49 @@ func (i *BlameImporter) listToCompute(filesDB *model.Files, repo *model.Reposito
 	return result, nil
 }
 
-type blameLine struct {
-	CommitHash string
-	Text       string
-}
-
-func (i *BlameImporter) computeFileBlame(w *blameWork) error {
-	cmd := exec.Command("git", "blame", "-l", "-s", "-w", "-M", "-C", "-C", "--minimal", "--root", "HEAD", "--", w.file.Path)
-	cmd.Dir = filepath.Dir(w.file.Path)
-
-	outputBytes, err := cmd.Output()
+func (i *BlameImporter) computeFileBlame(w *blameWork, cache BlameCache) error {
+	blameLines, err := Blame(w.relativePath, w.gitCommit, cache)
 	if err != nil {
-		return errors.Wrapf(err, "error calling %v %v", cmd.Path, cmd.Args)
+		return err
 	}
 
-	output := string(outputBytes)
-	output = strings.TrimRight(output, "\r\n")
-
-	blameLines := make([]*blameLine, 0, 100)
-	re := regexp.MustCompile(`^([0-9a-z]+) ([^)]*? )?(\d+)\)(.*)$`)
-	for j, line := range strings.Split(output, "\n") {
-		line = strings.TrimRight(line, "\r\n")
-		if line == "" {
-			continue
-		}
-
-		gs := re.FindStringSubmatch(line)
-
-		commitHash := gs[1]
-		lineNum, err := strconv.Atoi(gs[3])
-		if err != nil {
-			return err
-		}
-		text := gs[4]
-
-		if lineNum != j+1 {
-			panic(fmt.Sprintf("wrong line num: %v != %v", lineNum, j+1))
-		}
-
-		blameLines = append(blameLines, &blameLine{
-			CommitHash: commitHash,
-			Text:       text,
-		})
-	}
+	//cmd := exec.Command("git", "blame", "-l", "-s", "-w", "-M", "-C", "-C", "--minimal", "--root", "HEAD", "--", w.file.Path)
+	//cmd.Dir = filepath.Dir(w.file.Path)
+	//
+	//outputBytes, err := cmd.Output()
+	//if err != nil {
+	//	return errors.Wrapf(err, "error calling %v %v", cmd.Path, cmd.Args)
+	//}
+	//
+	//output := string(outputBytes)
+	//output = strings.TrimRight(output, "\r\n")
+	//
+	//blameLines := make([]*blameLine, 0, 100)
+	//re := regexp.MustCompile(`^([0-9a-z]+) ([^)]*? )?(\d+)\)(.*)$`)
+	//for j, line := range strings.Split(output, "\n") {
+	//	line = strings.TrimRight(line, "\r\n")
+	//	if line == "" {
+	//		continue
+	//	}
+	//
+	//	gs := re.FindStringSubmatch(line)
+	//
+	//	commitHash := gs[1]
+	//	lineNum, err := strconv.Atoi(gs[3])
+	//	if err != nil {
+	//		return err
+	//	}
+	//	text := gs[4]
+	//
+	//	if lineNum != j+1 {
+	//		panic(fmt.Sprintf("wrong line num: %v != %v", lineNum, j+1))
+	//	}
+	//
+	//	blameLines = append(blameLines, &blameLine{
+	//		CommitHash: commitHash,
+	//		Text:       text,
+	//	})
+	//}
 
 	contents := strings.Join(lo.Map(blameLines, func(item *blameLine, _ int) string { return item.Text }), "\n")
 

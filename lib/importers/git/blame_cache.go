@@ -1,21 +1,24 @@
 package git
 
 import (
+	"path/filepath"
+	"strings"
+
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
+
 	"github.com/pescuma/archer/lib/caches"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/storages"
-	"path/filepath"
-	"strings"
 )
 
 type BlameCache interface {
 	GetFile(name string, hash plumbing.Hash) (*object.File, error)
 	GetCommit(hash plumbing.Hash) (*BlameCommitCache, error)
 	GetFileHash(commit *object.Commit, path string) (plumbing.Hash, error)
+	CommitCount() int
 }
 
 type BlameCommitCache struct {
@@ -40,6 +43,22 @@ type BlameParentCache struct {
 	FileHashes map[string]plumbing.Hash
 }
 
+func (c *BlameParentCache) FileName(childFileName string) string {
+	result, ok := c.Renames[childFileName]
+	if !ok {
+		result = childFileName
+	}
+	return result
+}
+
+func (c *BlameParentCache) FileHash(childFileName string, childHash plumbing.Hash) plumbing.Hash {
+	result, ok := c.FileHashes[childFileName]
+	if !ok {
+		result = childHash
+	}
+	return result
+}
+
 type blameCacheImpl struct {
 	storage storages.Storage
 	filesDB *model.Files
@@ -48,16 +67,18 @@ type blameCacheImpl struct {
 	commits caches.Cache[plumbing.Hash, *BlameCommitCache]
 }
 
-func newBlameCache(storage storages.Storage, filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository) (BlameCache, error) {
-	cache := &blameCacheImpl{
+func (c *blameCacheImpl) CommitCount() int {
+	return c.repo.CountCommits()
+}
+
+func newBlameCache(storage storages.Storage, filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository) BlameCache {
+	return &blameCacheImpl{
 		storage: storage,
 		filesDB: filesDB,
 		repo:    repo,
 		gitRepo: gitRepo,
 		commits: caches.NewUnlimited[plumbing.Hash, *BlameCommitCache](),
 	}
-
-	return cache, nil
 }
 
 func (c *blameCacheImpl) GetFileHash(commit *object.Commit, path string) (plumbing.Hash, error) {
@@ -142,6 +163,13 @@ func (c *blameCacheImpl) loadCommit(hash plumbing.Hash) (*BlameCommitCache, erro
 
 			parentCache := result.Parents[plumbing.NewHash(repoParent.Hash)]
 			parentCache.Renames[filename] = oldFilename
+		}
+
+		for repoParentID, oldFileHash := range commitFile.OldHashes {
+			repoParent := c.repo.GetCommitByID(repoParentID)
+
+			parentCache := result.Parents[plumbing.NewHash(repoParent.Hash)]
+			parentCache.FileHashes[filename] = plumbing.NewHash(oldFileHash)
 		}
 	}
 
