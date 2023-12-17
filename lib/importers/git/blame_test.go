@@ -26,7 +26,8 @@ func (g *MergeParentChangesTests) NoChanges(t *testgroup.T) {
 
 	result := mergeParentChanges(parents)
 
-	t.Equal([]linediff.Diff{{Type: linediff.DiffEqual, Lines: 10}}, result)
+	t.Equal([]linediff.Diff{{Type: linediff.DiffEqual, Lines: 10}},
+		lo.Map(result, func(d *mergedDiff, _ int) linediff.Diff { return d.Diff }))
 }
 
 func (g *MergeParentChangesTests) IgnoreDeletes(t *testgroup.T) {
@@ -41,7 +42,8 @@ func (g *MergeParentChangesTests) IgnoreDeletes(t *testgroup.T) {
 
 	result := mergeParentChanges(parents)
 
-	t.Equal([]linediff.Diff{{Type: linediff.DiffEqual, Lines: 10}}, result)
+	t.Equal([]linediff.Diff{{Type: linediff.DiffEqual, Lines: 10}},
+		lo.Map(result, func(d *mergedDiff, _ int) linediff.Diff { return d.Diff }))
 }
 
 func (g *MergeParentChangesTests) IgnoreInsertWhenOtherSideIsEqual(t *testgroup.T) {
@@ -56,7 +58,8 @@ func (g *MergeParentChangesTests) IgnoreInsertWhenOtherSideIsEqual(t *testgroup.
 
 	result := mergeParentChanges(parents)
 
-	t.Equal([]linediff.Diff{{Type: linediff.DiffEqual, Lines: 10}}, result)
+	t.Equal([]linediff.Diff{{Type: linediff.DiffEqual, Lines: 10}},
+		lo.Map(result, func(d *mergedDiff, _ int) linediff.Diff { return d.Diff }))
 }
 
 func (g *MergeParentChangesTests) KeepInsertWhenSameFromBothSides(t *testgroup.T) {
@@ -77,7 +80,8 @@ func (g *MergeParentChangesTests) KeepInsertWhenSameFromBothSides(t *testgroup.T
 		{Type: linediff.DiffEqual, Lines: 2},
 		{Type: linediff.DiffInsert, Lines: 1},
 		{Type: linediff.DiffEqual, Lines: 7},
-	}, result)
+	},
+		lo.Map(result, func(d *mergedDiff, _ int) linediff.Diff { return d.Diff }))
 }
 
 func (g *MergeParentChangesTests) createParents(diffs ...[]linediff.Diff) []*parentItem {
@@ -98,7 +102,7 @@ type ComputeAffectedTests struct {
 }
 
 func (g *ComputeAffectedTests) OneChange(t *testgroup.T) {
-	changed, notChanged := computeAffected(newLinesRangesAll(10), []*mergedDiff{
+	changed, notChanged := computeAffected(newRangesWithLines(10), []*mergedDiff{
 		{
 			Diff:    linediff.Diff{Type: linediff.DiffEqual, Lines: 1},
 			sources: set.New[plumbing.Hash](1),
@@ -113,10 +117,10 @@ func (g *ComputeAffectedTests) OneChange(t *testgroup.T) {
 		},
 	})
 
-	t.Equal([]linesRange{newLinesRange(1, 2, 0)}, changed)
+	t.Equal(newRanges(newRange(1, 2, 0)), changed)
 
-	t.Equal([]linesRange{newLinesRange(0, 0, 0), newLinesRange(3, 9, 0)},
-		lo.Map(notChanged, func(r *linesRangeWithSource, _ int) linesRange { return r.linesRange }))
+	t.Equal(newRanges(newRange(0, 0, 0), newRange(3, 9, 0)),
+		newRanges(lo.Map(notChanged, func(r *linesRangeWithSource, _ int) linesRange { return r.linesRange })...))
 }
 
 func TestUpdateRanges(t *testing.T) {
@@ -127,7 +131,7 @@ type UpdateRangesTests struct {
 }
 
 func (g *UpdateRangesTests) OneInsert(t *testgroup.T) {
-	ranges := []linesRange{newLinesRange(2, 9, 0)}
+	ranges := newRanges(newRange(2, 9, 0))
 	diffs := []linediff.Diff{
 		{Type: linediff.DiffInsert, Lines: 1},
 		{Type: linediff.DiffEqual, Lines: 9},
@@ -135,11 +139,11 @@ func (g *UpdateRangesTests) OneInsert(t *testgroup.T) {
 
 	r := updateRanges(ranges, diffs)
 
-	t.Equal([]linesRange{newLinesRange(1, 8, 1)}, r)
+	t.Equal(newRanges(newRange(1, 8, 1)), r)
 }
 
 func (g *UpdateRangesTests) OneDelete(t *testgroup.T) {
-	ranges := []linesRange{newLinesRange(2, 9, 0)}
+	ranges := newRanges(newRange(2, 9, 0))
 	diffs := []linediff.Diff{
 		{Type: linediff.DiffDelete, Lines: 1},
 		{Type: linediff.DiffEqual, Lines: 10},
@@ -147,15 +151,15 @@ func (g *UpdateRangesTests) OneDelete(t *testgroup.T) {
 
 	r := updateRanges(ranges, diffs)
 
-	t.Equal([]linesRange{newLinesRange(3, 10, -1)}, r)
+	t.Equal(newRanges(newRange(3, 10, -1)), r)
 }
 
 func (g *UpdateRangesTests) OneInsertOneDelete(t *testgroup.T) {
-	ranges := []linesRange{
-		newLinesRange(0, 0, 0),
-		newLinesRange(5, 6, 0),
-		newLinesRange(13, 15, 0),
-	}
+	ranges := newRanges(
+		newRange(0, 0, 0),
+		newRange(5, 6, 0),
+		newRange(13, 15, 0),
+	)
 	diffs := []linediff.Diff{
 		{Type: linediff.DiffEqual, Lines: 5},
 		{Type: linediff.DiffDelete, Lines: 1},
@@ -166,9 +170,48 @@ func (g *UpdateRangesTests) OneInsertOneDelete(t *testgroup.T) {
 
 	r := updateRanges(ranges, diffs)
 
-	t.Equal([]linesRange{
-		newLinesRange(0, 0, 0),
-		newLinesRange(6, 7, -1),
-		newLinesRange(12, 14, 1),
-	}, r)
+	t.Equal(newRanges(
+		newRange(0, 0, 0),
+		newRange(6, 7, -1),
+		newRange(12, 14, 1),
+	), r)
+}
+
+func TestMergeRanges(t *testing.T) {
+	testgroup.RunInParallel(t, &MergeRangesTests{})
+}
+
+type MergeRangesTests struct {
+}
+
+func (g *MergeRangesTests) Same(t *testgroup.T) {
+	r1 := newRangesWithLines(10)
+	r2 := newRangesWithLines(10)
+
+	r := r1.merge(r2)
+
+	t.Equal(newRanges(newRange(0, 9, 0)), r)
+}
+
+func (g *MergeRangesTests) IntersectionSameOffsets(t *testgroup.T) {
+	r1 := newRanges(newRange(0, 9, 0))
+	r2 := newRanges(newRange(8, 20, 0))
+
+	r := r1.merge(r2)
+
+	t.Equal(newRanges(newRange(0, 20, 0)), r)
+}
+
+func (g *MergeRangesTests) IntersectionDifferentOffsets(t *testgroup.T) {
+	r1 := newRanges(newRange(0, 9, 0))
+	r2 := newRanges(newRange(8, 20, 1))
+
+	r := r1.merge(r2)
+
+	t.Equal(newRanges(
+		newRange(0, 7, 0),
+		newRange(8, 9, 0, 1),
+		newRange(10, 20, 1),
+	),
+		r)
 }

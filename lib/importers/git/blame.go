@@ -2,12 +2,15 @@ package git
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/hashicorp/go-set/v2"
+	"github.com/oleiade/lane/v2"
 	"github.com/samber/lo"
+	"golang.org/x/exp/slices"
 
 	"github.com/pescuma/archer/lib/linediff"
 )
@@ -39,49 +42,50 @@ func Blame(filename string, gitCommit *object.Commit, cache BlameCache) ([]*blam
 		result[i] = &blameLine{Text: strings.TrimRight(lines[i], "\r")}
 	}
 
-	commits := cache.CommitCount()
-	seen := set.New[plumbing.Hash](commits)
-	queue := make(chan *blameItem, commits)
+	queue := newBlameQueue(cache)
 
-	queue <- newBlameItemComplete(gitCommit.Hash, filename, gitFile.Hash, contents, len(lines))
-	for len(queue) > 0 {
-		i := <-queue
+	err = queue.Push(gitCommit.Hash, filename, gitFile.Hash, contents, newRangesWithLines(len(lines)))
+	if err != nil {
+		return nil, err
+	}
 
-		if !seen.Insert(i.CommitHash) {
-			continue
+	for {
+		i, ok := queue.Pop()
+		if !ok {
+			break
 		}
 
-		err = computeBlame(result, i, queue, cache)
+		err = computeBlame(result, queue, cache, i)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	for _, line := range result {
+	for i, line := range result {
 		if line.CommitHash == "" {
-			panic("commit hash should not be empty")
+			panic(fmt.Sprintf("commit hash should not be empty on line %v", i))
 		}
 	}
 
 	return result, nil
 }
 
-func computeBlame(result []*blameLine, i *blameItem, queue chan *blameItem, cache BlameCache) error {
-	commit, err := cache.GetCommit(i.CommitHash)
-	if err != nil {
-		return err
-	}
+func computeBlame(result []*blameLine, queue *blameQueue, cache BlameCache, i *blameItem) error {
+	commit := i.CommitCache
 
 	fileInfo, changedFile := checkChanged(i, commit)
 
 	if !changedFile {
-		for hash, parent := range commit.Parents {
+		for parentHash, parent := range commit.Parents {
 			parentFileName := parent.FileName(i.FileName)
 			parentFileHash := parent.FileHash(i.FileName, i.FileHash)
 
 			// Only follow the side(s) where the file came from
 			if parentFileHash == i.FileHash {
-				queue <- newBlameItem(hash, parentFileName, i.FileHash, i.Contents, i.Ranges)
+				err := queue.Push(parentHash, parentFileName, i.FileHash, i.FileContents, i.Ranges)
+				if err != nil {
+					return err
+				}
 			}
 		}
 		return nil
@@ -104,16 +108,19 @@ func computeBlame(result []*blameLine, i *blameItem, queue chan *blameItem, cach
 	fill(result, changed, commit.Hash)
 
 	for _, parent := range parentsInfo {
-		fromParent := make([]linesRange, 0, len(notChanged))
+		fromParent := newRangesWithCapacity(len(notChanged))
 		for _, c := range notChanged {
 			if c.source.Contains(parent.Hash) {
-				fromParent = append(fromParent, c.linesRange)
+				fromParent = fromParent.append(c.linesRange)
 			}
 		}
 
 		if len(fromParent) > 0 {
 			rs := updateRanges(fromParent, parent.Diff)
-			queue <- newBlameItem(parent.Hash, parent.File, parent.FileHash, parent.Contents, rs)
+			err = queue.Push(parent.Hash, parent.FileName, parent.FileHash, parent.FileContents, rs)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -166,14 +173,14 @@ func computeParentsInfo(i *blameItem, commit *BlameCommitCache, cache BlameCache
 			return nil, err
 		}
 
-		diff := linediff.Do(contents, i.Contents)
+		diff := linediff.Do(contents, i.FileContents)
 
 		result = append(result, &parentItem{
-			Hash:     hash,
-			File:     fileName,
-			FileHash: fileHash,
-			Contents: contents,
-			Diff:     diff,
+			Hash:         hash,
+			FileName:     fileName,
+			FileHash:     fileHash,
+			FileContents: contents,
+			Diff:         diff,
 		})
 	}
 	return result, nil
@@ -192,12 +199,10 @@ func mergeParentChanges(parents []*parentItem) []*mergedDiff {
 				continue
 			}
 
-			md := &mergedDiff{
+			result = append(result, &mergedDiff{
 				Diff:    d,
-				sources: set.New[plumbing.Hash](1),
-			}
-			md.sources.Insert(p.Hash)
-			result = append(result, md)
+				sources: set.From[plumbing.Hash]([]plumbing.Hash{p.Hash}),
+			})
 		}
 		return result
 	})
@@ -237,7 +242,7 @@ func getNextBlock(parentDiffs [][]*mergedDiff) *mergedDiff {
 		}
 
 		if d.Type != dt {
-			// One is equal and the other is insert
+			// One is DiffEqual and the other is DiffInsert
 			dt = linediff.DiffEqual
 		}
 	}
@@ -279,11 +284,9 @@ type linesRangeWithSource struct {
 	source *set.Set[plumbing.Hash]
 }
 
-func computeAffected(ranges []linesRange, changes []*mergedDiff) (changed []linesRange, notChanged []*linesRangeWithSource) {
+func computeAffected(ranges linesRanges, changes []*mergedDiff) (changed linesRanges, notChanged []*linesRangeWithSource) {
 	// ranges will be changed, so make a copy
-	tmp := make([]linesRange, len(ranges))
-	copy(tmp, ranges)
-	ranges = tmp
+	ranges = ranges.clone()
 
 	line := 0
 	for _, change := range changes {
@@ -310,8 +313,9 @@ func computeAffected(ranges []linesRange, changes []*mergedDiff) (changed []line
 				result = candidate
 				ranges = ranges[1:]
 			} else {
-				result = newLinesRange(candidate.Start, end, candidate.Offset)
-				ranges[0].Start = end + 1
+				a, b := candidate.split(end + 1)
+				result = a
+				ranges[0] = b
 			}
 
 			switch change.Type {
@@ -322,7 +326,7 @@ func computeAffected(ranges []linesRange, changes []*mergedDiff) (changed []line
 						source:     change.sources,
 					})
 			case linediff.DiffInsert:
-				changed = append(changed, result)
+				changed = changed.append(result)
 			default:
 				panic("unexpected change type")
 			}
@@ -332,8 +336,9 @@ func computeAffected(ranges []linesRange, changes []*mergedDiff) (changed []line
 	return
 }
 
-func updateRanges(ranges []linesRange, diffs []linediff.Diff) []linesRange {
-	result := make([]linesRange, 0, len(ranges))
+// This destroys ranges
+func updateRanges(ranges linesRanges, diffs []linediff.Diff) linesRanges {
+	result := newRangesWithCapacity(len(ranges))
 
 	lineNew := 0
 	offset := 0
@@ -350,11 +355,12 @@ func updateRanges(ranges []linesRange, diffs []linediff.Diff) []linesRange {
 			for len(ranges) > 0 && ranges[0].Start <= endNew {
 				r := ranges[0]
 				if r.End <= endNew {
-					result = appendRange(result, newLinesRange(r.Start+offset, r.End+offset, r.Offset-offset))
+					result = result.append(r.drift(offset))
 					ranges = ranges[1:]
 				} else {
-					result = appendRange(result, newLinesRange(r.Start+offset, endNew+offset, r.Offset-offset))
-					ranges[0] = newLinesRange(endNew+1, r.End, r.Offset)
+					a, b := r.split(endNew + 1)
+					result = result.append(a.drift(offset))
+					ranges[0] = b
 				}
 			}
 
@@ -378,93 +384,252 @@ func updateRanges(ranges []linesRange, diffs []linediff.Diff) []linesRange {
 	return result
 }
 
-func appendRange(list []linesRange, i linesRange) []linesRange {
-	l := len(list)
-	if l > 0 && list[l-1].End == i.Start-1 && list[l-1].Offset == i.Offset {
-		list[l-1].End = i.End
-	} else {
-		list = append(list, i)
-	}
-
-	return list
-}
-
-func fill(result []*blameLine, rs []linesRange, hash plumbing.Hash) {
+func fill(result []*blameLine, rs linesRanges, hash plumbing.Hash) {
 	for _, r := range rs {
 		for i := r.Start; i <= r.End; i++ {
-			result[i+r.Offset].CommitHash = hash.String()
+			for _, offset := range r.Offsets {
+				result[i+offset].CommitHash = hash.String()
+			}
 		}
 	}
 }
 
+type blameQueue struct {
+	cache BlameCache
+	items map[plumbing.Hash]*blameItem
+	queue *lane.PriorityQueue[plumbing.Hash, int]
+}
+
+func newBlameQueue(cache BlameCache) *blameQueue {
+	return &blameQueue{
+		cache: cache,
+		items: make(map[plumbing.Hash]*blameItem),
+		queue: lane.NewMaxPriorityQueue[plumbing.Hash, int](),
+	}
+}
+
+func (q *blameQueue) Push(commitHash plumbing.Hash,
+	fileName string, fileHash plumbing.Hash, fileContents string,
+	ranges linesRanges,
+) error {
+	if item, ok := q.items[commitHash]; ok {
+		item.Ranges = item.Ranges.merge(ranges)
+
+	} else {
+		commitCache, err := q.cache.GetCommit(commitHash)
+		if err != nil {
+			return err
+		}
+
+		i := newBlameItem(commitHash, commitCache, fileName, fileHash, fileContents, ranges)
+
+		q.items[commitHash] = i
+		q.queue.Push(commitHash, i.CommitCache.Order)
+	}
+
+	return nil
+}
+
+func (q *blameQueue) Pop() (*blameItem, bool) {
+	hash, _, ok := q.queue.Pop()
+	if !ok {
+		return nil, false
+	}
+
+	result := q.items[hash]
+	delete(q.items, hash)
+
+	return result, true
+}
+
 type blameItem struct {
-	CommitHash plumbing.Hash
-	FileName   string
-	FileHash   plumbing.Hash
-	Contents   string
-	Ranges     []linesRange
+	CommitHash   plumbing.Hash
+	CommitCache  *BlameCommitCache
+	FileName     string
+	FileHash     plumbing.Hash
+	FileContents string
+	Ranges       linesRanges
 }
 
 func (b *blameItem) String() string {
 	return fmt.Sprintf("blameItem[CommitHash=%v FileName=%v FileHash=%v Contents=%v Ranges=%v]",
-		b.CommitHash, b.FileName, b.FileHash, b.Contents, b.Ranges)
+		b.CommitHash, b.FileName, b.FileHash, b.FileContents, b.Ranges)
 }
 
 type parentItem struct {
-	Hash     plumbing.Hash
-	File     string
-	FileHash plumbing.Hash
-	Contents string
-	Diff     []linediff.Diff
+	Hash         plumbing.Hash
+	FileName     string
+	FileHash     plumbing.Hash
+	FileContents string
+	Diff         []linediff.Diff
 }
 
 func (p *parentItem) String() string {
-	return fmt.Sprintf("parentItem[Hash=%v File=%v FileHash=%v Contents=%v Diff=%v]",
-		p.Hash, p.File, p.FileHash, p.Contents, len(p.Diff))
+	return fmt.Sprintf("parentItem[Hash=%v FileName=%v FileHash=%v FileContents=%v Diff=%v]",
+		p.Hash, p.FileName, p.FileHash, p.FileContents, len(p.Diff))
 }
 
-func newBlameItem(commitHash plumbing.Hash, file string, fileHash plumbing.Hash, contents string, ranges []linesRange) *blameItem {
+func newBlameItem(commitHash plumbing.Hash, commitCache *BlameCommitCache,
+	fileName string, fileHash plumbing.Hash, fileContents string,
+	ranges linesRanges,
+) *blameItem {
 	return &blameItem{
-		CommitHash: commitHash,
-		FileName:   file,
-		FileHash:   fileHash,
-		Contents:   contents,
-		Ranges:     ranges,
+		CommitHash:   commitHash,
+		CommitCache:  commitCache,
+		FileName:     fileName,
+		FileHash:     fileHash,
+		FileContents: fileContents,
+		Ranges:       ranges,
 	}
 }
 
-func newBlameItemComplete(commitHash plumbing.Hash, file string, fileHash plumbing.Hash, contents string, lines int) *blameItem {
-	return &blameItem{
-		CommitHash: commitHash,
-		FileName:   file,
-		FileHash:   fileHash,
-		Contents:   contents,
-		Ranges:     newLinesRangesAll(lines),
+type linesRanges []linesRange
+
+func newRanges(items ...linesRange) linesRanges {
+	return items
+}
+
+func newRangesWithCapacity(size int) linesRanges {
+	return make([]linesRange, 0, size)
+}
+
+func newRangesWithLines(lines int) linesRanges {
+	return []linesRange{newRange(0, lines-1, 0)}
+}
+
+// This destroys the current range
+func (s linesRanges) append(i linesRange) []linesRange {
+	r := s
+
+	l := len(r)
+	if l > 0 && r[l-1].End == i.Start-1 && r[l-1].Offsets.equals(i.Offsets) {
+		r[l-1].End = i.End
+
+	} else {
+		r = append(r, i)
 	}
+
+	return r
+}
+
+// This range is destroyed by the merge
+func (s linesRanges) merge(r2 linesRanges) linesRanges {
+	r1 := s
+	r2 = slices.Clone(r2)
+
+	result := newRangesWithCapacity(len(r1) + len(r2))
+
+	for len(r1) > 0 && len(r2) > 0 {
+		if r1[0].Start > r2[0].Start {
+			r1, r2 = r2, r1
+		}
+
+		if r1[0].End < r2[0].Start {
+			result = result.append(r1[0])
+			r1 = r1[1:]
+			continue
+		}
+
+		if r1[0].Start < r2[0].Start {
+			a, b := r1[0].split(r2[0].Start)
+			result = result.append(a)
+			r1[0] = b
+			continue
+		}
+
+		// r1[0].Start == r2[0].Start
+
+		if r1[0].End > r2[0].End {
+			r1, r2 = r2, r1
+		}
+
+		if r1[0].End < r2[0].End {
+			a, b := r2[0].split(r1[0].End + 1)
+			result = result.append(newRange(a.Start, a.End, a.Offsets.join(r1[0].Offsets)...))
+			r1 = r1[1:]
+			r2[0] = b
+			continue
+		}
+
+		// r1[0].Start == r2[0].Start
+
+		result = result.append(newRange(r1[0].Start, r1[0].End, r1[0].Offsets.join(r2[0].Offsets)...))
+		r1 = r1[1:]
+		r2 = r2[1:]
+	}
+
+	for _, r := range r1 {
+		result = result.append(r)
+	}
+	for _, r := range r2 {
+		result = result.append(r)
+	}
+
+	return result
+}
+
+func (s linesRanges) clone() linesRanges {
+	return slices.Clone(s)
 }
 
 type linesRange struct {
-	Start  int
-	End    int
-	Offset int
+	Start   int
+	End     int
+	Offsets offsets
 }
 
-func (l *linesRange) String() string {
-	return fmt.Sprintf("linesRange[Start=%v End=%v Offset=%v]", l.Start, l.End, l.Offset)
-}
+func newRange(start, end int, offsets ...int) linesRange {
+	sort.Ints(offsets)
 
-func newLinesRange(start, end, offset int) linesRange {
 	return linesRange{
-		Start:  start,
-		End:    end,
-		Offset: offset,
+		Start:   start,
+		End:     end,
+		Offsets: offsets,
 	}
 }
 
-func newLinesRangesAll(lines int) []linesRange {
-	return []linesRange{{
-		Start:  0,
-		End:    lines - 1,
-		Offset: 0,
-	}}
+func (r *linesRange) drift(offset int) linesRange {
+	return newRange(r.Start+offset, r.End+offset, r.Offsets.drift(-offset)...)
+}
+
+func (r *linesRange) split(start int) (linesRange, linesRange) {
+	return newRange(r.Start, start-1, r.Offsets...),
+		newRange(start, r.End, r.Offsets...)
+}
+
+func (r *linesRange) String() string {
+	return fmt.Sprintf("linesRange[Start=%v End=%v Offset=%v]", r.Start, r.End, r.Offsets)
+}
+
+type offsets []int
+
+func (o offsets) drift(diff int) []int {
+	result := slices.Clone(o)
+	for i := range result {
+		result[i] += diff
+	}
+	return result
+}
+
+func (o offsets) equals(o2 offsets) bool {
+	if len(o) != len(o2) {
+		return false
+	}
+
+	for i := range o {
+		if o[i] != o2[i] {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (o offsets) join(o2 []int) []int {
+	result := make([]int, len(o)+len(o2))
+	result = append(result, o...)
+	result = append(result, o2...)
+	result = lo.Uniq(result)
+	sort.Ints(result)
+	return result
 }

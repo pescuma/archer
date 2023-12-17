@@ -74,6 +74,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/muesli/termenv v0.13.0 // indirect
+	github.com/oleiade/lane/v2 v2.0.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.1.0 // indirect
 	github.com/pescuma/go-build v0.0.0-20221021034732-538c218430a0 // indirect
 	github.com/pjbgf/sha1cd v0.3.0 // indirect
@@ -81,6 +82,7 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/skeema/knownhosts v1.2.1 // indirect
+	github.com/stevenle/topsort v0.2.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
@@ -98,4 +100,5 @@ require (
 	modernc.org/mathutil v1.6.0 // indirect
 	modernc.org/memory v1.7.2 // indirect
 	modernc.org/sqlite v1.27.0 // indirect
+	v.io/x/lib v0.1.16 // indirect
 )

@@ -8,6 +8,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"v.io/x/lib/toposort"
 
 	"github.com/pescuma/archer/lib/caches"
 	"github.com/pescuma/archer/lib/model"
@@ -23,6 +24,7 @@ type BlameCache interface {
 
 type BlameCommitCache struct {
 	Hash    plumbing.Hash
+	Order   int
 	Parents map[plumbing.Hash]*BlameParentCache
 	Changes map[string]*BlameFileCache
 }
@@ -65,6 +67,7 @@ type blameCacheImpl struct {
 	repo    *model.Repository
 	gitRepo *git.Repository
 	commits caches.Cache[plumbing.Hash, *BlameCommitCache]
+	indexes map[model.UUID]int
 }
 
 func (c *blameCacheImpl) CommitCount() int {
@@ -72,12 +75,27 @@ func (c *blameCacheImpl) CommitCount() int {
 }
 
 func newBlameCache(storage storages.Storage, filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository) BlameCache {
+	graph := toposort.Sorter{}
+	for _, c := range repo.ListCommits() {
+		graph.AddNode(c.Hash)
+		for _, p := range c.Parents {
+			graph.AddEdge(c.Hash, repo.GetCommitByID(p).Hash)
+		}
+	}
+
+	sorted, _ := graph.Sort()
+	indexes := make(map[model.UUID]int, len(sorted))
+	for i, s := range sorted {
+		indexes[s.(model.UUID)] = i
+	}
+
 	return &blameCacheImpl{
 		storage: storage,
 		filesDB: filesDB,
 		repo:    repo,
 		gitRepo: gitRepo,
 		commits: caches.NewUnlimited[plumbing.Hash, *BlameCommitCache](),
+		indexes: indexes,
 	}
 }
 
@@ -107,6 +125,8 @@ func (c *blameCacheImpl) loadCommit(hash plumbing.Hash) (*BlameCommitCache, erro
 	}
 
 	repoCommit := c.repo.GetCommit(hash.String())
+
+	result.Order = c.indexes[repoCommit.ID]
 
 	getFilename := func(fileID model.UUID) (string, error) {
 		f := c.filesDB.GetFileByID(fileID)
