@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/hashicorp/go-set/v2"
 	"github.com/hhatto/gocloc"
@@ -29,6 +30,7 @@ type BlameImporter struct {
 }
 
 type BlameOptions struct {
+	Branch           string
 	Incremental      bool
 	MaxImportedFiles *int
 	SaveEvery        *time.Duration
@@ -90,12 +92,25 @@ func (i *BlameImporter) Import(dirs []string, opts *BlameOptions) error {
 			continue
 		}
 
-		gitHead, err := gitRepo.Head()
-		if err != nil {
-			return err
+		var gitRevision plumbing.Hash
+		if opts.Branch != "" {
+			revision, err := gitRepo.ResolveRevision(plumbing.Revision(opts.Branch))
+			if err != nil {
+				return err
+			}
+
+			gitRevision = *revision
+
+		} else {
+			gitHead, err := gitRepo.Head()
+			if err != nil {
+				return err
+			}
+
+			gitRevision = gitHead.Hash()
 		}
 
-		gitCommit, err := gitRepo.CommitObject(gitHead.Hash())
+		gitCommit, err := gitRepo.CommitObject(gitRevision)
 		if err != nil {
 			return err
 		}
@@ -112,7 +127,7 @@ func (i *BlameImporter) Import(dirs []string, opts *BlameOptions) error {
 			continue
 		}
 
-		importedHistory, err := i.checkImportedHistory(repo, gitRepo)
+		importedHistory, err := i.checkImportedHistory(repo, gitRepo, opts)
 		if err != nil {
 			return err
 		}
@@ -520,12 +535,12 @@ func (i *BlameImporter) propagateChangesToParents(filesDB *model.Files, peopleDB
 	return nil
 }
 
-func (i *BlameImporter) checkImportedHistory(repo *model.Repository, gitRepo *git.Repository) (bool, error) {
+func (i *BlameImporter) checkImportedHistory(repo *model.Repository, gitRepo *git.Repository, opts *BlameOptions) (bool, error) {
 	if repo == nil {
 		return false, nil
 	}
 
-	commitsIter, err := log(gitRepo)
+	commitsIter, err := log(gitRepo, opts.Branch)
 	if err != nil {
 		return false, err
 	}

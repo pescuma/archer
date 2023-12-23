@@ -2,8 +2,9 @@ package git
 
 import (
 	"fmt"
-	"github.com/pescuma/archer/lib/utils"
 	"strings"
+
+	"github.com/pescuma/archer/lib/utils"
 
 	"github.com/hashicorp/go-set/v2"
 	"github.com/samber/lo"
@@ -32,15 +33,15 @@ func newNameEmailGrouperFrom(configDB *map[string]string, peopleDB *model.People
 
 		r := newNamesEmails()
 		r.Person = p
-		r.people.Insert(p)
-
 		r.Name = p.Name
+
 		for _, n := range p.ListNames() {
 			r.Names.Insert(n)
 		}
 		for _, e := range p.ListEmails() {
 			r.Emails.Insert(e)
 		}
+		r.people.Insert(p)
 
 		grouper.store(r)
 	}

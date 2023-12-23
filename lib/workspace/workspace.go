@@ -148,9 +148,9 @@ func (w *Workspace) ImportGradle(dir string) error {
 	return importer.Import(dir)
 }
 
-func (w *Workspace) ImportGitPeople(dirs []string) error {
+func (w *Workspace) ImportGitPeople(dirs []string, opts *git.PeopleOptions) error {
 	importer := git.NewPeopleImporter(w.console, w.storage)
-	return importer.Import(dirs)
+	return importer.Import(dirs, opts)
 }
 
 func (w *Workspace) ImportGitHistory(dirs []string, opts *git.HistoryOptions) error {

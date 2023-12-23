@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
@@ -29,6 +30,7 @@ type HistoryImporter struct {
 }
 
 type HistoryOptions struct {
+	Branch             string
 	Incremental        bool
 	MaxImportedCommits *int
 	MaxCommits         *int
@@ -83,23 +85,11 @@ func (i *HistoryImporter) Import(dirs []string, opts *HistoryOptions) error {
 		return err
 	}
 
+	i.grouper = newNameEmailGrouperFrom(configDB, peopleDB)
+
 	dirs, err = findRootDirs(dirs)
 	if err != nil {
 		return err
-	}
-
-	i.console.Printf("Importing and grouping authors...\n")
-
-	i.grouper, err = importPeople(configDB, peopleDB, dirs)
-	if err != nil {
-		return err
-	}
-
-	if opts.SaveEvery != nil {
-		err = i.storage.WritePeople()
-		if err != nil {
-			return err
-		}
 	}
 
 	for _, dir := range dirs {
@@ -125,6 +115,8 @@ func (i *HistoryImporter) Import(dirs []string, opts *HistoryOptions) error {
 
 		if opts.SaveEvery != nil && commitsImported > 0 {
 			i.console.Printf("%v: Writing results...\n", repo.Name)
+
+			i.grouper.copyToPeopleDB()
 
 			err = i.storage.WritePeople()
 			if err != nil {
@@ -166,6 +158,8 @@ func (i *HistoryImporter) Import(dirs []string, opts *HistoryOptions) error {
 	if err != nil {
 		return err
 	}
+
+	i.grouper.copyToPeopleDB()
 
 	err = i.storage.WritePeople()
 	if err != nil {
@@ -218,14 +212,25 @@ func (i *HistoryImporter) countFilesAtHEAD(gitRepo *git.Repository) (int, error)
 	return result, nil
 }
 
-func log(gitRepo *git.Repository) (object.CommitIter, error) {
+func log(gitRepo *git.Repository, branch string) (object.CommitIter, error) {
+	var from plumbing.Hash
+	if branch != "" {
+		revision, err := gitRepo.ResolveRevision(plumbing.Revision(branch))
+		if err != nil {
+			return nil, err
+		}
+
+		from = *revision
+	}
+
 	return gitRepo.Log(&git.LogOptions{
+		From:  from,
 		Order: git.LogOrderCommitterTime,
 	})
 }
 
 func (i *HistoryImporter) countCommitsToImport(repo *model.Repository, gitRepo *git.Repository, opts *HistoryOptions) (int, error) {
-	commitsIter, err := log(gitRepo)
+	commitsIter, err := log(gitRepo, opts.Branch)
 	if err != nil {
 		return 0, err
 	}
@@ -261,7 +266,7 @@ func (i *HistoryImporter) importCommits(peopleRelationsDB *model.PeopleRelations
 
 	i.console.Printf("%v: Importing commits...\n", repo.Name)
 
-	commitsIter, err := log(gitRepo)
+	commitsIter, err := log(gitRepo, opts.Branch)
 	if err != nil {
 		return 0, err
 	}
@@ -306,7 +311,7 @@ func (i *HistoryImporter) importCommits(peopleRelationsDB *model.PeopleRelations
 		return 0, err
 	}
 
-	commitsIter, err = log(gitRepo)
+	commitsIter, err = log(gitRepo, opts.Branch)
 	if err != nil {
 		return 0, err
 	}
@@ -338,7 +343,7 @@ func (i *HistoryImporter) importCommits(peopleRelationsDB *model.PeopleRelations
 }
 
 func (i *HistoryImporter) listChangesToImport(repo *model.Repository, gitRepo *git.Repository, opts *HistoryOptions) ([]*changeWork, error) {
-	commitsIter, err := log(gitRepo)
+	commitsIter, err := log(gitRepo, opts.Branch)
 	if err != nil {
 		return nil, err
 	}

@@ -15,6 +15,7 @@ import (
 
 type ImportAllCmd struct {
 	Paths       []string      `arg:"" help:"Paths to recursively search for data." type:"existingpath"`
+	Branch      string        `help:"Git branch to use to import data."`
 	Group       string        `help:"Group to use for the projects."`
 	Gitignore   bool          `default:"true" help:"Respect .gitignore file when importing files."`
 	Incremental bool          `default:"true" negatable:"" help:"Don't import commits already imported."`
@@ -46,9 +47,20 @@ func (c *ImportAllCmd) Run(ctx *context) error {
 	}
 
 	ws.Console().PopPrefix()
+	ws.Console().PushPrefix("git people: ")
+
+	err = ws.ImportGitPeople(c.Paths, &git.PeopleOptions{
+		Branch: c.Branch,
+	})
+	if err != nil {
+		return err
+	}
+
+	ws.Console().PopPrefix()
 	ws.Console().PushPrefix("git history: ")
 
 	err = ws.ImportGitHistory(c.Paths, &git.HistoryOptions{
+		Branch:      c.Branch,
 		Incremental: c.Incremental,
 		SaveEvery:   toOption(c.SaveEvery),
 	})
@@ -81,6 +93,7 @@ func (c *ImportAllCmd) Run(ctx *context) error {
 	ws.Console().PushPrefix("git blame: ")
 
 	err = ws.ImportGitBlame(c.Paths, &git.BlameOptions{
+		Branch:      c.Branch,
 		Incremental: c.Incremental,
 		SaveEvery:   toOption(c.SaveEvery),
 	})
@@ -176,15 +189,19 @@ func (c *ImportMetricsCmd) Run(ctx *context) error {
 }
 
 type ImportGitPeopleCmd struct {
-	Paths []string `arg:"" help:"Paths with the roots of git repositories." type:"existingpath"`
+	Paths  []string `arg:"" help:"Paths with the roots of git repositories." type:"existingpath"`
+	Branch string   `help:"Git branch to use to import data."`
 }
 
 func (c *ImportGitPeopleCmd) Run(ctx *context) error {
-	return ctx.ws.ImportGitPeople(c.Paths)
+	return ctx.ws.ImportGitPeople(c.Paths, &git.PeopleOptions{
+		Branch: c.Branch,
+	})
 }
 
 type ImportGitHistoryCmd struct {
 	Paths         []string      `arg:"" help:"Paths with the roots of git repositories." type:"existingpath"`
+	Branch        string        `help:"Git branch to use to import data."`
 	Incremental   bool          `default:"true" negatable:"" help:"Don't import commits already imported."`
 	LimitImported int           `help:"Limit the number of imported commits. Can be used to incrementally import data. Counted from the latest commit."`
 	LimitCommits  int           `help:"Limit the number of commits to be imported. Counted from the latest commit."`
@@ -195,6 +212,7 @@ type ImportGitHistoryCmd struct {
 
 func (c *ImportGitHistoryCmd) Run(ctx *context) error {
 	return ctx.ws.ImportGitHistory(c.Paths, &git.HistoryOptions{
+		Branch:             c.Branch,
 		Incremental:        c.Incremental,
 		MaxImportedCommits: toOption(c.LimitImported),
 		MaxCommits:         toOption(c.LimitCommits),
@@ -206,6 +224,7 @@ func (c *ImportGitHistoryCmd) Run(ctx *context) error {
 
 type ImportGitBlameCmd struct {
 	Paths         []string      `arg:"" help:"Paths with the roots of git repositories." type:"existingpath"`
+	Branch        string        `help:"Git branch to use to import data."`
 	Incremental   bool          `default:"true" negatable:"" help:"Don't import files already imported."`
 	LimitImported int           `help:"Limit the number of imported files. Can be used to incrementally import data. Counted by file name."`
 	SaveEvery     time.Duration `default:"10m" help:"Save results while processing to avoid losing work."`
@@ -213,6 +232,7 @@ type ImportGitBlameCmd struct {
 
 func (c *ImportGitBlameCmd) Run(ctx *context) error {
 	return ctx.ws.ImportGitBlame(c.Paths, &git.BlameOptions{
+		Branch:           c.Branch,
 		Incremental:      c.Incremental,
 		MaxImportedFiles: toOption(c.LimitImported),
 		SaveEvery:        toOption(c.SaveEvery),
