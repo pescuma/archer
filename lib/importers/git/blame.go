@@ -514,7 +514,7 @@ func (s linesRanges) append(i linesRange) []linesRange {
 
 // This range is destroyed by the merge
 func (s linesRanges) merge(r2 linesRanges) linesRanges {
-	r1 := s
+	r1 := slices.Clone(s)
 	r2 = slices.Clone(r2)
 
 	result := newRangesWithCapacity(len(r1) + len(r2))
@@ -626,7 +626,7 @@ func (o offsets) equals(o2 offsets) bool {
 }
 
 func (o offsets) join(o2 []int) []int {
-	result := make([]int, len(o)+len(o2))
+	result := make([]int, 0, len(o)+len(o2))
 	result = append(result, o...)
 	result = append(result, o2...)
 	result = lo.Uniq(result)

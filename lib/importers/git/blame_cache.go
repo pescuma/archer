@@ -77,9 +77,9 @@ func (c *blameCacheImpl) CommitCount() int {
 func newBlameCache(storage storages.Storage, filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository) BlameCache {
 	graph := toposort.Sorter{}
 	for _, c := range repo.ListCommits() {
-		graph.AddNode(c.Hash)
+		graph.AddNode(c.ID)
 		for _, p := range c.Parents {
-			graph.AddEdge(c.Hash, repo.GetCommitByID(p).Hash)
+			graph.AddEdge(c.ID, repo.GetCommitByID(p).ID)
 		}
 	}
 
