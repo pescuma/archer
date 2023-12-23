@@ -46,9 +46,9 @@ type blameWork struct {
 	repo         *model.Repository
 	gitRepo      *git.Repository
 	gitCommit    *object.Commit
+	gitFileHash  string
 	file         *model.File
 	relativePath string
-	lastMod      string
 }
 
 func (i *BlameImporter) Import(dirs []string, opts *BlameOptions) error {
@@ -320,15 +320,9 @@ func (i *BlameImporter) listToCompute(filesDB *model.Files, repo *model.Reposito
 			return fmt.Errorf("file not found in repo %v: %v", repo.Name, path)
 		}
 
-		lastMod := ""
-		stat, err := os.Stat(path)
-		if err == nil {
-			file.SeenAt(time.Now(), stat.ModTime())
-
-			lastMod = stat.ModTime().String()
-			if opts.Incremental && lastMod == file.Data["blame:last_modified"] {
-				return nil
-			}
+		hash := gitFile.Hash.String()
+		if opts.Incremental && hash == file.Data["blame:last_hash"] {
+			return nil
 		}
 
 		reader, err := gitFile.Reader()
@@ -345,8 +339,8 @@ func (i *BlameImporter) listToCompute(filesDB *model.Files, repo *model.Reposito
 			repo:         repo,
 			gitRepo:      gitRepo,
 			gitCommit:    gitCommit,
+			gitFileHash:  hash,
 			file:         file,
-			lastMod:      lastMod,
 			relativePath: gitFile.Name,
 		})
 
@@ -419,11 +413,7 @@ func (i *BlameImporter) computeFileBlame(w *blameWork, cache BlameCache) error {
 
 	fileLines.Lines = fileLines.Lines[:len(blameLines)]
 
-	if w.lastMod != "" {
-		w.file.Data["blame:last_modified"] = w.lastMod
-	} else {
-		delete(w.file.Data, "blame:last_modified")
-	}
+	w.file.Data["blame:last_hash"] = w.gitFileHash
 
 	err = i.storage.WriteFileContents(fileLines)
 	if err != nil {
