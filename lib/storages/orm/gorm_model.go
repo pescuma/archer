@@ -239,6 +239,7 @@ type sqlRepository struct {
 	Name    string
 	RootDir string `gorm:"uniqueIndex"`
 	VCS     string
+	Branch  string
 
 	CommitsTotal int
 	FilesTotal   *int

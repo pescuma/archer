@@ -29,8 +29,13 @@ var cli struct {
 			History ImportGitHistoryCmd `cmd:"" help:"Import history information from git."`
 			Blame   ImportGitBlameCmd   `cmd:"" help:"Import blame information from git."`
 			People  ImportGitPeopleCmd  `cmd:"" help:"Import only people information from git."`
+			Repos   ImportGitReposCmd   `cmd:"" help:"Import only repository information from git."`
 		} `cmd:""`
 		Owners ImportOwnersCmd `cmd:"" help:"Import file owners."`
+	} `cmd:""`
+
+	Run struct {
+		Git RunGitCmd `cmd:"" help:"Run git commands on all imported repositories."`
 	} `cmd:""`
 
 	Server ServerCmd `cmd:"" help:"Start webserver."`

@@ -3,8 +3,11 @@ package workspace
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/abiosoft/lineprefix"
 
 	"github.com/pescuma/archer/lib/consoles"
 	"github.com/pescuma/archer/lib/importers/csproj"
@@ -148,6 +151,11 @@ func (w *Workspace) ImportGradle(dir string) error {
 	return importer.Import(dir)
 }
 
+func (w *Workspace) ImportGitRepos(dirs []string, opts *git.ReposOptions) error {
+	importer := git.NewReposImporter(w.console, w.storage)
+	return importer.Import(dirs, opts)
+}
+
 func (w *Workspace) ImportGitPeople(dirs []string, opts *git.PeopleOptions) error {
 	importer := git.NewPeopleImporter(w.console, w.storage)
 	return importer.Import(dirs, opts)
@@ -186,4 +194,40 @@ func (w *Workspace) ImportMySql(connectionString string) error {
 func (w *Workspace) ImportOwners(filter []string, opts *owners.Options) error {
 	importer := owners.NewImporter(w.console, w.storage)
 	return importer.Import(filter, opts)
+}
+
+func (w *Workspace) RunGit(args ...string) error {
+	repos, err := w.storage.LoadRepositories()
+	if err != nil {
+		return err
+	}
+
+	for _, repo := range repos.List() {
+		if repo.VCS != "git" {
+			continue
+		}
+
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repo.RootDir
+		if err != nil {
+			return err
+		}
+
+		w.console.Printf("%v: Executing '%v'\n", repo.Name, strings.Join(cmd.Args, "' '"))
+		w.console.PushPrefix("%v: ", repo.Name)
+
+		prefix := lineprefix.PrefixFunc(func() string {
+			return w.console.Prepare("")
+		})
+
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = lineprefix.New(lineprefix.Writer(os.Stdout), prefix)
+		cmd.Stderr = lineprefix.New(lineprefix.Writer(os.Stderr), prefix)
+
+		_ = cmd.Run()
+
+		w.console.PopPrefix()
+	}
+
+	return nil
 }

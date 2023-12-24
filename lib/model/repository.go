@@ -12,13 +12,15 @@ type Repository struct {
 	VCS     string
 	ID      UUID
 
+	Branch string
+
+	FilesTotal int
+	FilesHead  int
+
 	Data map[string]string
 
 	FirstSeen time.Time
 	LastSeen  time.Time
-
-	FilesTotal int
-	FilesHead  int
 
 	commitsByHash map[string]*RepositoryCommit
 	commitsByID   map[UUID]*RepositoryCommit

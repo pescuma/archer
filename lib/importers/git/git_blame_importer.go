@@ -92,22 +92,15 @@ func (i *BlameImporter) Import(dirs []string, opts *BlameOptions) error {
 			continue
 		}
 
-		var gitRevision plumbing.Hash
-		if opts.Branch != "" {
-			revision, err := gitRepo.ResolveRevision(plumbing.Revision(opts.Branch))
-			if err != nil {
-				return err
-			}
+		repo := reposDB.Get(dir)
+		if repo == nil {
+			i.console.Printf("%v: repository history not fully imported. run 'import git history'\n", dir)
+			continue
+		}
 
-			gitRevision = *revision
-
-		} else {
-			gitHead, err := gitRepo.Head()
-			if err != nil {
-				return err
-			}
-
-			gitRevision = gitHead.Hash()
+		_, gitRevision, err := findBranchHash(repo, gitRepo, opts.Branch)
+		if err != nil {
+			return err
 		}
 
 		gitCommit, err := gitRepo.CommitObject(gitRevision)
@@ -120,14 +113,7 @@ func (i *BlameImporter) Import(dirs []string, opts *BlameOptions) error {
 			return err
 		}
 
-		repo := reposDB.Get(dir)
-
-		if repo == nil {
-			i.console.Printf("%v: repository history not fully imported. run 'import git history'\n", dir)
-			continue
-		}
-
-		importedHistory, err := i.checkImportedHistory(repo, gitRepo, opts)
+		importedHistory, err := i.checkImportedHistory(repo, gitRepo, gitRevision)
 		if err != nil {
 			return err
 		}
@@ -535,12 +521,12 @@ func (i *BlameImporter) propagateChangesToParents(filesDB *model.Files, peopleDB
 	return nil
 }
 
-func (i *BlameImporter) checkImportedHistory(repo *model.Repository, gitRepo *git.Repository, opts *BlameOptions) (bool, error) {
+func (i *BlameImporter) checkImportedHistory(repo *model.Repository, gitRepo *git.Repository, gitRevision plumbing.Hash) (bool, error) {
 	if repo == nil {
 		return false, nil
 	}
 
-	commitsIter, err := log(gitRepo, opts.Branch)
+	commitsIter, err := log(gitRepo, gitRevision)
 	if err != nil {
 		return false, err
 	}

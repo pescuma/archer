@@ -643,6 +643,7 @@ func (s *gormStorage) LoadRepositories() (*model.Repositories, error) {
 		r := result.GetOrCreateEx(sr.RootDir, &sr.ID)
 		r.Name = sr.Name
 		r.VCS = sr.VCS
+		r.Branch = sr.Branch
 		r.Data = decodeMap(sr.Data)
 		r.FirstSeen = sr.FirstSeen
 		r.LastSeen = sr.LastSeen
@@ -1321,6 +1322,7 @@ func toSqlRepository(r *model.Repository) *sqlRepository {
 		Name:         r.Name,
 		RootDir:      r.RootDir,
 		VCS:          r.VCS,
+		Branch:       r.Branch,
 		Data:         encodeMap(r.Data),
 		FirstSeen:    r.FirstSeen,
 		LastSeen:     r.LastSeen,

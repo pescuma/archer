@@ -36,15 +36,20 @@ func NewPeopleImporter(console consoles.Console, storage storages.Storage) *Peop
 	}
 }
 
-func (g PeopleImporter) Import(dirs []string, opts *PeopleOptions) error {
-	fmt.Printf("Loading existing data...\n")
+func (i PeopleImporter) Import(dirs []string, opts *PeopleOptions) error {
+	i.console.Printf("Loading existing data...\n")
 
-	configDB, err := g.storage.LoadConfig()
+	configDB, err := i.storage.LoadConfig()
 	if err != nil {
 		return err
 	}
 
-	peopleDB, err := g.storage.LoadPeople()
+	peopleDB, err := i.storage.LoadPeople()
+	if err != nil {
+		return err
+	}
+
+	reposDB, err := i.storage.LoadRepositories()
 	if err != nil {
 		return err
 	}
@@ -54,57 +59,16 @@ func (g PeopleImporter) Import(dirs []string, opts *PeopleOptions) error {
 		return err
 	}
 
-	fmt.Printf("Importing people...\n")
+	i.console.Printf("Importing people...\n")
 
-	grouper := newNameEmailGrouperFrom(configDB, peopleDB)
-
-	for _, dir := range dirs {
-		gitRepo, err := git.PlainOpen(dir)
-		if err != nil {
-			fmt.Printf("Skipping '%s': %s\n", dir, err)
-			continue
-		}
-
-		commitsIter, err := log(gitRepo, opts.Branch)
-		if err != nil {
-			return err
-		}
-
-		total := 0
-		err = commitsIter.ForEach(func(commit *object.Commit) error { total++; return nil })
-
-		commitsIter, err = log(gitRepo, opts.Branch)
-		if err != nil {
-			return err
-		}
-
-		bar := utils.NewProgressBar(total)
-		err = commitsIter.ForEach(func(commit *object.Commit) error {
-			bar.Describe(filepath.Base(dir) + ": " + commit.Committer.When.Format("2006-01-02 15"))
-			_ = bar.Add(1)
-
-			grouper.add(commit.Author.Name, commit.Author.Email)
-			grouper.add(commit.Committer.Name, commit.Committer.Email)
-
-			coAuthors := coAuthorsRE.FindAllStringSubmatch(commit.Message, -1)
-			for _, ca := range coAuthors {
-				grouper.add(ca[1], ca[2])
-			}
-
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-
-		_ = bar.Add(1)
+	_, err = importPeople(configDB, peopleDB, reposDB, dirs, opts.Branch)
+	if err != nil {
+		return err
 	}
 
-	grouper.copyToPeopleDB()
+	i.console.Printf("Writing results...\n")
 
-	fmt.Printf("Writing results...\n")
-
-	err = g.storage.WritePeople()
+	err = i.storage.WritePeople()
 	if err != nil {
 		return err
 	}
@@ -112,7 +76,9 @@ func (g PeopleImporter) Import(dirs []string, opts *PeopleOptions) error {
 	return nil
 }
 
-func importPeople(configDB *map[string]string, peopleDB *model.People, dirs []string, opts *PeopleOptions) error {
+func importPeople(configDB *map[string]string, peopleDB *model.People, reposDB *model.Repositories,
+	dirs []string, branch string,
+) (*nameEmailGrouper, error) {
 	grouper := newNameEmailGrouperFrom(configDB, peopleDB)
 
 	for _, dir := range dirs {
@@ -122,17 +88,26 @@ func importPeople(configDB *map[string]string, peopleDB *model.People, dirs []st
 			continue
 		}
 
-		commitsIter, err := log(gitRepo, opts.Branch)
+		repo := reposDB.GetOrCreate(dir)
+		repo.Name = filepath.Base(dir)
+		repo.VCS = "git"
+
+		_, gitRevision, err := findBranchHash(repo, gitRepo, branch)
 		if err != nil {
-			return err
+			return nil, err
+		}
+
+		commitsIter, err := log(gitRepo, gitRevision)
+		if err != nil {
+			return nil, err
 		}
 
 		total := 0
 		err = commitsIter.ForEach(func(commit *object.Commit) error { total++; return nil })
 
-		commitsIter, err = log(gitRepo, opts.Branch)
+		commitsIter, err = log(gitRepo, gitRevision)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		bar := utils.NewProgressBar(total)
@@ -151,7 +126,7 @@ func importPeople(configDB *map[string]string, peopleDB *model.People, dirs []st
 			return nil
 		})
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		_ = bar.Add(1)
@@ -159,5 +134,5 @@ func importPeople(configDB *map[string]string, peopleDB *model.People, dirs []st
 
 	grouper.copyToPeopleDB()
 
-	return nil
+	return grouper, nil
 }

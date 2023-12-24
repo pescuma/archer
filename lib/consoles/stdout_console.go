@@ -15,6 +15,10 @@ func NewStdOutConsole() Console {
 }
 
 func (o *stdoutConsole) Printf(format string, a ...any) {
+	print(o.Prepare(format, a...))
+}
+
+func (o *stdoutConsole) Prepare(format string, a ...any) string {
 	builder := strings.Builder{}
 	builder.WriteString("[")
 	builder.WriteString(time.Now().Format("15:04:05"))
@@ -23,7 +27,7 @@ func (o *stdoutConsole) Printf(format string, a ...any) {
 		builder.WriteString(prefix)
 	}
 	builder.WriteString(fmt.Sprintf(format, a...))
-	print(builder.String())
+	return builder.String()
 }
 
 func (o *stdoutConsole) PushPrefix(format string, a ...any) {

@@ -16,6 +16,7 @@ import (
 type ImportAllCmd struct {
 	Paths       []string      `arg:"" help:"Paths to recursively search for data." type:"existingpath"`
 	Branch      string        `help:"Git branch to use to import data."`
+	Fetch       bool          `help:"Execute git fetch before importing data."`
 	Group       string        `help:"Group to use for the projects."`
 	Gitignore   bool          `default:"true" help:"Respect .gitignore file when importing files."`
 	Incremental bool          `default:"true" negatable:"" help:"Don't import commits already imported."`
@@ -47,16 +48,28 @@ func (c *ImportAllCmd) Run(ctx *context) error {
 	}
 
 	ws.Console().PopPrefix()
-	ws.Console().PushPrefix("git people: ")
 
-	err = ws.ImportGitPeople(c.Paths, &git.PeopleOptions{
-		Branch: c.Branch,
-	})
-	if err != nil {
-		return err
+	if c.Fetch {
+		ws.Console().PushPrefix("git repos: ")
+
+		err = ws.ImportGitRepos(c.Paths, &git.ReposOptions{
+			Branch: c.Branch,
+		})
+		if err != nil {
+			return err
+		}
+
+		ws.Console().PopPrefix()
+		ws.Console().PushPrefix("git fetch: ")
+
+		err = ws.RunGit("fetch")
+		if err != nil {
+			return err
+		}
+
+		ws.Console().PopPrefix()
 	}
 
-	ws.Console().PopPrefix()
 	ws.Console().PushPrefix("git history: ")
 
 	err = ws.ImportGitHistory(c.Paths, &git.HistoryOptions{
@@ -185,6 +198,17 @@ func (c *ImportMetricsCmd) Run(ctx *context) error {
 		Incremental:      c.Incremental,
 		MaxImportedFiles: toOption(c.LimitImported),
 		SaveEvery:        toOption(c.SaveEvery),
+	})
+}
+
+type ImportGitReposCmd struct {
+	Paths  []string `arg:"" help:"Paths with the roots of git repositories." type:"existingpath"`
+	Branch string   `help:"Git branch to use to import data."`
+}
+
+func (c *ImportGitReposCmd) Run(ctx *context) error {
+	return ctx.ws.ImportGitRepos(c.Paths, &git.ReposOptions{
+		Branch: c.Branch,
 	})
 }
 
