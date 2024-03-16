@@ -56,16 +56,31 @@ type context struct {
 func main() {
 	ctx := kong.Parse(&cli, kong.ShortUsageOnError())
 
-	ws, err := workspace.NewWorkspace(cli.Workspace)
+	err := run(ctx)
 	ctx.FatalIfErrorf(err)
+}
 
-	defer ws.Close()
+func run(ctx *kong.Context) error {
+	ws, err := workspace.NewWorkspace(cli.Workspace)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		_ = ws.Close()
+	}()
 
 	err = ctx.Run(&context{
 		ws: ws,
 	})
-	ctx.FatalIfErrorf(err)
+	if err != nil {
+		return err
+	}
 
 	err = ws.Write()
-	ctx.FatalIfErrorf(err)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
