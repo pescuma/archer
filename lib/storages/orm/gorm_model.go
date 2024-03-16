@@ -150,7 +150,6 @@ type sqlMonthLines struct {
 	RepositoryID model.UUID
 	AuthorID     model.UUID
 	CommitterID  model.UUID
-	FileID       model.UUID
 	ProjectID    *model.UUID
 
 	Changes *sqlChanges `gorm:"embedded;embeddedPrefix:changes_"`

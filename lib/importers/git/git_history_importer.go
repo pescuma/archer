@@ -770,6 +770,11 @@ func (i *HistoryImporter) computeChangesNoLines(commit *object.Commit, parent *o
 			return nil, err
 		}
 
+		if parentFile == nil && commitFile == nil {
+			// Submodule change
+			continue
+		}
+
 		// Names are wrong for unknown reason
 		if parentFile != nil {
 			parentFile.Name = change.From.Name
@@ -1040,7 +1045,7 @@ func (i *HistoryImporter) propagateChangesToParents(reposDB *model.Repositories,
 					author := peopleDB.GetPersonByID(a)
 					addLinesFactor(author.Changes, len(c.AuthorIDs))
 
-					s := statsDB.GetOrCreateLines(c.Date.Format("2006-01"), repo.ID, author.ID, c.CommitterID, file.ID, file.ProjectID)
+					s := statsDB.GetOrCreateLines(c.Date.Format("2006-01"), repo.ID, author.ID, c.CommitterID, file.ProjectID)
 					if s.Changes.IsEmpty() {
 						s.Changes.Clear()
 					}

@@ -155,10 +155,10 @@ func (s *server) statsSeenCommits(params *StatsParams) (any, error) {
 }
 
 func (s *server) statsChangedLines(params *StatsParams) (any, error) {
-	fileIDs, err := s.listFileIDsOrNil(params.FilterFile)
-	if err != nil {
-		return nil, err
-	}
+	//fileIDs, err := s.listFileIDsOrNil(params.FilterFile)
+	//if err != nil {
+	//	return nil, err
+	//}
 	projIDs, err := s.listProjectIDsOrNil(params.FilterProject)
 	if err != nil {
 		return nil, err
@@ -178,9 +178,10 @@ func (s *server) statsChangedLines(params *StatsParams) (any, error) {
 			continue
 		}
 
-		if fileIDs != nil && !fileIDs[l.FileID] {
-			continue
-		}
+		// TODO
+		//if fileIDs != nil && !fileIDs[l.FileID] {
+		//	continue
+		//}
 		if projIDs != nil && (l.ProjectID == nil || !projIDs[*l.ProjectID]) {
 			continue
 		}
@@ -208,10 +209,10 @@ func (s *server) statsChangedLines(params *StatsParams) (any, error) {
 }
 
 func (s *server) statsSurvivedLines(params *StatsParams) (any, error) {
-	fileIDs, err := s.listFileIDsOrNil(params.FilterFile)
-	if err != nil {
-		return nil, err
-	}
+	//fileIDs, err := s.listFileIDsOrNil(params.FilterFile)
+	//if err != nil {
+	//	return nil, err
+	//}
 	projIDs, err := s.listProjectIDsOrNil(params.FilterProject)
 	if err != nil {
 		return nil, err
@@ -231,9 +232,10 @@ func (s *server) statsSurvivedLines(params *StatsParams) (any, error) {
 			continue
 		}
 
-		if fileIDs != nil && !fileIDs[l.FileID] {
-			continue
-		}
+		// TODO
+		//if fileIDs != nil && !fileIDs[l.FileID] {
+		//	continue
+		//}
 		if projIDs != nil && (l.ProjectID == nil || !projIDs[*l.ProjectID]) {
 			continue
 		}

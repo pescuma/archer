@@ -498,7 +498,7 @@ func (i *BlameImporter) propagateChangesToParents(filesDB *model.Files, peopleDB
 		pa := peopleDB.GetPersonByID(blame.AuthorID)
 		file := filesDB.GetFileByID(blame.FileID)
 
-		s := statsDB.GetOrCreateLines(c.Date.Format("2006-01"), blame.RepositoryID, blame.AuthorID, blame.CommitterID, file.ID, file.ProjectID)
+		s := statsDB.GetOrCreateLines(c.Date.Format("2006-01"), blame.RepositoryID, blame.AuthorID, blame.CommitterID, file.ProjectID)
 
 		switch blame.LineType {
 		case model.CodeFileLine:
