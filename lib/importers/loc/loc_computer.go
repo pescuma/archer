@@ -67,22 +67,5 @@ func (c *Computer) Compute() error {
 		}
 	}
 
-	c.console.Printf("Writing results...\n")
-
-	err = c.storage.WriteProjects()
-	if err != nil {
-		return err
-	}
-
-	err = c.storage.WriteFiles()
-	if err != nil {
-		return err
-	}
-
-	err = c.storage.WritePeople()
-	if err != nil {
-		return err
-	}
-
 	return nil
 }

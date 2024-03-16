@@ -159,8 +159,8 @@ func (w *Workspace) ImportGitHistory(dirs []string, opts *git.HistoryOptions) er
 }
 
 func (w *Workspace) ComputeHistory() error {
-	importer := history.NewComputer(w.console, w.storage)
-	return importer.Compute()
+	computer := history.NewComputer(w.console, w.storage)
+	return computer.Compute()
 }
 
 func (w *Workspace) ImportGitBlame(dirs []string, opts *git.BlameOptions) error {
@@ -169,8 +169,8 @@ func (w *Workspace) ImportGitBlame(dirs []string, opts *git.BlameOptions) error 
 }
 
 func (w *Workspace) ComputeBlame() error {
-	importer := blame.NewComputer(w.console, w.storage)
-	return importer.Compute()
+	computer := blame.NewComputer(w.console, w.storage)
+	return computer.Compute()
 }
 
 func (w *Workspace) ImportHibernate(rootDirs, globs []string, opts *hibernate.Options) error {
