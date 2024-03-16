@@ -37,6 +37,11 @@ func (c *Computer) Compute() error {
 		return err
 	}
 
+	peopleRelationsDB, err := c.storage.LoadPeopleRelations()
+	if err != nil {
+		return err
+	}
+
 	reposDB, err := c.storage.LoadRepositories()
 	if err != nil {
 		return err
@@ -108,8 +113,12 @@ func (c *Computer) Compute() error {
 
 			for _, a := range commit.AuthorIDs {
 				author := peopleDB.GetPersonByID(a)
+
 				addChanges(author.Changes)
+
+				peopleRelationsDB.GetOrCreatePersonRepo(a, repo.ID).SeenAt(commit.Date, commit.DateAuthored)
 			}
+			peopleRelationsDB.GetOrCreatePersonRepo(commit.CommitterID, repo.ID).SeenAt(commit.Date, commit.DateAuthored)
 
 			commitFiles, err := c.storage.LoadRepositoryCommitFiles(repo, commit)
 			if err != nil {
@@ -165,6 +174,16 @@ func (c *Computer) Compute() error {
 					}
 					addLinesFactor(s.Changes, len(commit.AuthorIDs))
 					msls[s] = true
+
+					peopleRelationsDB.GetOrCreatePersonFile(a, file.ID).SeenAt(commit.Date, commit.DateAuthored)
+				}
+				peopleRelationsDB.GetOrCreatePersonFile(commit.CommitterID, file.ID).SeenAt(commit.Date, commit.DateAuthored)
+
+				for _, of := range cf.OldIDs {
+					for _, a := range commit.AuthorIDs {
+						peopleRelationsDB.GetOrCreatePersonFile(a, of).SeenAt(commit.Date, commit.DateAuthored)
+					}
+					peopleRelationsDB.GetOrCreatePersonFile(commit.CommitterID, of).SeenAt(commit.Date, commit.DateAuthored)
 				}
 			}
 

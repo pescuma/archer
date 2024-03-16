@@ -73,11 +73,6 @@ func (i *HistoryImporter) Import(dirs []string, opts *HistoryOptions) error {
 		return err
 	}
 
-	peopleRelationsDB, err := i.storage.LoadPeopleRelations()
-	if err != nil {
-		return err
-	}
-
 	dirs, err = findRootDirs(dirs)
 	if err != nil {
 		return err
@@ -115,7 +110,7 @@ func (i *HistoryImporter) Import(dirs []string, opts *HistoryOptions) error {
 
 		repo.Branch = branch
 
-		commitsImported, err := i.importCommits(peopleRelationsDB, repo, gitRepo, gitRevision, opts)
+		commitsImported, err := i.importCommits(repo, gitRepo, gitRevision, opts)
 		if err != nil {
 			return err
 		}
@@ -144,7 +139,7 @@ func (i *HistoryImporter) Import(dirs []string, opts *HistoryOptions) error {
 			}
 		}
 
-		err = i.importChanges(filesDB, projectsDB, peopleRelationsDB, repo, gitRepo, gitRevision, opts)
+		err = i.importChanges(filesDB, projectsDB, repo, gitRepo, gitRevision, opts)
 		if err != nil {
 			return err
 		}
@@ -204,7 +199,7 @@ func (i *HistoryImporter) countCommitsToImport(repo *model.Repository, gitRepo *
 	return imported, nil
 }
 
-func (i *HistoryImporter) importCommits(peopleRelationsDB *model.PeopleRelations, repo *model.Repository,
+func (i *HistoryImporter) importCommits(repo *model.Repository,
 	gitRepo *git.Repository, gitRevision plumbing.Hash,
 	opts *HistoryOptions,
 ) (int, error) {
@@ -254,9 +249,6 @@ func (i *HistoryImporter) importCommits(peopleRelationsDB *model.PeopleRelations
 		repo.SeenAt(commit.Date, commit.DateAuthored)
 		author.SeenAt(commit.Date, commit.DateAuthored)
 		committer.SeenAt(commit.Date, commit.DateAuthored)
-
-		peopleRelationsDB.GetOrCreatePersonRepo(author.ID, repo.ID).SeenAt(commit.Date, commit.DateAuthored)
-		peopleRelationsDB.GetOrCreatePersonRepo(committer.ID, repo.ID).SeenAt(commit.Date, commit.DateAuthored)
 
 		return nil
 	})
@@ -340,7 +332,7 @@ type changeWork struct {
 	commitFiles *model.RepositoryCommitFiles
 }
 
-func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Projects, peopleRelationsDB *model.PeopleRelations,
+func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Projects,
 	repo *model.Repository, gitRepo *git.Repository, gitRevision plumbing.Hash,
 	opts *HistoryOptions,
 ) error {
@@ -448,11 +440,6 @@ func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Pro
 				proj.RepositoryID = &repo.ID
 			}
 
-			for _, a := range commit.AuthorIDs {
-				peopleRelationsDB.GetOrCreatePersonFile(a, file.ID).SeenAt(commit.Date, commit.DateAuthored)
-			}
-			peopleRelationsDB.GetOrCreatePersonFile(commit.CommitterID, file.ID).SeenAt(commit.Date, commit.DateAuthored)
-
 			for _, of := range cf.OldIDs {
 				oldFile := filesDB.GetFileByID(of)
 				oldFile.RepositoryID = &repo.ID
@@ -463,11 +450,6 @@ func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Pro
 					proj.SeenAt(commit.Date, commit.DateAuthored)
 					proj.RepositoryID = &repo.ID
 				}
-
-				for _, a := range commit.AuthorIDs {
-					peopleRelationsDB.GetOrCreatePersonFile(a, oldFile.ID).SeenAt(commit.Date, commit.DateAuthored)
-				}
-				peopleRelationsDB.GetOrCreatePersonFile(commit.CommitterID, oldFile.ID).SeenAt(commit.Date, commit.DateAuthored)
 			}
 		}
 
