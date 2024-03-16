@@ -10,6 +10,7 @@ import (
 	"github.com/abiosoft/lineprefix"
 
 	"github.com/pescuma/archer/lib/consoles"
+	"github.com/pescuma/archer/lib/importers/blame"
 	"github.com/pescuma/archer/lib/importers/csproj"
 	"github.com/pescuma/archer/lib/importers/git"
 	"github.com/pescuma/archer/lib/importers/gomod"
@@ -165,6 +166,11 @@ func (w *Workspace) ComputeHistory() error {
 func (w *Workspace) ImportGitBlame(dirs []string, opts *git.BlameOptions) error {
 	importer := git.NewBlameImporter(w.console, w.storage)
 	return importer.Import(dirs, opts)
+}
+
+func (w *Workspace) ComputeBlame() error {
+	importer := blame.NewComputer(w.console, w.storage)
+	return importer.Compute()
 }
 
 func (w *Workspace) ImportHibernate(rootDirs, globs []string, opts *hibernate.Options) error {

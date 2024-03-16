@@ -49,6 +49,8 @@ func (i *Importer) Import(rootDirs, globs []string, opts *Options) error {
 		return err
 	}
 
+	fmt.Printf("Finding files to import hibernate annotations...\n")
+
 	rootsFinder := common.NewRootsFinder(rootDirs, globs)
 
 	roots, err := rootsFinder.ComputeRootDirs(projectsDB, filesDB)
@@ -217,18 +219,6 @@ func (i *Importer) Import(rootDirs, globs []string, opts *Options) error {
 	}
 
 	common.CreateTableNameParts(lo.Keys(dbProjs))
-
-	fmt.Printf("Writing results...\n")
-
-	err = i.storage.WriteProjects()
-	if err != nil {
-		return err
-	}
-
-	err = i.storage.WriteFiles()
-	if err != nil {
-		return err
-	}
 
 	return nil
 }

@@ -34,6 +34,14 @@ var cli struct {
 		Owners ImportOwnersCmd `cmd:"" help:"Import file owners."`
 	} `cmd:""`
 
+	Compute struct {
+		All     ComputeAllCmd     `cmd:"" help:"Compute all based on imported information."`
+		LOC     ComputeLOCCmd     `cmd:"" help:"Compute lines of code based on imported files."`
+		Metrics ComputeMetricsCmd `cmd:"" help:"Compute code metrics based on imported files."`
+		History ComputeHistoryCmd `cmd:"" help:"Compute history based on imported files."`
+		Blame   ComputeBlameCmd   `cmd:"" help:"Compute blame based on imported files."`
+	} `cmd:""`
+
 	Run struct {
 		Git RunGitCmd `cmd:"" help:"Run git commands on all imported repositories."`
 	} `cmd:""`

@@ -38,7 +38,9 @@ func (i *Importer) Import(connectionString string) error {
 		return errors.Wrapf(err, "error connecting to MySQL using %v", connectionString)
 	}
 
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	db.SetConnMaxLifetime(time.Minute)
 	db.SetMaxOpenConns(1)

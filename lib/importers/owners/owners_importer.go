@@ -174,18 +174,6 @@ func (i *Importer) Import(filter []string, opts *Options) error {
 		_ = bar.Add(1)
 	}
 
-	fmt.Printf("Writing results...\n")
-
-	err = i.storage.WritePeople()
-	if err != nil {
-		return err
-	}
-
-	err = i.storage.WriteFiles()
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 

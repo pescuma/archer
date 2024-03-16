@@ -108,7 +108,6 @@ func (c *ImportAllCmd) Run(ctx *context) error {
 	err = ws.ImportGitBlame(c.Paths, &git.BlameOptions{
 		Branch:      c.Branch,
 		Incremental: c.Incremental,
-		SaveEvery:   toOption(c.SaveEvery),
 	})
 	if err != nil {
 		return err
@@ -247,11 +246,10 @@ func (c *ImportGitHistoryCmd) Run(ctx *context) error {
 }
 
 type ImportGitBlameCmd struct {
-	Paths         []string      `arg:"" help:"Paths with the roots of git repositories." type:"existingpath"`
-	Branch        string        `help:"Git branch to use to import data."`
-	Incremental   bool          `default:"true" negatable:"" help:"Don't import files already imported."`
-	LimitImported int           `help:"Limit the number of imported files. Can be used to incrementally import data. Counted by file name."`
-	SaveEvery     time.Duration `default:"10m" help:"Save results while processing to avoid losing work."`
+	Paths         []string `arg:"" help:"Paths with the roots of git repositories." type:"existingpath"`
+	Branch        string   `help:"Git branch to use to import data."`
+	Incremental   bool     `default:"true" negatable:"" help:"Don't import files already imported."`
+	LimitImported int      `help:"Limit the number of imported files. Can be used to incrementally import data. Counted by file name."`
 }
 
 func (c *ImportGitBlameCmd) Run(ctx *context) error {
@@ -259,7 +257,6 @@ func (c *ImportGitBlameCmd) Run(ctx *context) error {
 		Branch:           c.Branch,
 		Incremental:      c.Incremental,
 		MaxImportedFiles: toOption(c.LimitImported),
-		SaveEvery:        toOption(c.SaveEvery),
 	})
 }
 
