@@ -36,8 +36,6 @@ func NewImporter(console consoles.Console, storage storages.Storage) *Importer {
 }
 
 func (i *Importer) Import(dirs []string, options *Options) error {
-	i.console.Printf("Loading existing data...\n")
-
 	projsDB, err := i.storage.LoadProjects()
 	if err != nil {
 		return err
@@ -48,28 +46,14 @@ func (i *Importer) Import(dirs []string, options *Options) error {
 		return err
 	}
 
-	err = common.FindAndImportFiles(i.console, "projects", dirs, func(name string) bool {
-		return strings.HasSuffix(strings.ToLower(name), ".csproj")
-	}, func(path string) error {
-		return i.process(projsDB, filesDB, path, options)
-	})
-	if err != nil {
-		return err
-	}
-
-	i.console.Printf("Writing results...\n")
-
-	err = i.storage.WriteProjects()
-	if err != nil {
-		return err
-	}
-
-	err = i.storage.WriteFiles()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return common.FindAndImportFiles(i.console, "projects", dirs,
+		func(name string) bool {
+			return strings.HasSuffix(strings.ToLower(name), ".csproj")
+		},
+		func(path string) error {
+			return i.process(projsDB, filesDB, path, options)
+		},
+	)
 }
 
 func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path string, opts *Options) error {

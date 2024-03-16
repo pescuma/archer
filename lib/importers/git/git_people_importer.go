@@ -37,8 +37,6 @@ func NewPeopleImporter(console consoles.Console, storage storages.Storage) *Peop
 }
 
 func (i PeopleImporter) Import(dirs []string, opts *PeopleOptions) error {
-	i.console.Printf("Loading existing data...\n")
-
 	configDB, err := i.storage.LoadConfig()
 	if err != nil {
 		return err
@@ -62,13 +60,6 @@ func (i PeopleImporter) Import(dirs []string, opts *PeopleOptions) error {
 	i.console.Printf("Importing people...\n")
 
 	_, err = importPeople(configDB, peopleDB, reposDB, dirs, opts.Branch)
-	if err != nil {
-		return err
-	}
-
-	i.console.Printf("Writing results...\n")
-
-	err = i.storage.WritePeople()
 	if err != nil {
 		return err
 	}

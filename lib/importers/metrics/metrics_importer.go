@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"io/fs"
-	"math"
 	"os"
 	"strings"
 	"time"
@@ -19,7 +18,6 @@ import (
 	"github.com/pescuma/archer/lib/metrics/dependencies"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/storages"
-	"github.com/pescuma/archer/lib/utils"
 )
 
 type Importer struct {
@@ -47,11 +45,6 @@ func (i *Importer) Import(filter []string, opts *Options) error {
 	}
 
 	filesDB, err := i.storage.LoadFiles()
-	if err != nil {
-		return err
-	}
-
-	peopleDB, err := i.storage.LoadPeople()
 	if err != nil {
 		return err
 	}
@@ -117,7 +110,7 @@ func (i *Importer) Import(filter []string, opts *Options) error {
 	i.console.Printf("Importing metrics from %v files...\n", len(ws))
 
 	start := time.Now()
-	err = kotlin.ProcessFiles(lo.Keys(ws),
+	return kotlin.ProcessFiles(lo.Keys(ws),
 		func(path string, content kotlin_parser.IKotlinFileContext) error {
 			w := ws[path]
 			file := w.file
@@ -161,87 +154,8 @@ func (i *Importer) Import(filter []string, opts *Options) error {
 			}
 
 			return nil
-		})
-	if err != nil {
-		return err
-	}
-
-	i.console.Printf("Propagating changes to parents...\n")
-
-	updateParentMetrics(projectsDB, filesDB, peopleDB)
-
-	i.console.Printf("Writing results...\n")
-
-	err = i.storage.WriteProjects()
-	if err != nil {
-		return err
-	}
-
-	err = i.storage.WriteFiles()
-	if err != nil {
-		return err
-	}
-
-	err = i.storage.WritePeople()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func updateParentMetrics(projectsDB *model.Projects, filesDB *model.Files, peopleDB *model.People) {
-	for _, p := range projectsDB.ListProjects(model.FilterExcludeExternal) {
-		p.Metrics.Clear()
-		for _, d := range p.Dirs {
-			d.Metrics.Clear()
-		}
-	}
-
-	for _, a := range peopleDB.ListProductAreas() {
-		a.Metrics.Clear()
-	}
-
-	filesByDir := filesDB.GroupFilesByDirectory()
-
-	for _, proj := range projectsDB.ListProjects(model.FilterExcludeExternal) {
-		for _, dir := range proj.Dirs {
-			for _, file := range filesByDir[dir.ID] {
-				file.Metrics.FocusedComplexity = computeFocusedComplexity(file.Size, file.Changes, file.Metrics)
-
-				proj.SeenAt(file.FirstSeen, file.LastSeen)
-				dir.SeenAt(file.FirstSeen, file.LastSeen)
-
-				dir.Metrics.Add(file.Metrics)
-
-				if file.ProductAreaID != nil {
-					peopleDB.GetProductAreaByID(*file.ProductAreaID).Metrics.Add(file.Metrics)
-				}
-			}
-
-			proj.Metrics.Add(dir.Metrics)
-		}
-	}
-}
-
-func computeFocusedComplexity(size *model.Size, changes *model.Changes, metrics *model.Metrics) int {
-	if size.Lines == 0 {
-		return 0
-	}
-
-	complexityBase := float64(utils.Max(metrics.CognitiveComplexity, 1))
-
-	deps := utils.Max(metrics.GuiceDependencies, 0)
-	depsLimit := 6.
-	depsExp := 0.3
-	depsFactor := math.Max(math.Pow(float64(deps)/depsLimit, depsExp), 0.1)
-
-	chs := changes.In6Months
-	chsLimit := 10.
-	chsExp := 0.2
-	chsFactor := math.Max(math.Pow(float64(chs)/chsLimit, chsExp), 0.1)
-
-	return int(math.Round(complexityBase * depsFactor * chsFactor))
+		},
+	)
 }
 
 func (l *Options) ShouldContinue(imported int) bool {

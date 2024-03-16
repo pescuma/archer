@@ -57,4 +57,7 @@ func main() {
 		ws: ws,
 	})
 	ctx.FatalIfErrorf(err)
+
+	err = ws.Write()
+	ctx.FatalIfErrorf(err)
 }

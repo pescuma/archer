@@ -54,9 +54,7 @@ func (i *Importer) Import(connectionString string) error {
 		return err
 	}
 
-	fmt.Printf("Writing results...\n")
-
-	return i.storage.WriteProjects()
+	return nil
 }
 
 func (i *Importer) importTables(db *sql.DB, projs *model.Projects) error {

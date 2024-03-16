@@ -15,6 +15,7 @@ import (
 	"github.com/pescuma/archer/lib/importers/gomod"
 	"github.com/pescuma/archer/lib/importers/gradle"
 	"github.com/pescuma/archer/lib/importers/hibernate"
+	"github.com/pescuma/archer/lib/importers/history"
 	"github.com/pescuma/archer/lib/importers/loc"
 	"github.com/pescuma/archer/lib/importers/metrics"
 	"github.com/pescuma/archer/lib/importers/mysql"
@@ -39,11 +40,13 @@ func NewWorkspace(file string) (*Workspace, error) {
 		}
 	}
 
+	console := consoles.NewStdOutConsole()
+
 	var storage storages.Storage
 	var err error
 	switch {
 	case file == ":memory:":
-		storage, err = orm.NewGormStorage(orm.WithSqliteInMemory())
+		storage, err = orm.NewGormStorage(orm.WithSqliteInMemory(), console)
 
 	case strings.HasSuffix(file, ".sqlite"):
 		file, err = utils.PathAbs(file)
@@ -56,7 +59,7 @@ func NewWorkspace(file string) (*Workspace, error) {
 			return nil, err
 		}
 
-		storage, err = orm.NewGormStorage(orm.WithSqlite(file))
+		storage, err = orm.NewGormStorage(orm.WithSqlite(file), console)
 
 	default:
 		return nil, fmt.Errorf("unknown storage type for file %v", file)
@@ -66,7 +69,7 @@ func NewWorkspace(file string) (*Workspace, error) {
 	}
 
 	return &Workspace{
-		console: consoles.NewStdOutConsole(),
+		console: console,
 		storage: storage,
 	}, nil
 }
@@ -114,24 +117,12 @@ func (w *Workspace) SetGlobalConfig(config string, value string) (bool, error) {
 
 	(*cfg)[config] = value
 
-	err = w.storage.WriteConfig()
-	if err != nil {
-		return false, err
-	}
-
 	return true, nil
 
 }
 
 func (w *Workspace) SetProjectConfig(proj *model.Project, config string, value string) (bool, error) {
 	changed := proj.SetData(config, value)
-
-	if changed {
-		err := w.storage.WriteProject(proj)
-		if err != nil {
-			return false, err
-		}
-	}
 
 	return changed, nil
 }
@@ -166,6 +157,11 @@ func (w *Workspace) ImportGitHistory(dirs []string, opts *git.HistoryOptions) er
 	return importer.Import(dirs, opts)
 }
 
+func (w *Workspace) ComputeHistory() error {
+	importer := history.NewComputer(w.console, w.storage)
+	return importer.Compute()
+}
+
 func (w *Workspace) ImportGitBlame(dirs []string, opts *git.BlameOptions) error {
 	importer := git.NewBlameImporter(w.console, w.storage)
 	return importer.Import(dirs, opts)
@@ -178,29 +174,22 @@ func (w *Workspace) ImportHibernate(rootDirs, globs []string, opts *hibernate.Op
 
 func (w *Workspace) ImportLOC(filter []string, opts *loc.Options) error {
 	importer := loc.NewImporter(w.console, w.storage)
-
-	err := importer.Import(filter, opts)
-	if err != nil {
-		return err
-	}
-
-	return w.Write()
+	return importer.Import(filter, opts)
 }
 
 func (w *Workspace) ComputeLOC() error {
 	computer := loc.NewComputer(w.console, w.storage)
-
-	err := computer.Compute()
-	if err != nil {
-		return err
-	}
-
-	return w.Write()
+	return computer.Compute()
 }
 
 func (w *Workspace) ImportMetrics(filter []string, opts *metrics.Options) error {
 	importer := metrics.NewImporter(w.console, w.storage)
 	return importer.Import(filter, opts)
+}
+
+func (w *Workspace) ComputeMetrics() error {
+	computer := metrics.NewComputer(w.console, w.storage)
+	return computer.Compute()
 }
 
 func (w *Workspace) ImportMySql(connectionString string) error {

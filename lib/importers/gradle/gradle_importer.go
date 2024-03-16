@@ -108,18 +108,6 @@ func (i *Importer) Import(rootDir string) error {
 		}
 	}
 
-	fmt.Printf("Writing results...\n")
-
-	err = i.storage.WriteProjects()
-	if err != nil {
-		return err
-	}
-
-	err = i.storage.WriteFiles()
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 

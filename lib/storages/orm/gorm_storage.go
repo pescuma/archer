@@ -19,14 +19,16 @@ import (
 	"gorm.io/gorm/logger"
 	"gorm.io/gorm/schema"
 
+	"github.com/pescuma/archer/lib/consoles"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/storages"
 	"github.com/pescuma/archer/lib/utils"
 )
 
 type gormStorage struct {
-	mutex sync.RWMutex
-	db    *gorm.DB
+	mutex   sync.RWMutex
+	db      *gorm.DB
+	console consoles.Console
 
 	projects        *model.Projects
 	files           *model.Files
@@ -51,7 +53,7 @@ type gormStorage struct {
 	monthLines          map[string]*sqlMonthLines
 }
 
-func NewGormStorage(d gorm.Dialector) (storages.Storage, error) {
+func NewGormStorage(d gorm.Dialector, console consoles.Console) (storages.Storage, error) {
 	l := logger.New(
 		log.New(os.Stdout, "\r\n", log.LstdFlags),
 		logger.Config{
@@ -84,7 +86,8 @@ func NewGormStorage(d gorm.Dialector) (storages.Storage, error) {
 	}
 
 	return &gormStorage{
-		db: db,
+		db:      db,
+		console: console,
 	}, nil
 }
 
@@ -110,6 +113,8 @@ func (s *gormStorage) LoadProjects() (*model.Projects, error) {
 	if s.projects != nil {
 		return s.projects, nil
 	}
+
+	s.console.Printf("Loading projects...\n")
 
 	result := model.NewProjects()
 
@@ -273,6 +278,8 @@ func (s *gormStorage) LoadFiles() (*model.Files, error) {
 	if s.files != nil {
 		return s.files, nil
 	}
+
+	s.console.Printf("Loading files...\n")
 
 	result := model.NewFiles()
 
@@ -442,6 +449,8 @@ func (s *gormStorage) LoadPeople() (*model.People, error) {
 	if s.people != nil {
 		return s.people, nil
 	}
+
+	s.console.Printf("Loading people...\n")
 
 	result := model.NewPeople()
 
@@ -637,6 +646,8 @@ func (s *gormStorage) LoadRepositories() (*model.Repositories, error) {
 	if s.repos != nil {
 		return s.repos, nil
 	}
+
+	s.console.Printf("Loading repositories...\n")
 
 	result := model.NewRepositories()
 
@@ -961,6 +972,8 @@ func (s *gormStorage) LoadMonthlyStats() (*model.MonthlyStats, error) {
 		return s.stats, nil
 	}
 
+	s.console.Printf("Loading monthly stats...\n")
+
 	result := model.NewMonthlyStats()
 
 	var sqlLines []*sqlMonthLines
@@ -1023,6 +1036,8 @@ func (s *gormStorage) LoadConfig() (*map[string]string, error) {
 	if s.config != nil {
 		return s.config, nil
 	}
+
+	s.console.Printf("Loading config...\n")
 
 	result := map[string]string{}
 

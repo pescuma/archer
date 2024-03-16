@@ -26,8 +26,6 @@ func NewReposImporter(console consoles.Console, storage storages.Storage) *Repos
 }
 
 func (i *ReposImporter) Import(dirs []string, opts *ReposOptions) error {
-	i.console.Printf("Loading existing data...\n")
-
 	reposDB, err := i.storage.LoadRepositories()
 	if err != nil {
 		return err
@@ -57,13 +55,6 @@ func (i *ReposImporter) Import(dirs []string, opts *ReposOptions) error {
 		}
 
 		repo.Branch = branch
-	}
-
-	i.console.Printf("Writing results...\n")
-
-	err = i.storage.WriteRepositories()
-	if err != nil {
-		return err
 	}
 
 	return nil
