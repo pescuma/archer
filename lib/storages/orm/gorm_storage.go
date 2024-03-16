@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -186,10 +187,18 @@ func (s *gormStorage) LoadProjects() (*model.Projects, error) {
 }
 
 func (s *gormStorage) WriteProjects() error {
+	if s.projects == nil {
+		return nil
+	}
+
 	return s.writeProjects(s.projects.ListProjects(model.FilterAll))
 }
 
 func (s *gormStorage) WriteProject(proj *model.Project) error {
+	if s.projects == nil {
+		return errors.New("projects not loaded")
+	}
+
 	return s.writeProjects([]*model.Project{proj})
 }
 
@@ -295,10 +304,18 @@ func (s *gormStorage) LoadFiles() (*model.Files, error) {
 }
 
 func (s *gormStorage) WriteFiles() error {
+	if s.files == nil {
+		return nil
+	}
+
 	return s.writeFiles(s.files.ListFiles())
 }
 
 func (s *gormStorage) WriteFile(file *model.File) error {
+	if s.files == nil {
+		return errors.New("files not loaded")
+	}
+
 	return s.writeFiles([]*model.File{file})
 }
 
@@ -473,6 +490,10 @@ func (s *gormStorage) LoadPeople() (*model.People, error) {
 }
 
 func (s *gormStorage) WritePeople() error {
+	if s.projects == nil {
+		return nil
+	}
+
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -562,6 +583,10 @@ func (s *gormStorage) LoadPeopleRelations() (*model.PeopleRelations, error) {
 }
 
 func (s *gormStorage) WritePeopleRelations() error {
+	if s.peopleRelations == nil {
+		return nil
+	}
+
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -694,10 +719,18 @@ func (s *gormStorage) LoadRepositories() (*model.Repositories, error) {
 }
 
 func (s *gormStorage) WriteRepositories() error {
+	if s.repos == nil {
+		return nil
+	}
+
 	return s.writeRepositories(s.repos.List())
 }
 
 func (s *gormStorage) WriteRepository(repo *model.Repository) error {
+	if s.repos == nil {
+		return errors.New("repos not loaded")
+	}
+
 	return s.writeRepositories([]*model.Repository{repo})
 }
 
@@ -769,6 +802,10 @@ func (s *gormStorage) writeRepositories(repos []*model.Repository) error {
 }
 
 func (s *gormStorage) WriteCommit(repo *model.Repository, commit *model.RepositoryCommit) error {
+	if s.repos == nil {
+		return errors.New("repos not loaded")
+	}
+
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -818,6 +855,10 @@ func (s *gormStorage) WriteCommit(repo *model.Repository, commit *model.Reposito
 }
 
 func (s *gormStorage) LoadRepositoryCommitFiles(repo *model.Repository, commit *model.RepositoryCommit) (*model.RepositoryCommitFiles, error) {
+	if s.repos == nil {
+		return nil, errors.New("repos not loaded")
+	}
+
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -870,6 +911,10 @@ func (s *gormStorage) WriteRepositoryCommitFiles(files []*model.RepositoryCommit
 }
 
 func (s *gormStorage) QueryCommits(file string, proj string, repo string, person string) ([]model.UUID, error) {
+	if s.repos == nil {
+		return nil, errors.New("repos not loaded")
+	}
+
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -938,6 +983,10 @@ func (s *gormStorage) LoadMonthlyStats() (*model.MonthlyStats, error) {
 }
 
 func (s *gormStorage) WriteMonthlyStats() error {
+	if s.stats == nil {
+		return nil
+	}
+
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -994,6 +1043,10 @@ func (s *gormStorage) LoadConfig() (*map[string]string, error) {
 }
 
 func (s *gormStorage) WriteConfig() error {
+	if s.config == nil {
+		return nil
+	}
+
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 

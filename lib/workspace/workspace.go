@@ -178,7 +178,24 @@ func (w *Workspace) ImportHibernate(rootDirs, globs []string, opts *hibernate.Op
 
 func (w *Workspace) ImportLOC(filter []string, opts *loc.Options) error {
 	importer := loc.NewImporter(w.console, w.storage)
-	return importer.Import(filter, opts)
+
+	err := importer.Import(filter, opts)
+	if err != nil {
+		return err
+	}
+
+	return w.Write()
+}
+
+func (w *Workspace) ComputeLOC() error {
+	computer := loc.NewComputer(w.console, w.storage)
+
+	err := computer.Compute()
+	if err != nil {
+		return err
+	}
+
+	return w.Write()
 }
 
 func (w *Workspace) ImportMetrics(filter []string, opts *metrics.Options) error {
@@ -227,6 +244,47 @@ func (w *Workspace) RunGit(args ...string) error {
 		_ = cmd.Run()
 
 		w.console.PopPrefix()
+	}
+
+	return nil
+}
+
+func (w *Workspace) Write() error {
+	w.console.Printf("Writing results...\n")
+
+	err := w.storage.WriteConfig()
+	if err != nil {
+		return err
+	}
+
+	err = w.storage.WriteProjects()
+	if err != nil {
+		return err
+	}
+
+	err = w.storage.WriteFiles()
+	if err != nil {
+		return err
+	}
+
+	err = w.storage.WritePeople()
+	if err != nil {
+		return err
+	}
+
+	err = w.storage.WritePeopleRelations()
+	if err != nil {
+		return err
+	}
+
+	err = w.storage.WriteRepositories()
+	if err != nil {
+		return err
+	}
+
+	err = w.storage.WriteMonthlyStats()
+	if err != nil {
+		return err
 	}
 
 	return nil

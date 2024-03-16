@@ -46,11 +46,6 @@ func (i *Importer) Import(filter []string, opts *Options) error {
 		return err
 	}
 
-	peopleDB, err := i.storage.LoadPeople()
-	if err != nil {
-		return err
-	}
-
 	ps, err := filters.ParseAndFilterProjects(projectsDB, filter, model.FilterExcludeExternal)
 	if err != nil {
 		return err
@@ -118,25 +113,6 @@ func (i *Importer) Import(filter []string, opts *Options) error {
 		}
 	}
 
-	updateParents(projectsDB, filesDB, peopleDB)
-
-	i.console.Printf("Writing results...\n")
-
-	err = i.storage.WriteProjects()
-	if err != nil {
-		return err
-	}
-
-	err = i.storage.WriteFiles()
-	if err != nil {
-		return err
-	}
-
-	err = i.storage.WritePeople()
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -165,7 +141,51 @@ func countLines(path string) (int, int, error) {
 	return text, blank, scanner.Err()
 }
 
-func updateParents(projectsDB *model.Projects, filesDB *model.Files, peopleDB *model.People) {
+func (i *Importer) computeLOC(files []*model.File) (*gocloc.Result, error) {
+	languages := gocloc.NewDefinedLanguages()
+	options := gocloc.NewClocOptions()
+
+	paths := lo.Map(files, func(f *model.File, _ int) string { return f.Path })
+
+	processor := gocloc.NewProcessor(languages, options)
+	loc, err := processor.Analyze(paths)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error computing lines of code")
+	}
+
+	return loc, nil
+}
+
+type Computer struct {
+	console consoles.Console
+	storage storages.Storage
+}
+
+func NewComputer(console consoles.Console, storage storages.Storage) *Computer {
+	return &Computer{
+		console: console,
+		storage: storage,
+	}
+}
+
+func (c *Computer) Compute() error {
+	c.console.Printf("Loading existing data...\n")
+
+	projectsDB, err := c.storage.LoadProjects()
+	if err != nil {
+		return err
+	}
+
+	filesDB, err := c.storage.LoadFiles()
+	if err != nil {
+		return err
+	}
+
+	peopleDB, err := c.storage.LoadPeople()
+	if err != nil {
+		return err
+	}
+
 	for _, a := range peopleDB.ListProductAreas() {
 		a.Size.Clear()
 	}
@@ -196,19 +216,23 @@ func updateParents(projectsDB *model.Projects, filesDB *model.Files, peopleDB *m
 			proj.AddSize(dir.Type.String(), dir.Size)
 		}
 	}
-}
 
-func (i *Importer) computeLOC(files []*model.File) (*gocloc.Result, error) {
-	languages := gocloc.NewDefinedLanguages()
-	options := gocloc.NewClocOptions()
+	c.console.Printf("Writing results...\n")
 
-	paths := lo.Map(files, func(f *model.File, _ int) string { return f.Path })
-
-	processor := gocloc.NewProcessor(languages, options)
-	loc, err := processor.Analyze(paths)
+	err = c.storage.WriteProjects()
 	if err != nil {
-		return nil, errors.Wrapf(err, "error computing lines of code")
+		return err
 	}
 
-	return loc, nil
+	err = c.storage.WriteFiles()
+	if err != nil {
+		return err
+	}
+
+	err = c.storage.WritePeople()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

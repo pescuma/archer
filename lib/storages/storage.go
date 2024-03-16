@@ -5,6 +5,9 @@ import (
 )
 
 type Storage interface {
+	LoadConfig() (*map[string]string, error)
+	WriteConfig() error
+
 	LoadProjects() (*model.Projects, error)
 	WriteProjects() error
 	WriteProject(proj *model.Project) error
@@ -32,9 +35,6 @@ type Storage interface {
 
 	LoadMonthlyStats() (*model.MonthlyStats, error)
 	WriteMonthlyStats() error
-
-	LoadConfig() (*map[string]string, error)
-	WriteConfig() error
 
 	Close() error
 }
