@@ -160,7 +160,6 @@ func (s *gormStorage) LoadProjects() (*model.Projects, error) {
 		p.Data = decodeMap(sp.Data)
 		p.FirstSeen = sp.FirstSeen
 		p.LastSeen = sp.LastSeen
-		p.Ignore = sp.Ignore
 	}
 
 	for _, sd := range deps {
@@ -1265,7 +1264,6 @@ func toSqlProject(p *model.Project) *sqlProject {
 		Data:         encodeMap(p.Data),
 		FirstSeen:    p.FirstSeen,
 		LastSeen:     p.LastSeen,
-		Ignore:       p.Ignore,
 	}
 
 	for k, v := range p.Sizes {

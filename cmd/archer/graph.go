@@ -70,7 +70,7 @@ func (c *GraphCmd) Run(ctx *context) error {
 	return nil
 }
 
-func (c *GraphCmd) generateDot(projects *model.Projects, filter filters.ProjsAndDepsFilter) string {
+func (c *GraphCmd) generateDot(projects *model.Projects, filter filters.ProjectFilter) string {
 	ps := projects.ListProjects(model.FilterExcludeExternal)
 
 	getProjectName := func(p *model.Project) string {

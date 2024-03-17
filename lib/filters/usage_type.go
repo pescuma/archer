@@ -18,3 +18,18 @@ func (u UsageType) Merge(other UsageType) UsageType {
 		return Include
 	}
 }
+
+func (u UsageType) DecideFor(usage UsageType) bool {
+	switch {
+	case u == Include:
+		return true
+	case u == Exclude:
+		return false
+	case u == DontCare && usage == Exclude:
+		return true
+	case u == DontCare && usage == Include:
+		return false
+	default:
+		return true
+	}
+}

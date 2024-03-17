@@ -29,8 +29,6 @@ type Project struct {
 	Data         map[string]string
 	FirstSeen    time.Time
 	LastSeen     time.Time
-
-	Ignore bool
 }
 
 func NewProject(name string, id *UUID) *Project {

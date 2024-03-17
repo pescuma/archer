@@ -44,8 +44,6 @@ type sqlProject struct {
 	FirstSeen time.Time
 	LastSeen  time.Time
 
-	Ignore bool
-
 	CreatedAt time.Time
 	UpdatedAt time.Time
 

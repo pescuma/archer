@@ -23,7 +23,7 @@ func (s *server) archList(params *Filters) (any, error) {
 		result = append(result, s.toProject(proj))
 
 		for _, dep := range filters.FilterDependencies(filter, proj.Dependencies) {
-			if !filter.Decide(filter.FilterDependency(dep)) {
+			if !filter.FilterDependency(dep) {
 				continue
 			}
 

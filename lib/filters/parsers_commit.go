@@ -3,21 +3,19 @@ package filters
 import (
 	"strings"
 
-	"github.com/pkg/errors"
-
 	"github.com/pescuma/archer/lib/model"
 )
 
-func ParseCommitsFilter(rule string, filterType UsageType) (CommitsFilter, error) {
-	filter, err := ParseCommitsFilterBool(rule)
+func ParseCommitFilterWithUsage(rule string, filterType UsageType) (CommitFilterWithUsage, error) {
+	filter, err := ParseCommitFilter(rule)
 	if err != nil {
 		return nil, err
 	}
 
-	return LiftCommitsFilter(filter, filterType), nil
+	return LiftCommitFilter(filter, filterType), nil
 }
 
-func ParseCommitsFilterBool(rule string) (CommitsFilterBool, error) {
+func ParseCommitFilter(rule string) (CommitFilter, error) {
 	rule = strings.TrimSpace(rule)
 
 	switch {
@@ -27,7 +25,7 @@ func ParseCommitsFilterBool(rule string) (CommitsFilterBool, error) {
 		}, nil
 
 	case strings.Index(rule, "|") >= 0:
-		clauses, err := parseClauses(strings.Split(rule, "|"))
+		clauses, err := ParseCommitFilterList(strings.Split(rule, "|"))
 		if err != nil {
 			return nil, err
 		}
@@ -41,7 +39,7 @@ func ParseCommitsFilterBool(rule string) (CommitsFilterBool, error) {
 		}, nil
 
 	case strings.Index(rule, "&") >= 0:
-		clauses, err := parseClauses(strings.Split(rule, "&"))
+		clauses, err := ParseCommitFilterList(strings.Split(rule, "&"))
 		if err != nil {
 			return nil, err
 		}
@@ -55,7 +53,7 @@ func ParseCommitsFilterBool(rule string) (CommitsFilterBool, error) {
 		}, nil
 
 	case strings.HasPrefix(rule, "!"):
-		f, err := ParseCommitsFilterBool(rule[1:])
+		f, err := ParseCommitFilter(rule[1:])
 		if err != nil {
 			return nil, err
 		}
@@ -83,16 +81,11 @@ func ParseCommitsFilterBool(rule string) (CommitsFilterBool, error) {
 	}
 }
 
-func parseClauses(split []string) ([]CommitsFilterBool, error) {
-	result := make([]CommitsFilterBool, 0, len(split))
+func ParseCommitFilterList(rules []string) ([]CommitFilter, error) {
+	result := make([]CommitFilter, 0, len(rules))
 
-	for _, fi := range split {
-		fi = strings.TrimSpace(fi)
-		if fi == "" {
-			return nil, errors.New("empty clause")
-		}
-
-		f, err := ParseCommitsFilterBool(fi)
+	for _, rule := range rules {
+		f, err := ParseCommitFilter(rule)
 		if err != nil {
 			return nil, err
 		}

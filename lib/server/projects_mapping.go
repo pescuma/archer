@@ -24,29 +24,28 @@ func (s *server) filterProjects(col []*model.Project, params *Filters) ([]*model
 	return filters.FilterProjects(filter, col), nil
 }
 
-func (s *server) createProjectAndDepsFilter(params *Filters) (filters.ProjsAndDepsFilter, error) {
-	var fs []filters.ProjsAndDepsFilter
+func (s *server) createProjectAndDepsFilter(params *Filters) (filters.ProjectFilter, error) {
+	var fs []filters.ProjectFilterWithUsage
 
-	fi, err := filters.ParseProjsAndDepsFilter(s.projects, params.FilterProject, filters.Include)
+	fi, err := filters.ParseProjectFilterWithUsage(s.projects, params.FilterProject, filters.Include)
 	if err != nil {
 		return nil, err
 	}
 
 	fs = append(fs, fi)
 
-	projFilter, err := s.createProjectsExternalFilters(params)
+	pf, err := s.createProjectsExternalFilters(params)
 	if err != nil {
 		return nil, err
 	}
 
-	if projFilter != nil {
-		fs = append(fs, filters.NewSimpleProjectFilter(filters.Include, projFilter))
+	if pf != nil {
+		fs = append(fs, filters.LiftProjAndDepFilters(pf, nil, filters.Include))
 	}
 
-	fs = append(fs, filters.CreateProjsAndDepsIgnoreFilter())
-	fs = append(fs, filters.CreateProjsAndDepsIgnoreExternalDependenciesFilter())
+	fs = append(fs, filters.CreateIgnoreExternalDependenciesFilter())
 
-	return filters.GroupProjsAnDepsFilters(fs...), nil
+	return filters.UnliftProjectFilter(filters.GroupProjectFilters(fs...)), nil
 }
 
 func (s *server) createProjectsExternalFilters(params *Filters) (func(*model.Project) bool, error) {

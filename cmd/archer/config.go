@@ -28,7 +28,7 @@ func (c *ConfigSetCmd) Run(ctx *context) error {
 			return err
 		}
 
-		filter, err := filters.ParseProjsAndDepsFilter(projects, c.Project, filters.Include)
+		filter, err := filters.ParseProjectFilterWithUsage(projects, c.Project, filters.Include)
 		if err != nil {
 			return err
 		}

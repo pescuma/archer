@@ -10,11 +10,11 @@ type cmdWithFilters struct {
 	Exclude []string `short:"e" help:"Filter which projects or dependencies are NOT shown. This has preference over the included ones."`
 }
 
-func (c *cmdWithFilters) createFilter(projs *model.Projects) (filters.ProjsAndDepsFilter, error) {
-	var fs []filters.ProjsAndDepsFilter
+func (c *cmdWithFilters) createFilter(projs *model.Projects) (filters.ProjectFilter, error) {
+	var fs []filters.ProjectFilterWithUsage
 
 	for _, f := range c.Include {
-		fi, err := filters.ParseProjsAndDepsFilter(projs, f, filters.Include)
+		fi, err := filters.ParseProjectFilterWithUsage(projs, f, filters.Include)
 		if err != nil {
 			return nil, err
 		}
@@ -23,7 +23,7 @@ func (c *cmdWithFilters) createFilter(projs *model.Projects) (filters.ProjsAndDe
 	}
 
 	for _, f := range c.Exclude {
-		fi, err := filters.ParseProjsAndDepsFilter(projs, f, filters.Exclude)
+		fi, err := filters.ParseProjectFilterWithUsage(projs, f, filters.Exclude)
 		if err != nil {
 			return nil, err
 		}
@@ -31,8 +31,7 @@ func (c *cmdWithFilters) createFilter(projs *model.Projects) (filters.ProjsAndDe
 		fs = append(fs, fi)
 	}
 
-	fs = append(fs, filters.CreateProjsAndDepsIgnoreFilter())
-	fs = append(fs, filters.CreateProjsAndDepsIgnoreExternalDependenciesFilter())
+	fs = append(fs, filters.CreateIgnoreExternalDependenciesFilter())
 
-	return filters.GroupProjsAnDepsFilters(fs...), nil
+	return filters.UnliftProjectFilter(filters.GroupProjectFilters(fs...)), nil
 }
