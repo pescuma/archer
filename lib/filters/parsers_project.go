@@ -11,21 +11,21 @@ import (
 	"github.com/pescuma/archer/lib/utils"
 )
 
-func ParseFilter(projs *model.Projects, filter string, filterType UsageType) (Filter, error) {
+func ParseProjsAndDepsFilter(projs *model.Projects, rule string, filterType UsageType) (ProjsAndDepsFilter, error) {
 	switch {
-	case filter == "":
-		return &basicFilter{}, nil
+	case rule == "":
+		return &simpleProjectFilter{}, nil
 
-	case strings.Index(filter, "|") >= 0:
-		result := &orFilter{}
+	case strings.Index(rule, "|") >= 0:
+		result := &orProjsAndDepsFilter{}
 
-		for _, fi := range strings.Split(filter, "|") {
+		for _, fi := range strings.Split(rule, "|") {
 			fi = strings.TrimSpace(fi)
 			if fi == "" {
 				continue
 			}
 
-			f, err := ParseFilter(projs, fi, filterType)
+			f, err := ParseProjsAndDepsFilter(projs, fi, filterType)
 			if err != nil {
 				return nil, err
 			}
@@ -35,16 +35,16 @@ func ParseFilter(projs *model.Projects, filter string, filterType UsageType) (Fi
 
 		return result, nil
 
-	case strings.Index(filter, "&") >= 0:
-		result := &andFilter{}
+	case strings.Index(rule, "&") >= 0:
+		result := &andProjsAndDepsFilter{}
 
-		for _, fi := range strings.Split(filter, "&") {
+		for _, fi := range strings.Split(rule, "&") {
 			fi = strings.TrimSpace(fi)
 			if fi == "" {
 				continue
 			}
 
-			f, err := ParseFilter(projs, fi, filterType)
+			f, err := ParseProjsAndDepsFilter(projs, fi, filterType)
 			if err != nil {
 				return nil, err
 			}
@@ -54,32 +54,32 @@ func ParseFilter(projs *model.Projects, filter string, filterType UsageType) (Fi
 
 		return result, nil
 
-	case strings.Index(filter, "->") >= 0:
-		return ParseEdgeFilter(projs, filter, filterType)
+	case strings.Index(rule, "->") >= 0:
+		return ParseOnlyDepsFilter(projs, rule, filterType)
 
 	default:
-		return ParseProjectFilter(projs, filter, filterType)
+		return ParseOnlyProjsFilter(projs, rule, filterType)
 	}
 }
 
-func ParseProjectFilter(projs *model.Projects, filter string, filterType UsageType) (Filter, error) {
-	projFilter, err := parseProjectFilterBool(filter)
+func ParseOnlyProjsFilter(projs *model.Projects, rule string, filterType UsageType) (ProjsAndDepsFilter, error) {
+	projFilter, err := ParseOnlyProjsFilterBool(rule)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewProjectFilter(filterType, projFilter), nil
+	return NewSimpleProjectFilter(filterType, projFilter), nil
 }
 
-func ParseEdgeFilter(projs *model.Projects, filter string, filterType UsageType) (Filter, error) {
+func ParseOnlyDepsFilter(projs *model.Projects, rule string, filterType UsageType) (ProjsAndDepsFilter, error) {
 	re := regexp.MustCompile(`^([^>]*?)\s*(?:-(\d+)?(R)?)?->\s*([^>]*)$`)
 
-	parts := re.FindStringSubmatch(filter)
+	parts := re.FindStringSubmatch(rule)
 	if parts == nil {
-		return nil, errors.Errorf("invalid edge filter: %v", filter)
+		return nil, errors.Errorf("invalid edge filter: %v", rule)
 	}
 
-	srcFilter, err := parseProjectFilterBool(parts[1])
+	srcFilter, err := ParseOnlyProjsFilterBool(parts[1])
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +97,7 @@ func ParseEdgeFilter(projs *model.Projects, filter string, filterType UsageType)
 		onlyRequiredEdges = true
 	}
 
-	destFilter, _ := parseProjectFilterBool(parts[4])
+	destFilter, _ := ParseOnlyProjsFilterBool(parts[4])
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +121,7 @@ func ParseEdgeFilter(projs *model.Projects, filter string, filterType UsageType)
 		}
 	}
 
-	return &basicFilter{
+	return &simpleProjectFilter{
 		filterDependency: func(dep *model.ProjectDependency) UsageType {
 			if filterType == Include && !onlyRequiredEdges {
 				return utils.IIf(utils.MapContains(nodes, dep.Source.Name) && utils.MapContains(nodes, dep.Target.Name), Include, DontCare)
@@ -182,11 +182,11 @@ func findMatchingEdges(matches map[string]map[string]int, visited map[string]int
 	}
 }
 
-func parseProjectFilterBool(filter string) (func(proj *model.Project) bool, error) {
-	filter = strings.TrimSpace(filter)
+func ParseOnlyProjsFilterBool(rule string) (func(proj *model.Project) bool, error) {
+	rule = strings.TrimSpace(rule)
 
-	if strings.HasPrefix(filter, "!") {
-		f, err := parseProjectFilterBool(filter[1:])
+	if strings.HasPrefix(rule, "!") {
+		f, err := ParseOnlyProjsFilterBool(rule[1:])
 		if err != nil {
 			return nil, err
 		}
@@ -195,53 +195,20 @@ func parseProjectFilterBool(filter string) (func(proj *model.Project) bool, erro
 			return !f(proj)
 		}, nil
 
+	} else if strings.HasPrefix(rule, "id:") {
+		id := model.UUID(rule[3:])
+
+		return func(proj *model.Project) bool {
+			return proj.ID == id
+		}, nil
 	} else {
-		f, err := ParseStringFilter(filter)
+		f, err := ParseStringFilter(rule)
 		if err != nil {
 			return nil, err
 		}
 
 		return func(proj *model.Project) bool {
 			return f(proj.Name) || f(proj.SimpleName()) || f(proj.Name)
-		}, nil
-	}
-}
-
-func ParseStringFilter(filter string) (func(string) bool, error) {
-	filter = strings.TrimSpace(filter)
-
-	if filter == "" {
-		return func(s string) bool {
-			return true
-		}, nil
-
-	} else if strings.HasPrefix(filter, "re:") {
-		re, err := regexp.Compile("(?i)" + strings.TrimPrefix(filter, "re:"))
-		if err != nil {
-			return nil, errors.Wrapf(err, "invalid project RE: %v", filter)
-		}
-
-		return re.MatchString, nil
-
-	} else if strings.Index(filter, "*") >= 0 {
-		filterRE := strings.ReplaceAll(filter, `\`, `\\`)
-		filterRE = strings.ReplaceAll(filterRE, `.`, `\.`)
-		filterRE = strings.ReplaceAll(filterRE, `(`, `\(`)
-		filterRE = strings.ReplaceAll(filterRE, `)`, `\)`)
-		filterRE = strings.ReplaceAll(filterRE, `^`, `\^`)
-		filterRE = strings.ReplaceAll(filterRE, `$`, `\$`)
-		filterRE = strings.ReplaceAll(filterRE, `*`, `.*`)
-
-		re, err := regexp.Compile("(?i)^" + filterRE + "$")
-		if err != nil {
-			return nil, errors.Wrapf(err, "invalid project filter: %v", filter)
-		}
-
-		return re.MatchString, nil
-
-	} else {
-		return func(s string) bool {
-			return strings.EqualFold(s, filter)
 		}, nil
 	}
 }

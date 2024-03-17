@@ -7,9 +7,9 @@ func ParseAndFilterProjects(ps *model.Projects, filters []string, ft model.Filte
 		return ps.ListProjects(ft), nil
 	}
 
-	var fs []Filter
+	var fs []ProjsAndDepsFilter
 	for _, fe := range filters {
-		filter, err := ParseFilter(ps, fe, Include)
+		filter, err := ParseProjsAndDepsFilter(ps, fe, Include)
 		if err != nil {
 			return nil, err
 		}
@@ -17,16 +17,16 @@ func ParseAndFilterProjects(ps *model.Projects, filters []string, ft model.Filte
 		fs = append(fs, filter)
 	}
 
-	fs = append(fs, CreateIgnoreExternalDependenciesFilter())
+	fs = append(fs, CreateProjsAndDepsIgnoreExternalDependenciesFilter())
 
 	if ft == model.FilterExcludeExternal {
-		fs = append(fs, CreateIgnoreExternalDependenciesFilter())
+		fs = append(fs, CreateProjsAndDepsIgnoreExternalDependenciesFilter())
 	}
 
-	return FilterProjects(GroupFilters(fs...), ps.ListProjects(ft)), nil
+	return FilterProjects(GroupProjsAnDepsFilters(fs...), ps.ListProjects(ft)), nil
 }
 
-func FilterProjects(filter Filter, ps []*model.Project) []*model.Project {
+func FilterProjects(filter ProjsAndDepsFilter, ps []*model.Project) []*model.Project {
 	matched := map[*model.Project]bool{}
 
 	for _, p := range ps {
@@ -51,7 +51,7 @@ func FilterProjects(filter Filter, ps []*model.Project) []*model.Project {
 	return result
 }
 
-func FilterDependencies(filter Filter, ds map[string]*model.ProjectDependency) []*model.ProjectDependency {
+func FilterDependencies(filter ProjsAndDepsFilter, ds map[string]*model.ProjectDependency) []*model.ProjectDependency {
 	var result []*model.ProjectDependency
 	for _, d := range ds {
 		if IncludeDependency(filter, d) {
@@ -61,10 +61,14 @@ func FilterDependencies(filter Filter, ds map[string]*model.ProjectDependency) [
 	return result
 }
 
-func IncludeDependency(filter Filter, d *model.ProjectDependency) bool {
-	return filter.Decide(filter.FilterDependency(d)) == Include
+func IncludeDependency(filter ProjsAndDepsFilter, d *model.ProjectDependency) bool {
+	return filter.Decide(filter.FilterDependency(d))
 }
 
-func IncludeProject(filter Filter, p *model.Project) bool {
-	return filter.Decide(filter.FilterProject(p)) == Include
+func IncludeProject(filter ProjsAndDepsFilter, p *model.Project) bool {
+	return filter.Decide(filter.FilterProject(p))
+}
+
+func GroupProjsAnDepsFilters(filters ...ProjsAndDepsFilter) ProjsAndDepsFilter {
+	return &orProjsAndDepsFilter{filters}
 }

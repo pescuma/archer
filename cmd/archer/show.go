@@ -30,7 +30,7 @@ func (c *ShowCmd) Run(ctx *context) error {
 	return nil
 }
 
-func (c *ShowCmd) print(projects *model.Projects, filter filters.Filter) {
+func (c *ShowCmd) print(projects *model.Projects, filter filters.ProjsAndDepsFilter) {
 	ps := projects.ListProjects(model.FilterExcludeExternal)
 
 	tg := groupByGroups(ps, filter, false, func(p *model.Project) string {

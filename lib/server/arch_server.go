@@ -17,13 +17,13 @@ func (s *server) archList(params *Filters) (any, error) {
 		return nil, err
 	}
 
-	result := []gin.H{}
+	var result []gin.H
 
 	for _, proj := range filters.FilterProjects(filter, s.projects.ListProjects(model.FilterExcludeExternal)) {
 		result = append(result, s.toProject(proj))
 
 		for _, dep := range filters.FilterDependencies(filter, proj.Dependencies) {
-			if filter.Decide(filter.FilterDependency(dep)) == filters.Exclude {
+			if !filter.Decide(filter.FilterDependency(dep)) {
 				continue
 			}
 

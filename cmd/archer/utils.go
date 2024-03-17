@@ -10,7 +10,7 @@ import (
 	"github.com/pescuma/archer/lib/utils"
 )
 
-func groupByGroups(ps []*model.Project, filter filters.Filter, forceShowDependentProjects bool, projGrouping func(project *model.Project) string) *group {
+func groupByGroups(ps []*model.Project, filter filters.ProjsAndDepsFilter, forceShowDependentProjects bool, projGrouping func(project *model.Project) string) *group {
 	show := computeNodesShow(ps, filter, forceShowDependentProjects)
 
 	ps = lo.Filter(ps, func(p *model.Project, _ int) bool { return show[p.Name] })
@@ -100,7 +100,7 @@ func groupByGroups(ps []*model.Project, filter filters.Filter, forceShowDependen
 	return &tg
 }
 
-func computeNodesShow(ps []*model.Project, filter filters.Filter, forceShowDependentProjects bool) map[string]bool {
+func computeNodesShow(ps []*model.Project, filter filters.ProjsAndDepsFilter, forceShowDependentProjects bool) map[string]bool {
 	show := map[string]bool{}
 
 	for _, p := range ps {
