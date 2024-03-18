@@ -208,7 +208,7 @@ func (s *server) filterCommits(col []RepoAndCommit, file string, proj string, re
 	repo = prepareToSearch(repo)
 	person = prepareToSearch(person)
 
-	var ids *set.Set[model.UUID]
+	var ids *set.Set[model.ID]
 	if file != "" || proj != "" || repo != "" || person != "" {
 		r, err := s.storage.QueryCommits(file, proj, repo, person)
 		if err != nil {

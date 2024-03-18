@@ -14,7 +14,7 @@ type FileLine struct {
 	Line         int
 	ProjectID    *ID
 	RepositoryID *ID
-	CommitID     *UUID
+	CommitID     *ID
 	AuthorID     *ID
 	CommitterID  *ID
 	Date         time.Time

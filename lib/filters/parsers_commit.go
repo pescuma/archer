@@ -63,7 +63,10 @@ func ParseCommitFilter(rule string) (CommitFilter, error) {
 		}, nil
 
 	case strings.HasPrefix(rule, "id:"):
-		id := model.UUID(rule[3:])
+		id, err := model.StringToID(rule[3:])
+		if err != nil {
+			return nil, err
+		}
 
 		return func(repo *model.Repository, commit *model.RepositoryCommit) bool {
 			return commit.ID == id

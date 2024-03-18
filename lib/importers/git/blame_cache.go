@@ -67,7 +67,7 @@ type blameCacheImpl struct {
 	repo    *model.Repository
 	gitRepo *git.Repository
 	commits caches.Cache[plumbing.Hash, *BlameCommitCache]
-	indexes map[model.UUID]int
+	indexes map[model.ID]int
 }
 
 func (c *blameCacheImpl) CommitCount() int {
@@ -84,9 +84,9 @@ func newBlameCache(storage storages.Storage, filesDB *model.Files, repo *model.R
 	}
 
 	sorted, _ := graph.Sort()
-	indexes := make(map[model.UUID]int, len(sorted))
+	indexes := make(map[model.ID]int, len(sorted))
 	for i, s := range sorted {
-		indexes[s.(model.UUID)] = i
+		indexes[s.(model.ID)] = i
 	}
 
 	return &blameCacheImpl{

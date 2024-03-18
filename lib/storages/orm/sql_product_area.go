@@ -23,7 +23,7 @@ func newSqlProductArea(a *model.ProductArea) *sqlProductArea {
 	return &sqlProductArea{
 		ID:      a.ID,
 		Name:    a.Name,
-		Size:    toSqlSize(a.Size),
+		Size:    newSqlSize(a.Size),
 		Changes: toSqlChanges(a.Changes),
 		Metrics: toSqlMetricsAggregate(a.Metrics, a.Size),
 		Data:    encodeMap(a.Data),

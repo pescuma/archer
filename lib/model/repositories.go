@@ -10,6 +10,8 @@ type Repositories struct {
 	repoMaxID ID
 	byRootDir map[string]*Repository
 	byID      map[ID]*Repository
+
+	commitMaxID ID
 }
 
 func NewRepositories() *Repositories {
@@ -35,7 +37,7 @@ func (s *Repositories) GetOrCreateEx(rootDir string, id *ID) *Repository {
 	result, ok := s.byRootDir[rootDir]
 
 	if !ok {
-		result = NewRepository(createID(&s.repoMaxID, id), rootDir)
+		result = NewRepository(createID(&s.repoMaxID, id), rootDir, s)
 		s.byRootDir[rootDir] = result
 		s.byID[result.ID] = result
 	}

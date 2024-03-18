@@ -41,7 +41,7 @@ type server struct {
 	files           *model.Files
 	projects        *model.Projects
 	repos           *model.Repositories
-	commits         map[model.UUID]*model.RepositoryCommit
+	commits         map[model.ID]*model.RepositoryCommit
 	stats           *model.MonthlyStats
 }
 
@@ -88,7 +88,7 @@ func (s *server) load(storage storages.Storage) error {
 		return err
 	}
 
-	s.commits = make(map[model.UUID]*model.RepositoryCommit)
+	s.commits = make(map[model.ID]*model.RepositoryCommit)
 	for _, repo := range s.repos.List() {
 		for _, commit := range repo.ListCommits() {
 			s.commits[commit.ID] = commit

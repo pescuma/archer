@@ -46,7 +46,7 @@ func newSqlProject(p *model.Project) *sqlProject {
 		ProjectFile:  p.ProjectFile,
 		RepositoryID: p.RepositoryID,
 		Sizes:        map[string]*sqlSize{},
-		Size:         toSqlSize(p.Size),
+		Size:         newSqlSize(p.Size),
 		Changes:      toSqlChanges(p.Changes),
 		Metrics:      toSqlMetricsAggregate(p.Metrics, p.Size),
 		Data:         encodeMap(p.Data),
@@ -55,7 +55,7 @@ func newSqlProject(p *model.Project) *sqlProject {
 	}
 
 	for k, v := range p.Sizes {
-		sp.Sizes[k] = toSqlSize(v)
+		sp.Sizes[k] = newSqlSize(v)
 	}
 
 	if len(sp.Sizes) == 0 {

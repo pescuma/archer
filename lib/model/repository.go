@@ -23,10 +23,12 @@ type Repository struct {
 	LastSeen  time.Time
 
 	commitsByHash map[string]*RepositoryCommit
-	commitsByID   map[UUID]*RepositoryCommit
+	commitsByID   map[ID]*RepositoryCommit
+
+	repositories *Repositories
 }
 
-func NewRepository(id ID, rootDir string) *Repository {
+func NewRepository(id ID, rootDir string, repositories *Repositories) *Repository {
 	return &Repository{
 		ID:            id,
 		RootDir:       rootDir,
@@ -34,7 +36,8 @@ func NewRepository(id ID, rootDir string) *Repository {
 		FilesTotal:    -1,
 		FilesHead:     -1,
 		commitsByHash: map[string]*RepositoryCommit{},
-		commitsByID:   map[UUID]*RepositoryCommit{},
+		commitsByID:   map[ID]*RepositoryCommit{},
+		repositories:  repositories,
 	}
 }
 
@@ -42,11 +45,11 @@ func (r *Repository) GetOrCreateCommit(hash string) *RepositoryCommit {
 	return r.GetOrCreateCommitEx(hash, nil)
 }
 
-func (r *Repository) GetOrCreateCommitEx(hash string, id *UUID) *RepositoryCommit {
+func (r *Repository) GetOrCreateCommitEx(hash string, id *ID) *RepositoryCommit {
 	result, ok := r.commitsByHash[hash]
 
 	if !ok {
-		result = NewRepositoryCommit(hash, id)
+		result = NewRepositoryCommit(createID(&r.repositories.commitMaxID, id), hash)
 		r.commitsByHash[hash] = result
 		r.commitsByID[result.ID] = result
 	}
@@ -58,7 +61,7 @@ func (r *Repository) GetCommit(hash string) *RepositoryCommit {
 	return r.commitsByHash[hash]
 }
 
-func (r *Repository) GetCommitByID(id UUID) *RepositoryCommit {
+func (r *Repository) GetCommitByID(id ID) *RepositoryCommit {
 	return r.commitsByID[id]
 }
 

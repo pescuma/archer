@@ -31,7 +31,7 @@ func newSqlProjectDirectory(d *model.ProjectDirectory, p *model.Project) *sqlPro
 		ProjectID: p.ID,
 		Name:      d.RelativePath,
 		Type:      d.Type,
-		Size:      toSqlSize(d.Size),
+		Size:      newSqlSize(d.Size),
 		Changes:   toSqlChanges(d.Changes),
 		Metrics:   toSqlMetricsAggregate(d.Metrics, d.Size),
 		Data:      encodeMap(d.Data),

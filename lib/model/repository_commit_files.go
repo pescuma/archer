@@ -4,11 +4,11 @@ import "github.com/samber/lo"
 
 type RepositoryCommitFiles struct {
 	RepositoryID ID
-	CommitID     UUID
+	CommitID     ID
 	byID         map[ID]*RepositoryCommitFile
 }
 
-func NewRepositoryCommitFiles(repositoryID ID, commitID UUID) *RepositoryCommitFiles {
+func NewRepositoryCommitFiles(repositoryID ID, commitID ID) *RepositoryCommitFiles {
 	return &RepositoryCommitFiles{
 		RepositoryID: repositoryID,
 		CommitID:     commitID,

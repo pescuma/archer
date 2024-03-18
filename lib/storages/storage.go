@@ -31,7 +31,7 @@ type Storage interface {
 	WriteCommit(repo *model.Repository, commit *model.RepositoryCommit) error
 	LoadRepositoryCommitFiles(repo *model.Repository, commit *model.RepositoryCommit) (*model.RepositoryCommitFiles, error)
 	WriteRepositoryCommitFiles(files []*model.RepositoryCommitFiles) error
-	QueryCommits(file string, proj string, repo string, person string) ([]model.UUID, error)
+	QueryCommits(file string, proj string, repo string, person string) ([]model.ID, error)
 
 	LoadMonthlyStats() (*model.MonthlyStats, error)
 	WriteMonthlyStats() error
@@ -48,7 +48,7 @@ type BlamePerAuthor struct {
 	AuthorID     model.ID
 	CommitterID  model.ID
 	RepositoryID model.ID
-	CommitID     model.UUID
+	CommitID     model.ID
 	FileID       model.ID
 	LineType     model.FileLineType
 	Lines        int

@@ -10,9 +10,9 @@ import (
 )
 
 type CommitPatchParams struct {
-	RepoID   model.ID   `uri:"repoID"`
-	CommitID model.UUID `uri:"commitID"`
-	Ignore   *bool      `json:"ignore"`
+	RepoID   model.ID `uri:"repoID"`
+	CommitID model.ID `uri:"commitID"`
+	Ignore   *bool    `json:"ignore"`
 }
 
 func (s *server) initRepos(r *gin.Engine) {

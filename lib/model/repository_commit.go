@@ -5,11 +5,11 @@ import (
 )
 
 type RepositoryCommit struct {
+	ID       ID
 	Hash     string
 	Message  string
-	Parents  []UUID
-	Children []UUID
-	ID       UUID
+	Parents  []ID
+	Children []ID
 
 	Date         time.Time
 	CommitterID  ID
@@ -29,17 +29,10 @@ type RepositoryCommit struct {
 	Ignore bool
 }
 
-func NewRepositoryCommit(hash string, id *UUID) *RepositoryCommit {
-	var uuid UUID
-	if id == nil {
-		uuid = NewUUID("c")
-	} else {
-		uuid = *id
-	}
-
+func NewRepositoryCommit(id ID, hash string) *RepositoryCommit {
 	result := &RepositoryCommit{
 		Hash:          hash,
-		ID:            uuid,
+		ID:            id,
 		FilesModified: -1,
 		FilesCreated:  -1,
 		FilesDeleted:  -1,

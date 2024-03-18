@@ -155,9 +155,9 @@ func (s *gormStorage) LoadProjects() (*model.Projects, error) {
 		p.RepositoryID = sp.RepositoryID
 
 		for k, v := range sp.Sizes {
-			p.Sizes[k] = toModelSize(v)
+			p.Sizes[k] = v.ToModel()
 		}
-		p.Size = toModelSize(sp.Size)
+		p.Size = sp.Size.ToModel()
 		p.Changes = toModelChanges(sp.Changes)
 		p.Metrics = toModelMetricsAggregate(sp.Metrics)
 		p.Data = decodeMap(sp.Data)
@@ -179,7 +179,7 @@ func (s *gormStorage) LoadProjects() (*model.Projects, error) {
 
 		d := p.GetDirectoryEx(&sd.ID, sd.Name)
 		d.Type = sd.Type
-		d.Size = toModelSize(sd.Size)
+		d.Size = sd.Size.ToModel()
 		d.Changes = toModelChanges(sd.Changes)
 		d.Metrics = toModelMetricsAggregate(sd.Metrics)
 		d.Data = decodeMap(sd.Data)
@@ -292,7 +292,7 @@ func (s *gormStorage) LoadFiles() (*model.Files, error) {
 		f.RepositoryID = sf.RepositoryID
 		f.ProductAreaID = sf.ProductAreaID
 		f.Exists = sf.Exists
-		f.Size = toModelSize(sf.Size)
+		f.Size = sf.Size.ToModel()
 		f.Changes = toModelChanges(sf.Changes)
 		f.Metrics = toModelMetrics(sf.Metrics)
 		f.Data = decodeMap(sf.Data)
@@ -473,7 +473,7 @@ func (s *gormStorage) LoadPeople() (*model.People, error) {
 
 	for _, sa := range areas {
 		a := result.GetOrCreateProductAreaEx(sa.Name, &sa.ID)
-		a.Size = toModelSize(sa.Size)
+		a.Size = sa.Size.ToModel()
 		a.Changes = toModelChanges(sa.Changes)
 		a.Metrics = toModelMetricsAggregate(sa.Metrics)
 		a.Data = decodeMap(sa.Data)
@@ -644,7 +644,7 @@ func (s *gormStorage) LoadRepositories() (*model.Repositories, error) {
 		r.FilesHead = decodeMetric(sr.FilesHead)
 	}
 
-	commitsById := map[model.UUID]*model.RepositoryCommit{}
+	commitsById := map[model.ID]*model.RepositoryCommit{}
 	for _, sc := range commits {
 		repo := result.GetByID(sc.RepositoryID)
 
@@ -712,18 +712,18 @@ func (s *gormStorage) writeRepositories(repos []*model.Repository) error {
 	var sqlCommitPeople []*sqlRepositoryCommitPerson
 	for _, repo := range repos {
 		for _, c := range repo.ListCommits() {
-			sc := toSqlRepositoryCommit(repo, c)
+			sc := newSqlRepositoryCommit(repo, c)
 			if prepareChange(&s.sqlRepoCommits, sc) {
 				sqlCommits = append(sqlCommits, sc)
 			}
 
-			cp := toSqlRepositoryCommitPerson(c, c.CommitterID, CommitRoleCommitter, 1)
+			cp := newSqlRepositoryCommitPerson(c, c.CommitterID, CommitRoleCommitter, 1)
 			if prepareChange(&s.sqlRepoCommitPeople, cp) {
 				sqlCommitPeople = append(sqlCommitPeople, cp)
 			}
 
 			for i, a := range c.AuthorIDs {
-				cp = toSqlRepositoryCommitPerson(c, a, CommitRoleAuthor, i+1)
+				cp = newSqlRepositoryCommitPerson(c, a, CommitRoleAuthor, i+1)
 				if prepareChange(&s.sqlRepoCommitPeople, cp) {
 					sqlCommitPeople = append(sqlCommitPeople, cp)
 				}
@@ -774,18 +774,18 @@ func (s *gormStorage) WriteCommit(repo *model.Repository, commit *model.Reposito
 	var sqlCommits []*sqlRepositoryCommit
 	var sqlCommitPeople []*sqlRepositoryCommitPerson
 
-	sc := toSqlRepositoryCommit(repo, commit)
+	sc := newSqlRepositoryCommit(repo, commit)
 	if prepareChange(&s.sqlRepoCommits, sc) {
 		sqlCommits = append(sqlCommits, sc)
 	}
 
-	cp := toSqlRepositoryCommitPerson(commit, commit.CommitterID, CommitRoleCommitter, 1)
+	cp := newSqlRepositoryCommitPerson(commit, commit.CommitterID, CommitRoleCommitter, 1)
 	if prepareChange(&s.sqlRepoCommitPeople, cp) {
 		sqlCommitPeople = append(sqlCommitPeople, cp)
 	}
 
 	for i, a := range commit.AuthorIDs {
-		cp = toSqlRepositoryCommitPerson(commit, a, CommitRoleAuthor, i+1)
+		cp = newSqlRepositoryCommitPerson(commit, a, CommitRoleAuthor, i+1)
 		if prepareChange(&s.sqlRepoCommitPeople, cp) {
 			sqlCommitPeople = append(sqlCommitPeople, cp)
 		}
@@ -851,7 +851,7 @@ func (s *gormStorage) WriteRepositoryCommitFiles(files []*model.RepositoryCommit
 	var sqlCommitFiles []*sqlRepositoryCommitFile
 	for _, fs := range files {
 		for _, f := range fs.List() {
-			sf := toSqlRepositoryCommitFile(fs.CommitID, f)
+			sf := newSqlRepositoryCommitFile(fs.CommitID, f)
 			sqlCommitFiles = append(sqlCommitFiles, sf)
 		}
 	}
@@ -872,7 +872,7 @@ func (s *gormStorage) WriteRepositoryCommitFiles(files []*model.RepositoryCommit
 	return nil
 }
 
-func (s *gormStorage) QueryCommits(file string, proj string, repo string, person string) ([]model.UUID, error) {
+func (s *gormStorage) QueryCommits(file string, proj string, repo string, person string) ([]model.ID, error) {
 	if s.repos == nil {
 		return nil, errors.New("repos not loaded")
 	}
@@ -880,7 +880,7 @@ func (s *gormStorage) QueryCommits(file string, proj string, repo string, person
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
-	var result []model.UUID
+	var result []model.ID
 
 	err := s.db.Raw(`
 select distinct c.id
@@ -1011,7 +1011,7 @@ func (s *gormStorage) WriteConfig() error {
 
 	var sqlConfigs []*sqlConfig
 	for k, v := range *s.config {
-		sc := toSqlConfig(k, v)
+		sc := newSqlConfig(k, v)
 		if prepareChange(&s.sqlConfigs, sc) {
 			sqlConfigs = append(sqlConfigs, sc)
 		}
@@ -1087,31 +1087,6 @@ func (s *gormStorage) WriteIgnoreRules() error {
 	addList(&s.sqlIgnoreRules, sqlIgnoreRules)
 
 	return nil
-}
-
-func toSqlConfig(k string, v string) *sqlConfig {
-	return &sqlConfig{
-		Key:   k,
-		Value: v,
-	}
-}
-
-func toSqlSize(size *model.Size) *sqlSize {
-	return &sqlSize{
-		Lines: encodeMetric(size.Lines),
-		Files: encodeMetric(size.Files),
-		Bytes: encodeMetric(size.Bytes),
-		Other: encodeMap(size.Other),
-	}
-}
-
-func toModelSize(size *sqlSize) *model.Size {
-	return &model.Size{
-		Lines: decodeMetric(size.Lines),
-		Files: decodeMetric(size.Files),
-		Bytes: decodeMetric(size.Bytes),
-		Other: decodeMap(size.Other),
-	}
 }
 
 func toSqlBlame(blame *model.Blame) *sqlBlame {
@@ -1233,101 +1208,57 @@ func cloneMap[K comparable, V any](m map[K]V) map[K]V {
 	return result
 }
 
-func toSqlRepositoryCommit(r *model.Repository, c *model.RepositoryCommit) *sqlRepositoryCommit {
-	return &sqlRepositoryCommit{
-		ID:            c.ID,
-		RepositoryID:  r.ID,
-		Name:          c.Hash,
-		Message:       c.Message,
-		Parents:       c.Parents,
-		Children:      c.Children,
-		Date:          c.Date,
-		DateAuthored:  c.DateAuthored,
-		Ignore:        c.Ignore,
-		FilesModified: encodeMetric(c.FilesModified),
-		FilesCreated:  encodeMetric(c.FilesCreated),
-		FilesDeleted:  encodeMetric(c.FilesDeleted),
-		LinesModified: encodeMetric(c.LinesModified),
-		LinesAdded:    encodeMetric(c.LinesAdded),
-		LinesDeleted:  encodeMetric(c.LinesDeleted),
-		Blame:         toSqlBlame(c.Blame),
-	}
-}
-
-func toSqlRepositoryCommitPerson(commit *model.RepositoryCommit, personID model.ID, role CommitRole, order int) *sqlRepositoryCommitPerson {
-	return &sqlRepositoryCommitPerson{
-		CommitID: commit.ID,
-		PersonID: personID,
-		Role:     role,
-		Order:    order,
-	}
-}
-
-func toSqlRepositoryCommitFile(c model.UUID, f *model.RepositoryCommitFile) *sqlRepositoryCommitFile {
-	return &sqlRepositoryCommitFile{
-		CommitID:      c,
-		FileID:        f.FileID,
-		Hash:          f.Hash,
-		Change:        f.Change,
-		OldIDs:        encodeOldFileIDs(f.OldIDs),
-		OldHashes:     encodeOldFileHashes(f.OldHashes),
-		LinesModified: encodeMetric(f.LinesModified),
-		LinesAdded:    encodeMetric(f.LinesAdded),
-		LinesDeleted:  encodeMetric(f.LinesDeleted),
-	}
-}
-
-func encodeOldFileIDs(v map[model.UUID]model.ID) string {
+func encodeOldFileIDs(v map[model.ID]model.ID) string {
 	var sb strings.Builder
 
 	for k, v := range v {
 		if sb.Len() > 0 {
 			sb.WriteString("\n")
 		}
-		sb.WriteString(string(k))
+		sb.WriteString(k.String())
 		sb.WriteString(":")
 		sb.WriteString(v.String())
 	}
 
 	return sb.String()
 }
-func decodeOldFileIDs(v string) map[model.UUID]model.ID {
-	result := make(map[model.UUID]model.ID)
+func decodeOldFileIDs(v string) map[model.ID]model.ID {
+	result := make(map[model.ID]model.ID)
 	if v == "" {
 		return result
 	}
 
 	for _, line := range strings.Split(v, "\n") {
 		cols := strings.Split(line, ":")
-		result[model.UUID(cols[0])] = model.MustStringToID(cols[1])
+		result[model.MustStringToID(cols[0])] = model.MustStringToID(cols[1])
 	}
 
 	return result
 }
 
-func encodeOldFileHashes(v map[model.UUID]string) string {
+func encodeOldFileHashes(v map[model.ID]string) string {
 	var sb strings.Builder
 
 	for k, v := range v {
 		if sb.Len() > 0 {
 			sb.WriteString("\n")
 		}
-		sb.WriteString(string(k))
+		sb.WriteString(k.String())
 		sb.WriteString(":")
 		sb.WriteString(v)
 	}
 
 	return sb.String()
 }
-func decodeOldFileHashes(v string) map[model.UUID]string {
-	result := make(map[model.UUID]string)
+func decodeOldFileHashes(v string) map[model.ID]string {
+	result := make(map[model.ID]string)
 	if v == "" {
 		return result
 	}
 
 	for _, line := range strings.Split(v, "\n") {
 		cols := strings.Split(line, ":")
-		result[model.UUID(cols[0])] = cols[1]
+		result[model.MustStringToID(cols[0])] = cols[1]
 	}
 
 	return result

@@ -46,7 +46,7 @@ func (i *Computer) Compute() error {
 		return err
 	}
 
-	commits := make(map[model.UUID]*model.RepositoryCommit)
+	commits := make(map[model.ID]*model.RepositoryCommit)
 	for _, r := range reposDB.List() {
 		for _, c := range r.ListCommits() {
 			commits[c.ID] = c

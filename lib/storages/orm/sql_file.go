@@ -40,7 +40,7 @@ func newSqlFile(f *model.File) *sqlFile {
 		RepositoryID:       f.RepositoryID,
 		ProductAreaID:      f.ProductAreaID,
 		Exists:             f.Exists,
-		Size:               toSqlSize(f.Size),
+		Size:               newSqlSize(f.Size),
 		Changes:            toSqlChanges(f.Changes),
 		Metrics:            toSqlMetrics(f.Metrics),
 		Data:               encodeMap(f.Data),
