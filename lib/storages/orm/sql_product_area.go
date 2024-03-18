@@ -24,8 +24,8 @@ func newSqlProductArea(a *model.ProductArea) *sqlProductArea {
 		ID:      a.ID,
 		Name:    a.Name,
 		Size:    newSqlSize(a.Size),
-		Changes: toSqlChanges(a.Changes),
-		Metrics: toSqlMetricsAggregate(a.Metrics, a.Size),
+		Changes: newSqlChanges(a.Changes),
+		Metrics: newSqlMetricsAggregate(a.Metrics, a.Size),
 		Data:    encodeMap(a.Data),
 	}
 }

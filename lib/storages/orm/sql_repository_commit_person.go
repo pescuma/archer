@@ -26,5 +26,5 @@ func newSqlRepositoryCommitPerson(commit *model.RepositoryCommit, personID model
 }
 
 func (s *sqlRepositoryCommitPerson) CacheKey() string {
-	return compositeKey(string(s.CommitID), s.PersonID.String(), s.Role.String())
+	return compositeKey(s.CommitID.String(), s.PersonID.String(), s.Role.String())
 }

@@ -25,11 +25,11 @@ func TestEqualsSomeFields(t *testing.T) {
 
 	now := time.Now()
 	p1 := &sqlProject{
-		ID:        "a",
+		ID:        1,
 		CreatedAt: now,
 	}
 	p2 := &sqlProject{
-		ID:        "a",
+		ID:        1,
 		CreatedAt: now,
 	}
 

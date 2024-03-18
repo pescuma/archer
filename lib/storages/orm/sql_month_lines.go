@@ -30,8 +30,8 @@ func newSqlMonthLines(l *model.MonthlyStatsLine) *sqlMonthLines {
 		AuthorID:     l.AuthorID,
 		CommitterID:  l.CommitterID,
 		ProjectID:    l.ProjectID,
-		Changes:      toSqlChanges(l.Changes),
-		Blame:        toSqlBlame(l.Blame),
+		Changes:      newSqlChanges(l.Changes),
+		Blame:        newSqlBlame(l.Blame),
 	}
 }
 

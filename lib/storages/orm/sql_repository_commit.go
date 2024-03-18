@@ -49,10 +49,10 @@ func newSqlRepositoryCommit(r *model.Repository, c *model.RepositoryCommit) *sql
 		LinesModified: encodeMetric(c.LinesModified),
 		LinesAdded:    encodeMetric(c.LinesAdded),
 		LinesDeleted:  encodeMetric(c.LinesDeleted),
-		Blame:         toSqlBlame(c.Blame),
+		Blame:         newSqlBlame(c.Blame),
 	}
 }
 
 func (s *sqlRepositoryCommit) CacheKey() string {
-	return string(s.ID)
+	return s.ID.String()
 }

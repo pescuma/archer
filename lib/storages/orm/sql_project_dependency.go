@@ -31,5 +31,5 @@ func newSqlProjectDependency(d *model.ProjectDependency) *sqlProjectDependency {
 }
 
 func (s *sqlProjectDependency) CacheKey() string {
-	return string(s.ID)
+	return s.ID.String()
 }

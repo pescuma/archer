@@ -46,5 +46,5 @@ func newSqlRepository(r *model.Repository) *sqlRepository {
 }
 
 func (s *sqlRepository) CacheKey() string {
-	return string(s.ID)
+	return s.ID.String()
 }

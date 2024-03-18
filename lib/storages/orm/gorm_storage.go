@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"math"
 	"os"
 	"reflect"
 	"sort"
@@ -17,12 +16,10 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
-	"gorm.io/gorm/schema"
 
 	"github.com/pescuma/archer/lib/consoles"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/storages"
-	"github.com/pescuma/archer/lib/utils"
 )
 
 type gormStorage struct {
@@ -158,8 +155,8 @@ func (s *gormStorage) LoadProjects() (*model.Projects, error) {
 			p.Sizes[k] = v.ToModel()
 		}
 		p.Size = sp.Size.ToModel()
-		p.Changes = toModelChanges(sp.Changes)
-		p.Metrics = toModelMetricsAggregate(sp.Metrics)
+		p.Changes = sp.Changes.ToModel()
+		p.Metrics = sp.Metrics.ToModel()
 		p.Data = decodeMap(sp.Data)
 		p.FirstSeen = sp.FirstSeen
 		p.LastSeen = sp.LastSeen
@@ -180,8 +177,8 @@ func (s *gormStorage) LoadProjects() (*model.Projects, error) {
 		d := p.GetDirectoryEx(&sd.ID, sd.Name)
 		d.Type = sd.Type
 		d.Size = sd.Size.ToModel()
-		d.Changes = toModelChanges(sd.Changes)
-		d.Metrics = toModelMetricsAggregate(sd.Metrics)
+		d.Changes = sd.Changes.ToModel()
+		d.Metrics = sd.Metrics.ToModel()
 		d.Data = decodeMap(sd.Data)
 		d.FirstSeen = sd.FirstSeen
 		d.LastSeen = sd.LastSeen
@@ -293,8 +290,8 @@ func (s *gormStorage) LoadFiles() (*model.Files, error) {
 		f.ProductAreaID = sf.ProductAreaID
 		f.Exists = sf.Exists
 		f.Size = sf.Size.ToModel()
-		f.Changes = toModelChanges(sf.Changes)
-		f.Metrics = toModelMetrics(sf.Metrics)
+		f.Changes = sf.Changes.ToModel()
+		f.Metrics = sf.Metrics.toModel()
 		f.Data = decodeMap(sf.Data)
 		f.FirstSeen = sf.FirstSeen
 		f.LastSeen = sf.LastSeen
@@ -464,8 +461,8 @@ func (s *gormStorage) LoadPeople() (*model.People, error) {
 		for _, email := range sp.Emails {
 			p.AddEmail(email)
 		}
-		p.Blame = toModelBlame(sp.Blame)
-		p.Changes = toModelChanges(sp.Changes)
+		p.Blame = sp.Blame.ToModel()
+		p.Changes = sp.Changes.ToModel()
 		p.Data = decodeMap(sp.Data)
 		p.FirstSeen = sp.FirstSeen
 		p.LastSeen = sp.LastSeen
@@ -474,8 +471,8 @@ func (s *gormStorage) LoadPeople() (*model.People, error) {
 	for _, sa := range areas {
 		a := result.GetOrCreateProductAreaEx(sa.Name, &sa.ID)
 		a.Size = sa.Size.ToModel()
-		a.Changes = toModelChanges(sa.Changes)
-		a.Metrics = toModelMetricsAggregate(sa.Metrics)
+		a.Changes = sa.Changes.ToModel()
+		a.Metrics = sa.Metrics.ToModel()
 		a.Data = decodeMap(sa.Data)
 	}
 
@@ -661,7 +658,7 @@ func (s *gormStorage) LoadRepositories() (*model.Repositories, error) {
 		c.LinesModified = decodeMetric(sc.LinesModified)
 		c.LinesAdded = decodeMetric(sc.LinesAdded)
 		c.LinesDeleted = decodeMetric(sc.LinesDeleted)
-		c.Blame = toModelBlame(sc.Blame)
+		c.Blame = sc.Blame.ToModel()
 
 		commitsById[c.ID] = c
 	}
@@ -937,8 +934,8 @@ func (s *gormStorage) LoadMonthlyStats() (*model.MonthlyStats, error) {
 
 	for _, sl := range sqlLines {
 		l := result.GetOrCreateLinesEx(&sl.ID, sl.Month, sl.RepositoryID, sl.AuthorID, sl.CommitterID, sl.ProjectID)
-		l.Changes = toModelChanges(sl.Changes)
-		l.Blame = toModelBlame(sl.Blame)
+		l.Changes = sl.Changes.ToModel()
+		l.Blame = sl.Blame.ToModel()
 	}
 
 	s.stats = result
@@ -1089,181 +1086,6 @@ func (s *gormStorage) WriteIgnoreRules() error {
 	return nil
 }
 
-func toSqlBlame(blame *model.Blame) *sqlBlame {
-	return &sqlBlame{
-		Code:    encodeMetric(blame.Code),
-		Comment: encodeMetric(blame.Comment),
-		Blank:   encodeMetric(blame.Blank),
-	}
-}
-
-func toModelBlame(blame *sqlBlame) *model.Blame {
-	return &model.Blame{
-		Code:    decodeMetric(blame.Code),
-		Comment: decodeMetric(blame.Comment),
-		Blank:   decodeMetric(blame.Blank),
-	}
-}
-
-func toSqlChanges(c *model.Changes) *sqlChanges {
-	return &sqlChanges{
-		Semester:      encodeMetric(c.In6Months),
-		Total:         encodeMetric(c.Total),
-		LinesModified: encodeMetric(c.LinesModified),
-		LinesAdded:    encodeMetric(c.LinesAdded),
-		LinesDeleted:  encodeMetric(c.LinesDeleted),
-	}
-}
-
-func toModelChanges(sc *sqlChanges) *model.Changes {
-	return &model.Changes{
-		In6Months:     decodeMetric(sc.Semester),
-		Total:         decodeMetric(sc.Total),
-		LinesModified: decodeMetric(sc.LinesModified),
-		LinesAdded:    decodeMetric(sc.LinesAdded),
-		LinesDeleted:  decodeMetric(sc.LinesDeleted),
-	}
-}
-
-func toSqlMetrics(metrics *model.Metrics) *sqlMetrics {
-	return &sqlMetrics{
-		DependenciesGuice:    encodeMetric(metrics.GuiceDependencies),
-		Abstracts:            encodeMetric(metrics.Abstracts),
-		ComplexityCyclomatic: encodeMetric(metrics.CyclomaticComplexity),
-		ComplexityCognitive:  encodeMetric(metrics.CognitiveComplexity),
-		ComplexityFocus:      encodeMetric(metrics.FocusedComplexity),
-	}
-}
-
-func toModelMetrics(metrics *sqlMetrics) *model.Metrics {
-	return &model.Metrics{
-		GuiceDependencies:    decodeMetric(metrics.DependenciesGuice),
-		Abstracts:            decodeMetric(metrics.Abstracts),
-		CyclomaticComplexity: decodeMetric(metrics.ComplexityCyclomatic),
-		CognitiveComplexity:  decodeMetric(metrics.ComplexityCognitive),
-		FocusedComplexity:    decodeMetric(metrics.ComplexityFocus),
-	}
-}
-
-func toSqlMetricsAggregate(metrics *model.Metrics, size *model.Size) *sqlMetricsAggregate {
-	return &sqlMetricsAggregate{
-		DependenciesGuiceTotal:    encodeMetric(metrics.GuiceDependencies),
-		DependenciesGuiceAvg:      encodeMetricAggregate(metrics.GuiceDependencies, size.Files),
-		ComplexityCyclomaticTotal: encodeMetric(metrics.CyclomaticComplexity),
-		ComplexityCyclomaticAvg:   encodeMetricAggregate(metrics.CyclomaticComplexity, size.Files),
-		ComplexityCognitiveTotal:  encodeMetric(metrics.CognitiveComplexity),
-		ComplexityCognitiveAvg:    encodeMetricAggregate(metrics.CognitiveComplexity, size.Files),
-		ComplexityFocusTotal:      encodeMetric(metrics.FocusedComplexity),
-		ComplexityFocusAvg:        encodeMetricAggregate(metrics.FocusedComplexity, size.Files),
-	}
-}
-
-func toModelMetricsAggregate(metrics *sqlMetricsAggregate) *model.Metrics {
-	return &model.Metrics{
-		GuiceDependencies:    decodeMetric(metrics.DependenciesGuiceTotal),
-		CyclomaticComplexity: decodeMetric(metrics.ComplexityCyclomaticTotal),
-		CognitiveComplexity:  decodeMetric(metrics.ComplexityCognitiveTotal),
-		FocusedComplexity:    decodeMetric(metrics.ComplexityFocusTotal),
-	}
-}
-
-func encodeMetricAggregate(v int, t int) *float32 {
-	if v == -1 {
-		return nil
-	}
-	if t == 0 {
-		return nil
-	}
-	a := float32(math.Round(float64(v)*10/float64(t)) / 10)
-	return &a
-}
-func encodeMetric(v int) *int {
-	return utils.IIf(v == -1, nil, &v)
-}
-func decodeMetric(v *int) int {
-	if v == nil {
-		return -1
-	} else {
-		return *v
-	}
-}
-
-func encodeMap[K comparable, V any](m map[K]V) map[K]V {
-	if len(m) == 0 {
-		return nil
-	}
-
-	return cloneMap(m)
-}
-
-func decodeMap[K comparable, V any](m map[K]V) map[K]V {
-	return cloneMap(m)
-}
-
-func cloneMap[K comparable, V any](m map[K]V) map[K]V {
-	result := make(map[K]V, len(m))
-	for k, v := range m {
-		result[k] = v
-	}
-	return result
-}
-
-func encodeOldFileIDs(v map[model.ID]model.ID) string {
-	var sb strings.Builder
-
-	for k, v := range v {
-		if sb.Len() > 0 {
-			sb.WriteString("\n")
-		}
-		sb.WriteString(k.String())
-		sb.WriteString(":")
-		sb.WriteString(v.String())
-	}
-
-	return sb.String()
-}
-func decodeOldFileIDs(v string) map[model.ID]model.ID {
-	result := make(map[model.ID]model.ID)
-	if v == "" {
-		return result
-	}
-
-	for _, line := range strings.Split(v, "\n") {
-		cols := strings.Split(line, ":")
-		result[model.MustStringToID(cols[0])] = model.MustStringToID(cols[1])
-	}
-
-	return result
-}
-
-func encodeOldFileHashes(v map[model.ID]string) string {
-	var sb strings.Builder
-
-	for k, v := range v {
-		if sb.Len() > 0 {
-			sb.WriteString("\n")
-		}
-		sb.WriteString(k.String())
-		sb.WriteString(":")
-		sb.WriteString(v)
-	}
-
-	return sb.String()
-}
-func decodeOldFileHashes(v string) map[model.ID]string {
-	result := make(map[model.ID]string)
-	if v == "" {
-		return result
-	}
-
-	for _, line := range strings.Split(v, "\n") {
-		cols := strings.Split(line, ":")
-		result[model.MustStringToID(cols[0])] = cols[1]
-	}
-
-	return result
-}
-
 func addMap[K comparable, V any](target *map[K]V, toAdd map[K]V) {
 	for k, v := range toAdd {
 		(*target)[k] = v
@@ -1304,34 +1126,6 @@ func prepareChange[T sqlTable](byID *map[string]T, n T) bool {
 	}
 }
 
-type NamingStrategy struct {
-	inner schema.NamingStrategy
-}
-
-func (n *NamingStrategy) TableName(table string) string {
-	return strings.TrimPrefix(n.inner.TableName(table), "sql_")
-}
-
-func (n *NamingStrategy) SchemaName(table string) string {
-	return n.inner.SchemaName(table)
-}
-
-func (n *NamingStrategy) ColumnName(table, column string) string {
-	return n.inner.ColumnName(table, column)
-}
-
-func (n *NamingStrategy) JoinTableName(joinTable string) string {
-	return n.inner.JoinTableName(joinTable)
-}
-
-func (n *NamingStrategy) RelationshipFKName(relationship schema.Relationship) string {
-	return strings.ReplaceAll(n.inner.RelationshipFKName(relationship), "_sql_", "_")
-}
-
-func (n *NamingStrategy) CheckerName(table, column string) string {
-	return strings.ReplaceAll(n.inner.CheckerName(table, column), "_sql_", "_")
-}
-
-func (n *NamingStrategy) IndexName(table, column string) string {
-	return strings.ReplaceAll(n.inner.IndexName(table, column), "_sql_", "_")
+func compositeKey(ids ...string) string {
+	return strings.Join(ids, "\n")
 }

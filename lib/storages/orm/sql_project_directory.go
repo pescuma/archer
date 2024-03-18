@@ -32,8 +32,8 @@ func newSqlProjectDirectory(d *model.ProjectDirectory, p *model.Project) *sqlPro
 		Name:      d.RelativePath,
 		Type:      d.Type,
 		Size:      newSqlSize(d.Size),
-		Changes:   toSqlChanges(d.Changes),
-		Metrics:   toSqlMetricsAggregate(d.Metrics, d.Size),
+		Changes:   newSqlChanges(d.Changes),
+		Metrics:   newSqlMetricsAggregate(d.Metrics, d.Size),
 		Data:      encodeMap(d.Data),
 		FirstSeen: d.FirstSeen,
 		LastSeen:  d.LastSeen,
@@ -41,5 +41,5 @@ func newSqlProjectDirectory(d *model.ProjectDirectory, p *model.Project) *sqlPro
 }
 
 func (s *sqlProjectDirectory) CacheKey() string {
-	return string(s.ID)
+	return s.ID.String()
 }
