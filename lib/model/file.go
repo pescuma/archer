@@ -14,7 +14,7 @@ type File struct {
 
 	RepositoryID *UUID
 
-	ProductAreaID *UUID
+	ProductAreaID *ID
 
 	Exists    bool
 	Size      *Size

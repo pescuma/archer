@@ -191,7 +191,7 @@ func (s *server) toPersonReference(id *model.ID) gin.H {
 	}
 }
 
-func (s *server) toProductAreaReference(id *model.UUID) gin.H {
+func (s *server) toProductAreaReference(id *model.ID) gin.H {
 	if id == nil {
 		return nil
 	}

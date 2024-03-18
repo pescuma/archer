@@ -2,7 +2,7 @@ package model
 
 type ProductArea struct {
 	Name string
-	ID   UUID
+	ID   ID
 
 	Size    *Size
 	Changes *Changes
@@ -10,17 +10,10 @@ type ProductArea struct {
 	Data    map[string]string
 }
 
-func NewProductArea(name string, id *UUID) *ProductArea {
-	var uuid UUID
-	if id == nil {
-		uuid = NewUUID("a")
-	} else {
-		uuid = *id
-	}
-
+func NewProductArea(name string, id ID) *ProductArea {
 	return &ProductArea{
 		Name:    name,
-		ID:      uuid,
+		ID:      id,
 		Size:    NewSize(),
 		Changes: NewChanges(),
 		Metrics: NewMetrics(),

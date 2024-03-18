@@ -45,8 +45,8 @@ type gormStorage struct {
 	sqlProjDirs         map[string]*sqlProjectDirectory
 	sqlFiles            map[string]*sqlFile
 	sqlPeople           map[string]*sqlPerson
-	sqlPeopleRepos      map[string]*sqlPersonRepository
-	sqlPeopleFiles      map[string]*sqlPersonFile
+	sqlPersonRepos      map[string]*sqlPersonRepository
+	sqlPersonFiles      map[string]*sqlPersonFile
 	sqlAreas            map[string]*sqlProductArea
 	sqlRepos            map[string]*sqlRepository
 	sqlRepoCommits      map[string]*sqlRepositoryCommit
@@ -499,23 +499,8 @@ func (s *gormStorage) WritePeople() error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	var sqlPeople []*sqlPerson
-	people := s.people.ListPeople()
-	for _, p := range people {
-		sp := toSqlPerson(p)
-		if prepareChange(&s.sqlPeople, sp) {
-			sqlPeople = append(sqlPeople, sp)
-		}
-	}
-
-	var sqlAreas []*sqlProductArea
-	area := s.people.ListProductAreas()
-	for _, p := range area {
-		sp := toSqlProductArea(p)
-		if prepareChange(&s.sqlAreas, sp) {
-			sqlAreas = append(sqlAreas, sp)
-		}
-	}
+	sqlPeople := prepareChanges(s.people.ListPeople(), newSqlPerson, &s.sqlPeople)
+	sqlAreas := prepareChanges(s.people.ListProductAreas(), newSqlProductArea, &s.sqlAreas)
 
 	now := time.Now().Local()
 	db := s.db.Session(&gorm.Session{
@@ -558,7 +543,7 @@ func (s *gormStorage) LoadPeopleRelations() (*model.PeopleRelations, error) {
 		return nil, err
 	}
 
-	s.sqlPeopleRepos = createCache(rs)
+	s.sqlPersonRepos = createCache(rs)
 
 	var fs []*sqlPersonFile
 	err = s.db.Find(&fs).Error
@@ -566,7 +551,7 @@ func (s *gormStorage) LoadPeopleRelations() (*model.PeopleRelations, error) {
 		return nil, err
 	}
 
-	s.sqlPeopleFiles = createCache(fs)
+	s.sqlPersonFiles = createCache(fs)
 
 	for _, r := range rs {
 		pr := result.GetOrCreatePersonRepo(r.PersonID, r.RepositoryID)
@@ -595,18 +580,12 @@ func (s *gormStorage) WritePeopleRelations() error {
 	var rs []*sqlPersonRepository
 	for _, r := range s.peopleRelations.ListRepositories() {
 		pr := toSqlPersonRepository(r)
-		if prepareChange(&s.sqlPeopleRepos, pr) {
+		if prepareChange(&s.sqlPersonRepos, pr) {
 			rs = append(rs, pr)
 		}
 	}
 
-	var fs []*sqlPersonFile
-	for _, f := range s.peopleRelations.ListFiles() {
-		pf := toSqlPersonFile(f)
-		if prepareChange(&s.sqlPeopleFiles, pf) {
-			fs = append(fs, pf)
-		}
-	}
+	fs := prepareChanges(s.peopleRelations.ListFiles(), newSqlPersonFile, &s.sqlPersonFiles)
 
 	now := time.Now().Local()
 	db := s.db.Session(&gorm.Session{
@@ -626,8 +605,8 @@ func (s *gormStorage) WritePeopleRelations() error {
 
 	// TODO delete
 
-	addList(&s.sqlPeopleRepos, rs)
-	addList(&s.sqlPeopleFiles, fs)
+	addList(&s.sqlPersonRepos, rs)
+	addList(&s.sqlPersonFiles, fs)
 
 	return nil
 }
@@ -995,13 +974,7 @@ func (s *gormStorage) WriteMonthlyStats() error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	var sqlLines []*sqlMonthLines
-	for _, f := range s.stats.ListLines() {
-		sf := toSqlMonthLines(f)
-		if prepareChange(&s.monthLines, sf) {
-			sqlLines = append(sqlLines, sf)
-		}
-	}
+	sqlLines := prepareChanges(s.stats.ListLines(), newSqlMonthLines, &s.monthLines)
 
 	now := time.Now().Local()
 	db := s.db.Session(&gorm.Session{
@@ -1135,19 +1108,6 @@ func (s *gormStorage) WriteIgnoreRules() error {
 	addList(&s.sqlIgnoreRules, sqlIgnoreRules)
 
 	return nil
-}
-
-func toSqlMonthLines(l *model.MonthlyStatsLine) *sqlMonthLines {
-	return &sqlMonthLines{
-		ID:           l.ID,
-		Month:        l.Month,
-		RepositoryID: l.RepositoryID,
-		AuthorID:     l.AuthorID,
-		CommitterID:  l.CommitterID,
-		ProjectID:    l.ProjectID,
-		Changes:      toSqlChanges(l.Changes),
-		Blame:        toSqlBlame(l.Blame),
-	}
 }
 
 func toSqlConfig(k string, v string) *sqlConfig {
@@ -1350,48 +1310,12 @@ func toSqlProjectDirectory(d *model.ProjectDirectory, p *model.Project) *sqlProj
 	}
 }
 
-func toSqlPerson(p *model.Person) *sqlPerson {
-	result := &sqlPerson{
-		ID:        p.ID,
-		Name:      p.Name,
-		Names:     p.ListNames(),
-		Emails:    p.ListEmails(),
-		Changes:   toSqlChanges(p.Changes),
-		Blame:     toSqlBlame(p.Blame),
-		Data:      encodeMap(p.Data),
-		FirstSeen: p.FirstSeen,
-		LastSeen:  p.LastSeen,
-	}
-
-	return result
-}
-
 func toSqlPersonRepository(r *model.PersonRepository) *sqlPersonRepository {
 	return &sqlPersonRepository{
 		PersonID:     r.PersonID,
 		RepositoryID: r.RepositoryID,
 		FirstSeen:    r.FirstSeen,
 		LastSeen:     r.LastSeen,
-	}
-}
-
-func toSqlPersonFile(f *model.PersonFile) *sqlPersonFile {
-	return &sqlPersonFile{
-		PersonID:  f.PersonID,
-		FileID:    f.FileID,
-		FirstSeen: f.FirstSeen,
-		LastSeen:  f.LastSeen,
-	}
-}
-
-func toSqlProductArea(a *model.ProductArea) *sqlProductArea {
-	return &sqlProductArea{
-		ID:      a.ID,
-		Name:    a.Name,
-		Size:    toSqlSize(a.Size),
-		Changes: toSqlChanges(a.Changes),
-		Metrics: toSqlMetricsAggregate(a.Metrics, a.Size),
-		Data:    encodeMap(a.Data),
 	}
 }
 

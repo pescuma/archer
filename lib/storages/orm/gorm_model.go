@@ -97,49 +97,6 @@ func (s *sqlProjectDirectory) CacheKey() string {
 	return string(s.ID)
 }
 
-type sqlMonthLines struct {
-	ID model.ID `gorm:"primaryKey"`
-
-	Month        string
-	RepositoryID model.UUID
-	AuthorID     model.ID
-	CommitterID  model.ID
-	ProjectID    *model.UUID
-
-	Changes *sqlChanges `gorm:"embedded;embeddedPrefix:changes_"`
-	Blame   *sqlBlame   `gorm:"embedded;embeddedPrefix:blame_"`
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
-func (s *sqlMonthLines) CacheKey() string {
-	return string(s.ID)
-}
-
-type sqlPerson struct {
-	ID   model.ID
-	Name string
-
-	Names     []string          `gorm:"serializer:json"`
-	Emails    []string          `gorm:"serializer:json"`
-	Changes   *sqlChanges       `gorm:"embedded;embeddedPrefix:changes_"`
-	Blame     *sqlBlame         `gorm:"embedded;embeddedPrefix:blame_"`
-	Data      map[string]string `gorm:"serializer:json"`
-	FirstSeen time.Time
-	LastSeen  time.Time
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
-
-	Commits      []sqlRepositoryCommitPerson `gorm:"foreignKey:PersonID"`
-	Repositories []sqlPersonRepository       `gorm:"foreignKey:PersonID"`
-}
-
-func (s *sqlPerson) CacheKey() string {
-	return string(s.ID)
-}
-
 type sqlPersonRepository struct {
 	PersonID     model.ID   `gorm:"primaryKey"`
 	RepositoryID model.UUID `gorm:"primaryKey"`
@@ -152,39 +109,7 @@ type sqlPersonRepository struct {
 }
 
 func (s *sqlPersonRepository) CacheKey() string {
-	return compositeKey(string(s.PersonID), string(s.RepositoryID))
-}
-
-type sqlPersonFile struct {
-	PersonID model.ID `gorm:"primaryKey"`
-	FileID   model.ID `gorm:"primaryKey"`
-
-	FirstSeen time.Time
-	LastSeen  time.Time
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
-func (s *sqlPersonFile) CacheKey() string {
-	return compositeKey(string(s.PersonID), string(s.FileID))
-}
-
-type sqlProductArea struct {
-	ID   model.UUID
-	Name string
-
-	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
-	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
-	Metrics *sqlMetricsAggregate `gorm:"embedded"`
-	Data    map[string]string    `gorm:"serializer:json"`
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
-func (s *sqlProductArea) CacheKey() string {
-	return string(s.ID)
+	return compositeKey(s.PersonID.String(), string(s.RepositoryID))
 }
 
 type sqlRepository struct {
@@ -266,7 +191,7 @@ type sqlRepositoryCommitPerson struct {
 }
 
 func (s *sqlRepositoryCommitPerson) CacheKey() string {
-	return compositeKey(string(s.CommitID), string(s.PersonID), s.Role.String())
+	return compositeKey(string(s.CommitID), s.PersonID.String(), s.Role.String())
 }
 
 type sqlRepositoryCommitFile struct {

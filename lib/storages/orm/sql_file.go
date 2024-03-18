@@ -14,7 +14,7 @@ type sqlFile struct {
 	ProjectDirectoryID *model.UUID `gorm:"index"`
 	RepositoryID       *model.UUID `gorm:"index"`
 
-	ProductAreaID *model.UUID `gorm:"index"`
+	ProductAreaID *model.ID `gorm:"index"`
 
 	Exists    bool
 	Size      *sqlSize          `gorm:"embedded;embeddedPrefix:size_"`

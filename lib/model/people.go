@@ -8,15 +8,16 @@ type People struct {
 	personMaxID ID
 	peopleByID  map[ID]*Person
 
+	productAreaMaxID   ID
 	productAreasByName map[string]*ProductArea
-	productAreasByID   map[UUID]*ProductArea
+	productAreasByID   map[ID]*ProductArea
 }
 
 func NewPeople() *People {
 	return &People{
 		peopleByID:         map[ID]*Person{},
 		productAreasByName: map[string]*ProductArea{},
-		productAreasByID:   map[UUID]*ProductArea{},
+		productAreasByID:   map[ID]*ProductArea{},
 	}
 }
 
@@ -45,7 +46,7 @@ func (ps *People) GetOrCreateProductArea(name string) *ProductArea {
 
 }
 
-func (ps *People) GetOrCreateProductAreaEx(name string, id *UUID) *ProductArea {
+func (ps *People) GetOrCreateProductAreaEx(name string, id *ID) *ProductArea {
 	if len(name) == 0 {
 		panic("empty name not supported")
 	}
@@ -53,7 +54,7 @@ func (ps *People) GetOrCreateProductAreaEx(name string, id *UUID) *ProductArea {
 	result, ok := ps.productAreasByName[name]
 
 	if !ok {
-		result = NewProductArea(name, id)
+		result = NewProductArea(name, createID(&ps.productAreaMaxID, id))
 		ps.productAreasByName[name] = result
 		ps.productAreasByID[result.ID] = result
 	}
@@ -61,7 +62,7 @@ func (ps *People) GetOrCreateProductAreaEx(name string, id *UUID) *ProductArea {
 	return result
 }
 
-func (ps *People) GetProductAreaByID(id UUID) *ProductArea {
+func (ps *People) GetProductAreaByID(id ID) *ProductArea {
 	return ps.productAreasByID[id]
 }
 
