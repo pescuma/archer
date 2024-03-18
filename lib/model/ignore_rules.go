@@ -1,8 +1,9 @@
 package model
 
 type IgnoreRules struct {
-	rules []*IgnoreRule
 	maxID ID
+
+	rules []*IgnoreRule
 }
 
 func NewIgnoreRules() *IgnoreRules {

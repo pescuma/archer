@@ -8,15 +8,17 @@ import (
 )
 
 type Files struct {
-	mutex       sync.RWMutex
+	mutex sync.RWMutex
+	maxID ID
+
 	filesByPath map[string]*File
-	filesByID   map[UUID]*File
+	filesByID   map[ID]*File
 }
 
 func NewFiles() *Files {
 	return &Files{
 		filesByPath: map[string]*File{},
-		filesByID:   map[UUID]*File{},
+		filesByID:   map[ID]*File{},
 	}
 }
 
@@ -24,7 +26,7 @@ func (fs *Files) GetOrCreateFile(path string) *File {
 	return fs.GetOrCreateFileEx(path, nil)
 }
 
-func (fs *Files) GetOrCreateFileEx(path string, id *UUID) *File {
+func (fs *Files) GetOrCreateFileEx(path string, id *ID) *File {
 	if len(path) == 0 {
 		panic("empty path not supported")
 	}
@@ -35,7 +37,7 @@ func (fs *Files) GetOrCreateFileEx(path string, id *UUID) *File {
 	result, ok := fs.filesByPath[path]
 
 	if !ok {
-		result = NewFile(path, id)
+		result = NewFile(path, createID(&fs.maxID, id))
 		fs.filesByPath[path] = result
 		fs.filesByID[result.ID] = result
 	}
@@ -50,7 +52,7 @@ func (fs *Files) GetFile(path string) *File {
 	return fs.filesByPath[path]
 }
 
-func (fs *Files) GetFileByID(id UUID) *File {
+func (fs *Files) GetFileByID(id ID) *File {
 	fs.mutex.RLock()
 	defer fs.mutex.RUnlock()
 

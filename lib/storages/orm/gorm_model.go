@@ -97,50 +97,6 @@ func (s *sqlProjectDirectory) CacheKey() string {
 	return string(s.ID)
 }
 
-type sqlFile struct {
-	ID   model.UUID
-	Name string
-
-	ProjectID          *model.UUID `gorm:"index"`
-	ProjectDirectoryID *model.UUID `gorm:"index"`
-	RepositoryID       *model.UUID `gorm:"index"`
-
-	ProductAreaID *model.UUID `gorm:"index"`
-
-	Exists    bool
-	Size      *sqlSize          `gorm:"embedded;embeddedPrefix:size_"`
-	Changes   *sqlChanges       `gorm:"embedded;embeddedPrefix:changes_"`
-	Metrics   *sqlMetrics       `gorm:"embedded"`
-	Data      map[string]string `gorm:"serializer:json"`
-	FirstSeen time.Time
-	LastSeen  time.Time
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
-
-	CommitFiles []sqlRepositoryCommitFile `gorm:"foreignKey:FileID"`
-	People      []sqlPersonFile           `gorm:"foreignKey:FileID"`
-}
-
-func (s *sqlFile) CacheKey() string {
-	return string(s.ID)
-}
-
-type sqlFileLine struct {
-	FileID model.UUID `gorm:"primaryKey"`
-	Line   int        `gorm:"primaryKey"`
-
-	ProjectID    *model.UUID
-	RepositoryID *model.UUID
-	CommitID     *model.UUID
-	AuthorID     *model.UUID
-	CommitterID  *model.UUID
-	Date         time.Time
-
-	Type model.FileLineType
-	Text string
-}
-
 type sqlMonthLines struct {
 	ID model.UUID `gorm:"primaryKey"`
 
@@ -201,7 +157,7 @@ func (s *sqlPersonRepository) CacheKey() string {
 
 type sqlPersonFile struct {
 	PersonID model.UUID `gorm:"primaryKey"`
-	FileID   model.UUID `gorm:"primaryKey"`
+	FileID   model.ID   `gorm:"primaryKey"`
 
 	FirstSeen time.Time
 	LastSeen  time.Time
@@ -315,7 +271,7 @@ func (s *sqlRepositoryCommitPerson) CacheKey() string {
 
 type sqlRepositoryCommitFile struct {
 	CommitID      model.UUID `gorm:"primaryKey"`
-	FileID        model.UUID `gorm:"primaryKey"`
+	FileID        model.ID   `gorm:"primaryKey"`
 	Hash          string
 	Change        model.FileChangeType
 	OldIDs        string

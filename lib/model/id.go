@@ -14,9 +14,26 @@ func (i ID) String() string {
 	return fmt.Sprintf("%v", int(i))
 }
 
-func StringToID(id string) (ID, error) {
+func MustStringToID(id string) ID {
 	r, err := strconv.ParseInt(id, 10, 32)
-	return ID(r), err
+	if err != nil {
+		panic(err)
+	}
+	return ID(r)
+}
+
+func createID(maxID *ID, id *ID) ID {
+	if id == nil {
+		*maxID++
+		return *maxID
+
+	} else {
+		if *id > *maxID {
+			*maxID = *id
+		}
+
+		return *id
+	}
 }
 
 type UUID string

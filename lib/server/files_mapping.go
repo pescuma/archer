@@ -77,7 +77,7 @@ func (s *server) createFileFilter(file string) (func(*model.File) bool, error) {
 	}
 }
 
-func (s *server) listFileIDsOrNil(file string) (map[model.UUID]bool, error) {
+func (s *server) listFileIDsOrNil(file string) (map[model.ID]bool, error) {
 	file = prepareToSearch(file)
 
 	switch {
@@ -87,7 +87,7 @@ func (s *server) listFileIDsOrNil(file string) (map[model.UUID]bool, error) {
 			return nil, err
 		}
 
-		result := make(map[model.UUID]bool, len(files))
+		result := make(map[model.ID]bool, len(files))
 		for _, p := range files {
 			result[p.ID] = true
 		}

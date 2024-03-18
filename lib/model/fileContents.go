@@ -1,11 +1,11 @@
 package model
 
 type FileContents struct {
-	FileID UUID
+	FileID ID
 	Lines  []*FileLine
 }
 
-func NewFileContents(fileID UUID) *FileContents {
+func NewFileContents(fileID ID) *FileContents {
 	return &FileContents{FileID: fileID}
 }
 

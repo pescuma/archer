@@ -4,13 +4,13 @@ import "time"
 
 type PersonFile struct {
 	PersonID UUID
-	FileID   UUID
+	FileID   ID
 
 	FirstSeen time.Time
 	LastSeen  time.Time
 }
 
-func NewPersonFile(personID UUID, fileID UUID) *PersonFile {
+func NewPersonFile(personID UUID, fileID ID) *PersonFile {
 	return &PersonFile{
 		PersonID: personID,
 		FileID:   fileID,

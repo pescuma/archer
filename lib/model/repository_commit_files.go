@@ -5,18 +5,18 @@ import "github.com/samber/lo"
 type RepositoryCommitFiles struct {
 	RepositoryID UUID
 	CommitID     UUID
-	byID         map[UUID]*RepositoryCommitFile
+	byID         map[ID]*RepositoryCommitFile
 }
 
 func NewRepositoryCommitFiles(repositoryID UUID, commitID UUID) *RepositoryCommitFiles {
 	return &RepositoryCommitFiles{
 		RepositoryID: repositoryID,
 		CommitID:     commitID,
-		byID:         make(map[UUID]*RepositoryCommitFile),
+		byID:         make(map[ID]*RepositoryCommitFile),
 	}
 }
 
-func (l *RepositoryCommitFiles) GetOrCreate(fileID UUID) *RepositoryCommitFile {
+func (l *RepositoryCommitFiles) GetOrCreate(fileID ID) *RepositoryCommitFile {
 	file, ok := l.byID[fileID]
 
 	if !ok {

@@ -332,13 +332,7 @@ func (s *gormStorage) writeFiles(all []*model.File) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	var sqlFiles []*sqlFile
-	for _, f := range all {
-		sf := toSqlFile(f)
-		if prepareChange(&s.sqlFiles, sf) {
-			sqlFiles = append(sqlFiles, sf)
-		}
-	}
+	sqlFiles := prepareChanges(all, newSqlFile, &s.sqlFiles)
 
 	now := time.Now().Local()
 	db := s.db.Session(&gorm.Session{
@@ -358,7 +352,7 @@ func (s *gormStorage) writeFiles(all []*model.File) error {
 	return nil
 }
 
-func (s *gormStorage) LoadFileContents(fileID model.UUID) (*model.FileContents, error) {
+func (s *gormStorage) LoadFileContents(fileID model.ID) (*model.FileContents, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -400,7 +394,7 @@ func (s *gormStorage) WriteFileContents(contents *model.FileContents) error {
 
 	var sqlLines []*sqlFileLine
 	for _, f := range contents.Lines {
-		sf := toSqlFileLine(contents.FileID, f)
+		sf := newSqlFileLine(contents.FileID, f)
 		sqlLines = append(sqlLines, sf)
 	}
 
@@ -1357,39 +1351,6 @@ func toSqlProjectDirectory(d *model.ProjectDirectory, p *model.Project) *sqlProj
 	}
 }
 
-func toSqlFile(f *model.File) *sqlFile {
-	return &sqlFile{
-		ID:                 f.ID,
-		Name:               f.Path,
-		ProjectID:          f.ProjectID,
-		ProjectDirectoryID: f.ProjectDirectoryID,
-		RepositoryID:       f.RepositoryID,
-		ProductAreaID:      f.ProductAreaID,
-		Exists:             f.Exists,
-		Size:               toSqlSize(f.Size),
-		Changes:            toSqlChanges(f.Changes),
-		Metrics:            toSqlMetrics(f.Metrics),
-		Data:               encodeMap(f.Data),
-		FirstSeen:          f.FirstSeen,
-		LastSeen:           f.LastSeen,
-	}
-}
-
-func toSqlFileLine(fileID model.UUID, f *model.FileLine) *sqlFileLine {
-	return &sqlFileLine{
-		FileID:       fileID,
-		Line:         f.Line,
-		ProjectID:    f.ProjectID,
-		RepositoryID: f.RepositoryID,
-		CommitID:     f.CommitID,
-		AuthorID:     f.AuthorID,
-		Date:         f.Date,
-		CommitterID:  f.CommitterID,
-		Type:         f.Type,
-		Text:         f.Text,
-	}
-}
-
 func toSqlPerson(p *model.Person) *sqlPerson {
 	result := &sqlPerson{
 		ID:        p.ID,
@@ -1495,7 +1456,7 @@ func toSqlRepositoryCommitFile(c model.UUID, f *model.RepositoryCommitFile) *sql
 	}
 }
 
-func encodeOldFileIDs(v map[model.UUID]model.UUID) string {
+func encodeOldFileIDs(v map[model.UUID]model.ID) string {
 	var sb strings.Builder
 
 	for k, v := range v {
@@ -1504,20 +1465,20 @@ func encodeOldFileIDs(v map[model.UUID]model.UUID) string {
 		}
 		sb.WriteString(string(k))
 		sb.WriteString(":")
-		sb.WriteString(string(v))
+		sb.WriteString(v.String())
 	}
 
 	return sb.String()
 }
-func decodeOldFileIDs(v string) map[model.UUID]model.UUID {
-	result := make(map[model.UUID]model.UUID)
+func decodeOldFileIDs(v string) map[model.UUID]model.ID {
+	result := make(map[model.UUID]model.ID)
 	if v == "" {
 		return result
 	}
 
 	for _, line := range strings.Split(v, "\n") {
 		cols := strings.Split(line, ":")
-		result[model.UUID(cols[0])] = model.UUID(cols[1])
+		result[model.UUID(cols[0])] = model.MustStringToID(cols[1])
 	}
 
 	return result

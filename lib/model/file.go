@@ -7,7 +7,7 @@ import (
 
 type File struct {
 	Path string
-	ID   UUID
+	ID   ID
 
 	ProjectID          *UUID
 	ProjectDirectoryID *UUID
@@ -28,17 +28,10 @@ type File struct {
 	Functions map[string]*Function
 }
 
-func NewFile(path string, id *UUID) *File {
-	var uuid UUID
-	if id == nil {
-		uuid = NewUUID("f")
-	} else {
-		uuid = *id
-	}
-
+func NewFile(path string, id ID) *File {
 	return &File{
 		Path:    path,
-		ID:      uuid,
+		ID:      id,
 		Exists:  true,
 		Size:    NewSize(),
 		Changes: NewChanges(),

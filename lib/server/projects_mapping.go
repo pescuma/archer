@@ -66,7 +66,7 @@ func (s *server) createProjectsExternalFilters(params *Filters) (func(*model.Pro
 		return nil, nil
 	}
 
-	filesPerProject := make(map[model.UUID]map[model.UUID]bool)
+	filesPerProject := make(map[model.UUID]map[model.ID]bool)
 	if fileIDs != nil || personIDs != nil {
 		for _, f := range s.files.ListFiles() {
 			if f.ProjectID == nil {
@@ -77,7 +77,7 @@ func (s *server) createProjectsExternalFilters(params *Filters) (func(*model.Pro
 
 			fs, ok := filesPerProject[projID]
 			if !ok {
-				fs = make(map[model.UUID]bool)
+				fs = make(map[model.ID]bool)
 				filesPerProject[projID] = fs
 			}
 

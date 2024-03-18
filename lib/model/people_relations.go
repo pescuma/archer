@@ -1,8 +1,8 @@
 package model
 
 type PeopleRelations struct {
-	personFile map[UUID]map[UUID]*PersonFile
-	filePerson map[UUID]map[UUID]*PersonFile
+	personFile map[UUID]map[ID]*PersonFile
+	filePerson map[ID]map[UUID]*PersonFile
 
 	personRepo map[UUID]map[UUID]*PersonRepository
 	repoPerson map[UUID]map[UUID]*PersonRepository
@@ -10,17 +10,17 @@ type PeopleRelations struct {
 
 func NewPeopleRelations() *PeopleRelations {
 	return &PeopleRelations{
-		personFile: make(map[UUID]map[UUID]*PersonFile),
-		filePerson: make(map[UUID]map[UUID]*PersonFile),
+		personFile: make(map[UUID]map[ID]*PersonFile),
+		filePerson: make(map[ID]map[UUID]*PersonFile),
 		personRepo: make(map[UUID]map[UUID]*PersonRepository),
 		repoPerson: make(map[UUID]map[UUID]*PersonRepository),
 	}
 }
 
-func (p *PeopleRelations) GetOrCreatePersonFile(personID UUID, fileID UUID) *PersonFile {
+func (p *PeopleRelations) GetOrCreatePersonFile(personID UUID, fileID ID) *PersonFile {
 	pf, ok := p.personFile[personID]
 	if !ok {
-		pf = make(map[UUID]*PersonFile)
+		pf = make(map[ID]*PersonFile)
 		p.personFile[personID] = pf
 	}
 
@@ -53,7 +53,7 @@ func (p *PeopleRelations) ListFiles() []*PersonFile {
 	return result
 }
 
-func (p *PeopleRelations) ListPeopleByFile(fileID UUID) map[UUID]*PersonFile {
+func (p *PeopleRelations) ListPeopleByFile(fileID ID) map[UUID]*PersonFile {
 	ps, ok := p.filePerson[fileID]
 	if !ok {
 		return nil
@@ -62,7 +62,7 @@ func (p *PeopleRelations) ListPeopleByFile(fileID UUID) map[UUID]*PersonFile {
 	return ps
 }
 
-func (p *PeopleRelations) ListFilesByPerson(personID UUID) map[UUID]*PersonFile {
+func (p *PeopleRelations) ListFilesByPerson(personID UUID) map[ID]*PersonFile {
 	fs, ok := p.personFile[personID]
 	if !ok {
 		return nil

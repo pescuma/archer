@@ -16,7 +16,7 @@ type Storage interface {
 	WriteFiles() error
 	WriteFile(file *model.File) error
 
-	LoadFileContents(fileID model.UUID) (*model.FileContents, error)
+	LoadFileContents(fileID model.ID) (*model.FileContents, error)
 	WriteFileContents(contents *model.FileContents) error
 	QueryBlamePerAuthor() ([]*BlamePerAuthor, error)
 
@@ -49,7 +49,7 @@ type BlamePerAuthor struct {
 	CommitterID  model.UUID
 	RepositoryID model.UUID
 	CommitID     model.UUID
-	FileID       model.UUID
+	FileID       model.ID
 	LineType     model.FileLineType
 	Lines        int
 }
