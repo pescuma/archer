@@ -98,7 +98,7 @@ func (s *sqlProjectDirectory) CacheKey() string {
 }
 
 type sqlMonthLines struct {
-	ID model.UUID `gorm:"primaryKey"`
+	ID model.ID `gorm:"primaryKey"`
 
 	Month        string
 	RepositoryID model.UUID

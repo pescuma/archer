@@ -1,7 +1,7 @@
 package model
 
 type MonthlyStatsLine struct {
-	ID UUID
+	ID ID
 
 	Month        string
 	RepositoryID UUID
@@ -13,9 +13,9 @@ type MonthlyStatsLine struct {
 	Blame   *Blame
 }
 
-func NewMonthlyStatsLine(month string, repositoryID UUID, authorID UUID, committerID UUID, projectID *UUID) *MonthlyStatsLine {
+func NewMonthlyStatsLine(id ID, month string, repositoryID UUID, authorID UUID, committerID UUID, projectID *UUID) *MonthlyStatsLine {
 	return &MonthlyStatsLine{
-		ID:           NewUUID("sl"),
+		ID:           id,
 		Month:        month,
 		RepositoryID: repositoryID,
 		AuthorID:     authorID,

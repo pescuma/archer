@@ -978,8 +978,7 @@ func (s *gormStorage) LoadMonthlyStats() (*model.MonthlyStats, error) {
 	s.monthLines = createCache(sqlLines)
 
 	for _, sl := range sqlLines {
-		l := result.GetOrCreateLines(sl.Month, sl.RepositoryID, sl.AuthorID, sl.CommitterID, sl.ProjectID)
-		l.ID = sl.ID
+		l := result.GetOrCreateLinesEx(&sl.ID, sl.Month, sl.RepositoryID, sl.AuthorID, sl.CommitterID, sl.ProjectID)
 		l.Changes = toModelChanges(sl.Changes)
 		l.Blame = toModelBlame(sl.Blame)
 	}

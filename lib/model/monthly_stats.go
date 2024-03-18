@@ -7,6 +7,8 @@ import (
 )
 
 type MonthlyStats struct {
+	maxID ID
+
 	lines map[string]*MonthlyStatsLine
 }
 
@@ -15,13 +17,16 @@ func NewMonthlyStats() *MonthlyStats {
 		lines: make(map[string]*MonthlyStatsLine),
 	}
 }
-
 func (s *MonthlyStats) GetOrCreateLines(month string, repositoryID UUID, authorID UUID, committerID UUID, projectID *UUID) *MonthlyStatsLine {
+	return s.GetOrCreateLinesEx(nil, month, repositoryID, authorID, committerID, projectID)
+}
+
+func (s *MonthlyStats) GetOrCreateLinesEx(id *ID, month string, repositoryID UUID, authorID UUID, committerID UUID, projectID *UUID) *MonthlyStatsLine {
 	key := s.createKey(month, repositoryID, authorID, committerID, projectID)
 
 	line, ok := s.lines[key]
 	if !ok {
-		line = NewMonthlyStatsLine(month, repositoryID, authorID, committerID, projectID)
+		line = NewMonthlyStatsLine(createID(&s.maxID, id), month, repositoryID, authorID, committerID, projectID)
 		s.lines[key] = line
 	}
 

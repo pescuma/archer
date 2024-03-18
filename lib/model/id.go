@@ -14,12 +14,18 @@ func (i ID) String() string {
 	return fmt.Sprintf("%v", int(i))
 }
 
-func MustStringToID(id string) ID {
+func StringToID(id string) (ID, error) {
 	r, err := strconv.ParseInt(id, 10, 32)
+	return ID(r), err
+}
+
+func MustStringToID(id string) ID {
+	r, err := StringToID(id)
 	if err != nil {
 		panic(err)
 	}
-	return ID(r)
+
+	return r
 }
 
 func createID(maxID *ID, id *ID) ID {
