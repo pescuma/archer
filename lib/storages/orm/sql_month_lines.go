@@ -13,7 +13,7 @@ type sqlMonthLines struct {
 	RepositoryID model.UUID
 	AuthorID     model.ID
 	CommitterID  model.ID
-	ProjectID    *model.UUID
+	ProjectID    *model.ID
 
 	Changes *sqlChanges `gorm:"embedded;embeddedPrefix:changes_"`
 	Blame   *sqlBlame   `gorm:"embedded;embeddedPrefix:blame_"`

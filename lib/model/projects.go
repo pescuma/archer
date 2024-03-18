@@ -6,14 +6,15 @@ import (
 )
 
 type Projects struct {
+	maxID  ID
 	byName map[string]*Project
-	byID   map[UUID]*Project
+	byID   map[ID]*Project
 }
 
 func NewProjects() *Projects {
 	return &Projects{
 		byName: map[string]*Project{},
-		byID:   map[UUID]*Project{},
+		byID:   map[ID]*Project{},
 	}
 }
 
@@ -21,7 +22,7 @@ func (ps *Projects) GetOrCreate(name string) *Project {
 	return ps.GetOrCreateEx(name, nil)
 }
 
-func (ps *Projects) GetOrCreateEx(name string, id *UUID) *Project {
+func (ps *Projects) GetOrCreateEx(name string, id *ID) *Project {
 	if len(name) == 0 {
 		panic("empty name not supported")
 	}
@@ -29,7 +30,7 @@ func (ps *Projects) GetOrCreateEx(name string, id *UUID) *Project {
 	result, ok := ps.byName[name]
 
 	if !ok {
-		result = NewProject(name, id)
+		result = NewProject(name, createID(&ps.maxID, id))
 		ps.byName[name] = result
 		ps.byID[result.ID] = result
 	}
@@ -37,7 +38,7 @@ func (ps *Projects) GetOrCreateEx(name string, id *UUID) *Project {
 	return result
 }
 
-func (ps *Projects) GetByID(id UUID) *Project {
+func (ps *Projects) GetByID(id ID) *Project {
 	return ps.byID[id]
 }
 

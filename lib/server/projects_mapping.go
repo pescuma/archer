@@ -66,7 +66,7 @@ func (s *server) createProjectsExternalFilters(params *Filters) (func(*model.Pro
 		return nil, nil
 	}
 
-	filesPerProject := make(map[model.UUID]map[model.ID]bool)
+	filesPerProject := make(map[model.ID]map[model.ID]bool)
 	if fileIDs != nil || personIDs != nil {
 		for _, f := range s.files.ListFiles() {
 			if f.ProjectID == nil {
@@ -126,7 +126,7 @@ func (s *server) createProjectsExternalFilters(params *Filters) (func(*model.Pro
 	return result, nil
 }
 
-func (s *server) listProjectIDsOrNil(proj string) (map[model.UUID]bool, error) {
+func (s *server) listProjectIDsOrNil(proj string) (map[model.ID]bool, error) {
 	proj = prepareToSearch(proj)
 
 	switch {
@@ -136,7 +136,7 @@ func (s *server) listProjectIDsOrNil(proj string) (map[model.UUID]bool, error) {
 			return nil, err
 		}
 
-		result := make(map[model.UUID]bool, len(projects))
+		result := make(map[model.ID]bool, len(projects))
 		for _, p := range projects {
 			result[p.ID] = true
 		}
@@ -216,7 +216,7 @@ func (s *server) toProject(p *model.Project) gin.H {
 	}
 }
 
-func (s *server) toProjectReference(id *model.UUID) gin.H {
+func (s *server) toProjectReference(id *model.ID) gin.H {
 	if id == nil {
 		return nil
 	}

@@ -10,7 +10,7 @@ type sqlFileLine struct {
 	FileID model.ID `gorm:"primaryKey;autoIncrement:false"`
 	Line   int      `gorm:"primaryKey"`
 
-	ProjectID    *model.UUID
+	ProjectID    *model.ID
 	RepositoryID *model.UUID
 	CommitID     *model.UUID
 	AuthorID     *model.ID

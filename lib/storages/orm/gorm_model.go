@@ -24,44 +24,11 @@ func (s *sqlConfig) CacheKey() string {
 	return s.Key
 }
 
-type sqlProject struct {
-	ID          model.UUID
-	Name        string
-	ProjectName string   `gorm:"index"`
-	Groups      []string `gorm:"serializer:json"`
-	Type        model.ProjectType
-
-	RootDir     string
-	ProjectFile string
-
-	RepositoryID *model.UUID `gorm:"index"`
-
-	Sizes     map[string]*sqlSize  `gorm:"serializer:json"`
-	Size      *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
-	Changes   *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
-	Metrics   *sqlMetricsAggregate `gorm:"embedded"`
-	Data      map[string]string    `gorm:"serializer:json"`
-	FirstSeen time.Time
-	LastSeen  time.Time
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
-
-	DependencySources []sqlProjectDependency `gorm:"foreignKey:SourceID"`
-	DependencyTargets []sqlProjectDependency `gorm:"foreignKey:TargetID"`
-	Dirs              []sqlProjectDirectory  `gorm:"foreignKey:ProjectID"`
-	Files             []sqlFile              `gorm:"foreignKey:ProjectID"`
-}
-
-func (s *sqlProject) CacheKey() string {
-	return string(s.ID)
-}
-
 type sqlProjectDependency struct {
 	ID       model.UUID
 	Name     string
-	SourceID model.UUID `gorm:"index"`
-	TargetID model.UUID `gorm:"index"`
+	SourceID model.ID `gorm:"index"`
+	TargetID model.ID `gorm:"index"`
 
 	Versions []string          `gorm:"serializer:json"`
 	Data     map[string]string `gorm:"serializer:json"`
@@ -76,7 +43,7 @@ func (s *sqlProjectDependency) CacheKey() string {
 
 type sqlProjectDirectory struct {
 	ID        model.UUID
-	ProjectID model.UUID `gorm:"index"`
+	ProjectID model.ID `gorm:"index"`
 	Name      string
 	Type      model.ProjectDirectoryType
 

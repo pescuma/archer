@@ -12,7 +12,7 @@ const (
 
 type FileLine struct {
 	Line         int
-	ProjectID    *UUID
+	ProjectID    *ID
 	RepositoryID *UUID
 	CommitID     *UUID
 	AuthorID     *ID

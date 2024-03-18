@@ -78,7 +78,7 @@ func (fs *Files) ListFilesByProjects(ps []*Project) []*File {
 	fs.mutex.RLock()
 	defer fs.mutex.RUnlock()
 
-	consider := map[UUID]bool{}
+	consider := map[ID]bool{}
 	for _, p := range ps {
 		consider[p.ID] = true
 	}

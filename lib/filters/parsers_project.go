@@ -136,18 +136,18 @@ func ParseDependencyFilter(projs *model.Projects, rule string) (ProjectFilter, e
 		return nil, err
 	}
 
-	matches := map[model.UUID]map[model.UUID]bool{}
+	matches := map[model.ID]map[model.ID]bool{}
 
 	for _, src := range projs.ListProjects(model.FilterExcludeExternal) {
 		if !srcFilter(src) {
 			continue
 		}
 
-		visited := map[model.UUID]bool{}
+		visited := map[model.ID]bool{}
 		findMatchingEdges(matches, visited, destFilter, maxDepth, []*model.Project{src})
 	}
 
-	nodes := map[model.UUID]bool{}
+	nodes := map[model.ID]bool{}
 	for s, m := range matches {
 		nodes[s] = true
 		for d := range m {
@@ -170,8 +170,8 @@ func ParseDependencyFilter(projs *model.Projects, rule string) (ProjectFilter, e
 }
 
 func findMatchingEdges(
-	matches map[model.UUID]map[model.UUID]bool,
-	visited map[model.UUID]bool,
+	matches map[model.ID]map[model.ID]bool,
+	visited map[model.ID]bool,
 	destFilter func(proj *model.Project) bool,
 	maxDepth int,
 	path []*model.Project,
@@ -199,17 +199,17 @@ func findMatchingEdges(
 	}
 }
 
-func addEdge(matches map[model.UUID]map[model.UUID]bool, a, b *model.Project) {
+func addEdge(matches map[model.ID]map[model.ID]bool, a, b *model.Project) {
 	m, ok := matches[a.ID]
 	if !ok {
-		m = map[model.UUID]bool{}
+		m = map[model.ID]bool{}
 		matches[a.ID] = m
 	}
 
 	m[b.ID] = true
 }
 
-func addPath(matches map[model.UUID]map[model.UUID]bool, path []*model.Project) {
+func addPath(matches map[model.ID]map[model.ID]bool, path []*model.Project) {
 	p := path[0]
 	for _, n := range path[1:] {
 		addEdge(matches, p, n)
@@ -231,7 +231,10 @@ func ParseOnlyProjsFilter(rule string) (func(proj *model.Project) bool, error) {
 		}, nil
 
 	} else if strings.HasPrefix(rule, "id:") {
-		id := model.UUID(rule[3:])
+		id, err := model.StringToID(rule[3:])
+		if err != nil {
+			return nil, err
+		}
 
 		return func(proj *model.Project) bool {
 			return proj.ID == id

@@ -9,7 +9,7 @@ type File struct {
 	Path string
 	ID   ID
 
-	ProjectID          *UUID
+	ProjectID          *ID
 	ProjectDirectoryID *UUID
 
 	RepositoryID *UUID

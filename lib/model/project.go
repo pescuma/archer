@@ -13,7 +13,7 @@ type Project struct {
 	Name   string
 	Groups []string
 	Type   ProjectType
-	ID     UUID
+	ID     ID
 
 	RootDir     string
 	ProjectFile string
@@ -31,17 +31,10 @@ type Project struct {
 	LastSeen     time.Time
 }
 
-func NewProject(name string, id *UUID) *Project {
-	var uuid UUID
-	if id == nil {
-		uuid = NewUUID("p")
-	} else {
-		uuid = *id
-	}
-
+func NewProject(name string, id ID) *Project {
 	return &Project{
 		Name:         name,
-		ID:           uuid,
+		ID:           id,
 		Dirs:         map[string]*ProjectDirectory{},
 		Dependencies: map[string]*ProjectDependency{},
 		Sizes:        map[string]*Size{},

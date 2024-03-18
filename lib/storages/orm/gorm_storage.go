@@ -213,13 +213,7 @@ func (s *gormStorage) writeProjects(projs []*model.Project) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	var sqlProjs []*sqlProject
-	for _, p := range projs {
-		sp := toSqlProject(p)
-		if prepareChange(&s.sqlProjs, sp) {
-			sqlProjs = append(sqlProjs, sp)
-		}
-	}
+	sqlProjs := prepareChanges(projs, newSqlProject, &s.sqlProjs)
 
 	var sqlDeps []*sqlProjectDependency
 	for _, p := range projs {
@@ -1252,36 +1246,6 @@ func cloneMap[K comparable, V any](m map[K]V) map[K]V {
 		result[k] = v
 	}
 	return result
-}
-
-func toSqlProject(p *model.Project) *sqlProject {
-	sp := &sqlProject{
-		ID:           p.ID,
-		Name:         p.String(),
-		ProjectName:  p.Name,
-		Groups:       p.Groups,
-		Type:         p.Type,
-		RootDir:      p.RootDir,
-		ProjectFile:  p.ProjectFile,
-		RepositoryID: p.RepositoryID,
-		Sizes:        map[string]*sqlSize{},
-		Size:         toSqlSize(p.Size),
-		Changes:      toSqlChanges(p.Changes),
-		Metrics:      toSqlMetricsAggregate(p.Metrics, p.Size),
-		Data:         encodeMap(p.Data),
-		FirstSeen:    p.FirstSeen,
-		LastSeen:     p.LastSeen,
-	}
-
-	for k, v := range p.Sizes {
-		sp.Sizes[k] = toSqlSize(v)
-	}
-
-	if len(sp.Sizes) == 0 {
-		sp.Sizes = nil
-	}
-
-	return sp
 }
 
 func toSqlProjectDependency(d *model.ProjectDependency) *sqlProjectDependency {
