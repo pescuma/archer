@@ -13,6 +13,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/pescuma/archer/lib/consoles"
+	"github.com/pescuma/archer/lib/ignore_rules"
 	"github.com/pescuma/archer/lib/linediff"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/storages"
@@ -73,6 +74,11 @@ func (i *HistoryImporter) Import(dirs []string, opts *HistoryOptions) error {
 		return err
 	}
 
+	ignored, err := ignore_rules.New(i.console, i.storage)
+	if err != nil {
+		return err
+	}
+
 	dirs, err = findRootDirs(dirs)
 	if err != nil {
 		return err
@@ -110,7 +116,7 @@ func (i *HistoryImporter) Import(dirs []string, opts *HistoryOptions) error {
 
 		repo.Branch = branch
 
-		commitsImported, err := i.importCommits(repo, gitRepo, gitRevision, opts)
+		commitsImported, err := i.importCommits(repo, ignored, gitRepo, gitRevision, opts)
 		if err != nil {
 			return err
 		}
@@ -199,8 +205,11 @@ func (i *HistoryImporter) countCommitsToImport(repo *model.Repository, gitRepo *
 	return imported, nil
 }
 
-func (i *HistoryImporter) importCommits(repo *model.Repository,
-	gitRepo *git.Repository, gitRevision plumbing.Hash,
+func (i *HistoryImporter) importCommits(
+	repo *model.Repository,
+	ignored *ignore_rules.IgnoreRules,
+	gitRepo *git.Repository,
+	gitRevision plumbing.Hash,
 	opts *HistoryOptions,
 ) (int, error) {
 	imported, err := i.countCommitsToImport(repo, gitRepo, gitRevision, opts)
@@ -245,6 +254,8 @@ func (i *HistoryImporter) importCommits(repo *model.Repository,
 		}
 		// People duplicate a lot
 		commit.AuthorIDs = lo.Uniq(commit.AuthorIDs)
+
+		commit.Ignore = ignored.IgnoreCommit(repo, commit)
 
 		repo.SeenAt(commit.Date, commit.DateAuthored)
 		author.SeenAt(commit.Date, commit.DateAuthored)

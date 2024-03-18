@@ -62,29 +62,35 @@ func (i *Computer) Compute() error {
 		s.Blame.Clear()
 	}
 
+	add := func(blame *model.Blame, query *storages.BlamePerAuthor) {
+		switch query.LineType {
+		case model.CodeFileLine:
+			blame.Code += query.Lines
+		case model.CommentFileLine:
+			blame.Comment += query.Lines
+		case model.BlankFileLine:
+			blame.Blank += query.Lines
+		default:
+			panic(query.LineType)
+		}
+	}
+
 	for _, blame := range blames {
 		c := commits[blame.CommitID]
+		add(c.Blame, blame)
+
+		if c.Ignore {
+			continue
+		}
+
 		pa := peopleDB.GetPersonByID(blame.AuthorID)
+		add(pa.Blame, blame)
+
 		file := filesDB.GetFileByID(blame.FileID)
 
-		s := statsDB.GetOrCreateLines(c.Date.Format("2006-01"), blame.RepositoryID, blame.AuthorID, blame.CommitterID, file.ProjectID)
-
-		switch blame.LineType {
-		case model.CodeFileLine:
-			c.Blame.Code += blame.Lines
-			pa.Blame.Code += blame.Lines
-			s.Blame.Code += blame.Lines
-		case model.CommentFileLine:
-			c.Blame.Comment += blame.Lines
-			pa.Blame.Comment += blame.Lines
-			s.Blame.Comment += blame.Lines
-		case model.BlankFileLine:
-			c.Blame.Blank += blame.Lines
-			pa.Blame.Blank += blame.Lines
-			s.Blame.Blank += blame.Lines
-		default:
-			panic(blame.LineType)
-		}
+		s := statsDB.GetOrCreateLines(c.Date.Format("2006-01"), blame.RepositoryID,
+			blame.AuthorID, blame.CommitterID, file.ProjectID)
+		add(s.Blame, blame)
 	}
 
 	return nil

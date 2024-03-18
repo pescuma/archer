@@ -42,6 +42,12 @@ var cli struct {
 		Blame   ComputeBlameCmd   `cmd:"" help:"Compute blame based on imported files."`
 	} `cmd:""`
 
+	Ignore struct {
+		Add struct {
+			Commit IgnoreAddCommitCmd `cmd:"" help:"Add a commit ignore rule."`
+		} `cmd:""`
+	} `cmd:""`
+
 	Run struct {
 		Git RunGitCmd `cmd:"" help:"Run git commands on all imported repositories."`
 	} `cmd:""`

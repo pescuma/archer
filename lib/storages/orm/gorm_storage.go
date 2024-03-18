@@ -37,6 +37,7 @@ type gormStorage struct {
 	repos           *model.Repositories
 	stats           *model.MonthlyStats
 	config          *map[string]string
+	ignoreRules     *model.IgnoreRules
 
 	sqlConfigs          map[string]*sqlConfig
 	sqlProjs            map[string]*sqlProject
@@ -46,11 +47,12 @@ type gormStorage struct {
 	sqlPeople           map[string]*sqlPerson
 	sqlPeopleRepos      map[string]*sqlPersonRepository
 	sqlPeopleFiles      map[string]*sqlPersonFile
-	area                map[string]*sqlProductArea
+	sqlAreas            map[string]*sqlProductArea
 	sqlRepos            map[string]*sqlRepository
 	sqlRepoCommits      map[string]*sqlRepositoryCommit
 	sqlRepoCommitPeople map[string]*sqlRepositoryCommitPerson
 	monthLines          map[string]*sqlMonthLines
+	sqlIgnoreRules      map[string]*sqlIgnoreRule
 }
 
 func NewGormStorage(d gorm.Dialector, console consoles.Console) (storages.Storage, error) {
@@ -80,6 +82,7 @@ func NewGormStorage(d gorm.Dialector, console consoles.Console) (storages.Storag
 		&sqlRepository{}, &sqlRepositoryCommit{}, &sqlRepositoryCommitFile{}, &sqlRepositoryCommitPerson{},
 		&sqlMonthLines{},
 		&sqlFileLine{},
+		&sqlIgnoreRule{},
 	)
 	if err != nil {
 		return nil, err
@@ -427,12 +430,9 @@ func (s *gormStorage) QueryBlamePerAuthor() ([]*storages.BlamePerAuthor, error) 
 	var result []*storages.BlamePerAuthor
 
 	err := s.db.Raw(`
-select l.author_id, l.committer_id, l.repository_id, l.commit_id, l.file_id, l.type line_type, count(*) lines
-from file_lines l
-	join repository_commits c
-		on c.id = l.commit_id 
-where c.ignore = 0
-group by l.author_id, l.committer_id, l.repository_id, l.commit_id, file_id, type
+		select author_id, committer_id, repository_id, commit_id, file_id, type line_type, count(*) lines
+		from file_lines
+		group by author_id, committer_id, repository_id, commit_id, file_id, type
 	`).Scan(&result).Error
 	if err != nil {
 		return nil, err
@@ -467,7 +467,7 @@ func (s *gormStorage) LoadPeople() (*model.People, error) {
 		return nil, err
 	}
 
-	s.area = createCache(areas)
+	s.sqlAreas = createCache(areas)
 
 	for _, sp := range people {
 		p := result.GetOrCreatePerson(&sp.ID)
@@ -498,7 +498,7 @@ func (s *gormStorage) LoadPeople() (*model.People, error) {
 }
 
 func (s *gormStorage) WritePeople() error {
-	if s.projects == nil {
+	if s.people == nil {
 		return nil
 	}
 
@@ -518,7 +518,7 @@ func (s *gormStorage) WritePeople() error {
 	area := s.people.ListProductAreas()
 	for _, p := range area {
 		sp := toSqlProductArea(p)
-		if prepareChange(&s.area, sp) {
+		if prepareChange(&s.sqlAreas, sp) {
 			sqlAreas = append(sqlAreas, sp)
 		}
 	}
@@ -541,7 +541,7 @@ func (s *gormStorage) WritePeople() error {
 		return err
 	}
 
-	addList(&s.area, sqlAreas)
+	addList(&s.sqlAreas, sqlAreas)
 
 	// TODO delete
 
@@ -1090,6 +1090,60 @@ func (s *gormStorage) WriteConfig() error {
 	return nil
 }
 
+func (s *gormStorage) LoadIgnoreRules() (*model.IgnoreRules, error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	if s.ignoreRules != nil {
+		return s.ignoreRules, nil
+	}
+
+	s.console.Printf("Loading ignore rules...\n")
+
+	result := model.NewIgnoreRules()
+
+	var sqlIgnoreRules []*sqlIgnoreRule
+	err := s.db.Find(&sqlIgnoreRules).Error
+	if err != nil {
+		return nil, err
+	}
+
+	s.sqlIgnoreRules = createCache(sqlIgnoreRules)
+
+	for _, sr := range sqlIgnoreRules {
+		result.AddRuleEx(sr.ToModel())
+	}
+
+	s.ignoreRules = result
+	return result, nil
+}
+
+func (s *gormStorage) WriteIgnoreRules() error {
+	if s.ignoreRules == nil {
+		return nil
+	}
+
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	sqlIgnoreRules := prepareChanges(s.ignoreRules.ListRules(), newSqlIgnoreRule, &s.sqlIgnoreRules)
+
+	now := time.Now().Local()
+	db := s.db.Session(&gorm.Session{
+		NowFunc:         func() time.Time { return now },
+		CreateBatchSize: 300,
+	})
+
+	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlIgnoreRules).Error
+	if err != nil {
+		return err
+	}
+
+	addList(&s.sqlIgnoreRules, sqlIgnoreRules)
+
+	return nil
+}
+
 func toSqlMonthLines(l *model.MonthlyStatsLine) *sqlMonthLines {
 	return &sqlMonthLines{
 		ID:           l.ID,
@@ -1506,6 +1560,17 @@ func addList[T sqlTable](target *map[string]T, toAdd []T) {
 	for _, v := range toAdd {
 		(*target)[v.CacheKey()] = v
 	}
+}
+
+func prepareChanges[S sqlTable, M any](models []M, toSql func(M) S, cache *map[string]S) []S {
+	var result []S
+	for _, m := range models {
+		s := toSql(m)
+		if prepareChange(cache, s) {
+			result = append(result, s)
+		}
+	}
+	return result
 }
 
 func prepareChange[T sqlTable](byID *map[string]T, n T) bool {

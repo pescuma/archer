@@ -36,6 +36,9 @@ type Storage interface {
 	LoadMonthlyStats() (*model.MonthlyStats, error)
 	WriteMonthlyStats() error
 
+	LoadIgnoreRules() (*model.IgnoreRules, error)
+	WriteIgnoreRules() error
+
 	Close() error
 }
 

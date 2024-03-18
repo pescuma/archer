@@ -10,6 +10,7 @@ import (
 	"github.com/abiosoft/lineprefix"
 
 	"github.com/pescuma/archer/lib/consoles"
+	"github.com/pescuma/archer/lib/ignore_rules"
 	"github.com/pescuma/archer/lib/importers/blame"
 	"github.com/pescuma/archer/lib/importers/csproj"
 	"github.com/pescuma/archer/lib/importers/git"
@@ -208,6 +209,15 @@ func (w *Workspace) ImportOwners(filter []string, opts *owners.Options) error {
 	return importer.Import(filter, opts)
 }
 
+func (w *Workspace) IgnoreAddCommitRule(rule string) error {
+	ignored, err := ignore_rules.New(w.console, w.storage)
+	if err != nil {
+		return err
+	}
+
+	return ignored.AddCommitRule(rule)
+}
+
 func (w *Workspace) RunGit(args ...string) error {
 	repos, err := w.storage.LoadRepositories()
 	if err != nil {
@@ -248,6 +258,11 @@ func (w *Workspace) Write() error {
 	w.console.Printf("Writing results...\n")
 
 	err := w.storage.WriteConfig()
+	if err != nil {
+		return err
+	}
+
+	err = w.storage.WriteIgnoreRules()
 	if err != nil {
 		return err
 	}

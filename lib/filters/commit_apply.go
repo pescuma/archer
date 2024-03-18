@@ -13,3 +13,7 @@ func UnliftCommitFilter(filter CommitFilterWithUsage) CommitFilter {
 		return filter.Decide(filter.Filter(repo, commit))
 	}
 }
+
+func GroupCommitFilters(filters ...CommitFilterWithUsage) CommitFilterWithUsage {
+	return &commitFilterWithUsageGroup{filters}
+}
