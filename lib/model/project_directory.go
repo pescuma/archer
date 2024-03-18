@@ -5,7 +5,7 @@ import "time"
 type ProjectDirectory struct {
 	RelativePath string
 	Type         ProjectDirectoryType
-	ID           UUID
+	ID           ID
 
 	Size      *Size
 	Changes   *Changes
@@ -15,10 +15,10 @@ type ProjectDirectory struct {
 	LastSeen  time.Time
 }
 
-func NewProjectDirectory(relativePath string) *ProjectDirectory {
+func NewProjectDirectory(id ID, relativePath string) *ProjectDirectory {
 	return &ProjectDirectory{
 		RelativePath: relativePath,
-		ID:           NewUUID("d"),
+		ID:           id,
 		Size:         NewSize(),
 		Changes:      NewChanges(),
 		Metrics:      NewMetrics(),

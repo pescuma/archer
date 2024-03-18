@@ -92,10 +92,10 @@ func (fs *Files) ListFilesByProjects(ps []*Project) []*File {
 	return result
 }
 
-func (fs *Files) GroupFilesByDirectory() map[UUID][]*File {
+func (fs *Files) GroupFilesByDirectory() map[ID][]*File {
 	return lo.GroupBy(
 		lo.Filter(fs.ListFiles(), func(f *File, _ int) bool { return f.ProjectDirectoryID != nil }),
-		func(f *File) UUID { return *f.ProjectDirectoryID },
+		func(f *File) ID { return *f.ProjectDirectoryID },
 	)
 }
 

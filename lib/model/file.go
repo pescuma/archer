@@ -10,7 +10,7 @@ type File struct {
 	ID   ID
 
 	ProjectID          *ID
-	ProjectDirectoryID *UUID
+	ProjectDirectoryID *ID
 
 	RepositoryID *UUID
 

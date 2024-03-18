@@ -30,21 +30,21 @@ type Project struct {
 	FirstSeen    time.Time
 	LastSeen     time.Time
 
-	dependencyMaxID *ID
+	projects *Projects
 }
 
-func NewProject(id ID, name string, dependencyMaxID *ID) *Project {
+func NewProject(id ID, name string, ps *Projects) *Project {
 	return &Project{
-		Name:            name,
-		ID:              id,
-		Dirs:            map[string]*ProjectDirectory{},
-		Dependencies:    map[string]*ProjectDependency{},
-		Sizes:           map[string]*Size{},
-		Size:            NewSize(),
-		Changes:         NewChanges(),
-		Metrics:         NewMetrics(),
-		Data:            map[string]string{},
-		dependencyMaxID: dependencyMaxID,
+		Name:         name,
+		ID:           id,
+		Dirs:         map[string]*ProjectDirectory{},
+		Dependencies: map[string]*ProjectDependency{},
+		Sizes:        map[string]*Size{},
+		Size:         NewSize(),
+		Changes:      NewChanges(),
+		Metrics:      NewMetrics(),
+		Data:         map[string]string{},
+		projects:     ps,
 	}
 }
 
@@ -60,7 +60,7 @@ func (p *Project) GetOrCreateDependencyEx(id *ID, d *Project) *ProjectDependency
 	result, ok := p.Dependencies[d.Name]
 
 	if !ok {
-		result = NewDependency(createID(p.dependencyMaxID, id), p, d)
+		result = NewDependency(createID(&p.projects.dependencyMaxID, id), p, d)
 		p.Dependencies[d.Name] = result
 	}
 
@@ -105,10 +105,14 @@ func (p *Project) GetMetrics() *Metrics {
 }
 
 func (p *Project) GetDirectory(relativePath string) *ProjectDirectory {
+	return p.GetDirectoryEx(nil, relativePath)
+}
+
+func (p *Project) GetDirectoryEx(id *ID, relativePath string) *ProjectDirectory {
 	result, ok := p.Dirs[relativePath]
 
 	if !ok {
-		result = NewProjectDirectory(relativePath)
+		result = NewProjectDirectory(createID(&p.projects.directoryMaxID, id), relativePath)
 		p.Dirs[relativePath] = result
 	}
 

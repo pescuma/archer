@@ -54,7 +54,7 @@ func (c *Computer) Compute() error {
 
 	c.console.Printf("Computing history for projects, dirs, files, people, areas and monthly stats...\n")
 
-	dirsByIDs := map[model.UUID]*model.ProjectDirectory{}
+	dirsByIDs := map[model.ID]*model.ProjectDirectory{}
 	for _, p := range projectsDB.ListProjects(model.FilterExcludeExternal) {
 		for _, d := range p.Dirs {
 			dirsByIDs[d.ID] = d

@@ -24,29 +24,6 @@ func (s *sqlConfig) CacheKey() string {
 	return s.Key
 }
 
-type sqlProjectDirectory struct {
-	ID        model.UUID
-	ProjectID model.ID `gorm:"index"`
-	Name      string
-	Type      model.ProjectDirectoryType
-
-	Size      *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
-	Changes   *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
-	Metrics   *sqlMetricsAggregate `gorm:"embedded"`
-	Data      map[string]string    `gorm:"serializer:json"`
-	FirstSeen time.Time
-	LastSeen  time.Time
-
-	Files []sqlFile `gorm:"foreignKey:ProjectDirectoryID"`
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
-func (s *sqlProjectDirectory) CacheKey() string {
-	return string(s.ID)
-}
-
 type sqlPersonRepository struct {
 	PersonID     model.ID   `gorm:"primaryKey"`
 	RepositoryID model.UUID `gorm:"primaryKey"`

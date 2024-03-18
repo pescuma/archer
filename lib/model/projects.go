@@ -11,6 +11,7 @@ type Projects struct {
 	byID         map[ID]*Project
 
 	dependencyMaxID ID
+	directoryMaxID  ID
 }
 
 func NewProjects() *Projects {
@@ -32,7 +33,7 @@ func (ps *Projects) GetOrCreateEx(name string, id *ID) *Project {
 	result, ok := ps.byName[name]
 
 	if !ok {
-		result = NewProject(createID(&ps.projectMaxID, id), name, &ps.dependencyMaxID)
+		result = NewProject(createID(&ps.projectMaxID, id), name, ps)
 		ps.byName[name] = result
 		ps.byID[result.ID] = result
 	}

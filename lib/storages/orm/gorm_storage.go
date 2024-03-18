@@ -169,8 +169,7 @@ func (s *gormStorage) LoadProjects() (*model.Projects, error) {
 		source := result.GetByID(sd.SourceID)
 		target := result.GetByID(sd.TargetID)
 
-		d := source.GetOrCreateDependency(target)
-		d.ID = sd.ID
+		d := source.GetOrCreateDependencyEx(&sd.ID, target)
 		d.Versions.InsertSlice(sd.Versions)
 		d.Data = decodeMap(sd.Data)
 	}
@@ -178,8 +177,7 @@ func (s *gormStorage) LoadProjects() (*model.Projects, error) {
 	for _, sd := range dirs {
 		p := result.GetByID(sd.ProjectID)
 
-		d := p.GetDirectory(sd.Name)
-		d.ID = sd.ID
+		d := p.GetDirectoryEx(&sd.ID, sd.Name)
 		d.Type = sd.Type
 		d.Size = toModelSize(sd.Size)
 		d.Changes = toModelChanges(sd.Changes)
@@ -228,7 +226,7 @@ func (s *gormStorage) writeProjects(projs []*model.Project) error {
 	var sqlDirs []*sqlProjectDirectory
 	for _, p := range projs {
 		for _, d := range p.Dirs {
-			sd := toSqlProjectDirectory(d, p)
+			sd := newSqlProjectDirectory(d, p)
 			if prepareChange(&s.sqlProjDirs, sd) {
 				sqlDirs = append(sqlDirs, sd)
 			}
@@ -1246,21 +1244,6 @@ func cloneMap[K comparable, V any](m map[K]V) map[K]V {
 		result[k] = v
 	}
 	return result
-}
-
-func toSqlProjectDirectory(d *model.ProjectDirectory, p *model.Project) *sqlProjectDirectory {
-	return &sqlProjectDirectory{
-		ID:        d.ID,
-		ProjectID: p.ID,
-		Name:      d.RelativePath,
-		Type:      d.Type,
-		Size:      toSqlSize(d.Size),
-		Changes:   toSqlChanges(d.Changes),
-		Metrics:   toSqlMetricsAggregate(d.Metrics, d.Size),
-		Data:      encodeMap(d.Data),
-		FirstSeen: d.FirstSeen,
-		LastSeen:  d.LastSeen,
-	}
 }
 
 func toSqlPersonRepository(r *model.PersonRepository) *sqlPersonRepository {
