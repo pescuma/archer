@@ -9,17 +9,17 @@ import (
 type ProjectDependency struct {
 	Source *Project
 	Target *Project
-	ID     UUID
+	ID     ID
 
 	Versions *set.Set[string]
 	Data     map[string]string
 }
 
-func NewDependency(source *Project, target *Project) *ProjectDependency {
+func NewDependency(id ID, source *Project, target *Project) *ProjectDependency {
 	return &ProjectDependency{
 		Source:   source,
 		Target:   target,
-		ID:       NewUUID("q"),
+		ID:       id,
 		Versions: set.New[string](10),
 		Data:     map[string]string{},
 	}

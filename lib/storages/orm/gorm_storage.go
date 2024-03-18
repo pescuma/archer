@@ -218,7 +218,7 @@ func (s *gormStorage) writeProjects(projs []*model.Project) error {
 	var sqlDeps []*sqlProjectDependency
 	for _, p := range projs {
 		for _, d := range p.Dependencies {
-			sd := toSqlProjectDependency(d)
+			sd := newSqlProjectDependency(d)
 			if prepareChange(&s.sqlProjDeps, sd) {
 				sqlDeps = append(sqlDeps, sd)
 			}
@@ -1246,17 +1246,6 @@ func cloneMap[K comparable, V any](m map[K]V) map[K]V {
 		result[k] = v
 	}
 	return result
-}
-
-func toSqlProjectDependency(d *model.ProjectDependency) *sqlProjectDependency {
-	return &sqlProjectDependency{
-		ID:       d.ID,
-		Name:     d.String(),
-		SourceID: d.Source.ID,
-		TargetID: d.Target.ID,
-		Versions: d.Versions.Slice(),
-		Data:     encodeMap(d.Data),
-	}
 }
 
 func toSqlProjectDirectory(d *model.ProjectDirectory, p *model.Project) *sqlProjectDirectory {

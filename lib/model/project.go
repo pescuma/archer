@@ -10,10 +10,10 @@ import (
 )
 
 type Project struct {
+	ID     ID
 	Name   string
 	Groups []string
 	Type   ProjectType
-	ID     ID
 
 	RootDir     string
 	ProjectFile string
@@ -29,19 +29,22 @@ type Project struct {
 	Data         map[string]string
 	FirstSeen    time.Time
 	LastSeen     time.Time
+
+	dependencyMaxID *ID
 }
 
-func NewProject(name string, id ID) *Project {
+func NewProject(id ID, name string, dependencyMaxID *ID) *Project {
 	return &Project{
-		Name:         name,
-		ID:           id,
-		Dirs:         map[string]*ProjectDirectory{},
-		Dependencies: map[string]*ProjectDependency{},
-		Sizes:        map[string]*Size{},
-		Size:         NewSize(),
-		Changes:      NewChanges(),
-		Metrics:      NewMetrics(),
-		Data:         map[string]string{},
+		Name:            name,
+		ID:              id,
+		Dirs:            map[string]*ProjectDirectory{},
+		Dependencies:    map[string]*ProjectDependency{},
+		Sizes:           map[string]*Size{},
+		Size:            NewSize(),
+		Changes:         NewChanges(),
+		Metrics:         NewMetrics(),
+		Data:            map[string]string{},
+		dependencyMaxID: dependencyMaxID,
 	}
 }
 
@@ -50,10 +53,14 @@ func (p *Project) String() string {
 }
 
 func (p *Project) GetOrCreateDependency(d *Project) *ProjectDependency {
+	return p.GetOrCreateDependencyEx(nil, d)
+}
+
+func (p *Project) GetOrCreateDependencyEx(id *ID, d *Project) *ProjectDependency {
 	result, ok := p.Dependencies[d.Name]
 
 	if !ok {
-		result = NewDependency(p, d)
+		result = NewDependency(createID(p.dependencyMaxID, id), p, d)
 		p.Dependencies[d.Name] = result
 	}
 

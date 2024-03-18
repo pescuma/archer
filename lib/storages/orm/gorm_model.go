@@ -24,23 +24,6 @@ func (s *sqlConfig) CacheKey() string {
 	return s.Key
 }
 
-type sqlProjectDependency struct {
-	ID       model.UUID
-	Name     string
-	SourceID model.ID `gorm:"index"`
-	TargetID model.ID `gorm:"index"`
-
-	Versions []string          `gorm:"serializer:json"`
-	Data     map[string]string `gorm:"serializer:json"`
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
-func (s *sqlProjectDependency) CacheKey() string {
-	return string(s.ID)
-}
-
 type sqlProjectDirectory struct {
 	ID        model.UUID
 	ProjectID model.ID `gorm:"index"`
