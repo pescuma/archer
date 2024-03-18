@@ -45,8 +45,8 @@ type Storage interface {
 type Factory = func(path string) (Storage, error)
 
 type BlamePerAuthor struct {
-	AuthorID     model.UUID
-	CommitterID  model.UUID
+	AuthorID     model.ID
+	CommitterID  model.ID
 	RepositoryID model.UUID
 	CommitID     model.UUID
 	FileID       model.ID

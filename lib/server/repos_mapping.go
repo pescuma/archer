@@ -278,7 +278,7 @@ func (s *server) toCommit(commit *model.RepositoryCommit, repo *model.Repository
 		"children":      commit.Children,
 		"committer":     s.toPersonReference(&commit.CommitterID),
 		"dateAuthored":  commit.DateAuthored,
-		"authors":       lo.Map(commit.AuthorIDs, func(a model.UUID, _ int) gin.H { return s.toPersonReference(&a) }),
+		"authors":       lo.Map(commit.AuthorIDs, func(a model.ID, _ int) gin.H { return s.toPersonReference(&a) }),
 		"modifiedLines": encodeMetric(commit.LinesModified),
 		"addedLines":    encodeMetric(commit.LinesAdded),
 		"deletedLines":  encodeMetric(commit.LinesDeleted),

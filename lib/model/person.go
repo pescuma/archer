@@ -9,7 +9,7 @@ import (
 
 type Person struct {
 	Name string
-	ID   UUID
+	ID   ID
 
 	names     map[string]bool
 	emails    map[string]bool
@@ -20,16 +20,9 @@ type Person struct {
 	LastSeen  time.Time
 }
 
-func NewPerson(id *UUID) *Person {
-	var uuid UUID
-	if id == nil {
-		uuid = NewUUID("i")
-	} else {
-		uuid = *id
-	}
-
+func NewPerson(id ID) *Person {
 	return &Person{
-		ID:      uuid,
+		ID:      id,
 		names:   map[string]bool{},
 		emails:  map[string]bool{},
 		Blame:   NewBlame(),

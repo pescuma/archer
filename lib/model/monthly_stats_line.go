@@ -5,15 +5,15 @@ type MonthlyStatsLine struct {
 
 	Month        string
 	RepositoryID UUID
-	AuthorID     UUID
-	CommitterID  UUID
+	AuthorID     ID
+	CommitterID  ID
 	ProjectID    *UUID
 
 	Changes *Changes
 	Blame   *Blame
 }
 
-func NewMonthlyStatsLine(id ID, month string, repositoryID UUID, authorID UUID, committerID UUID, projectID *UUID) *MonthlyStatsLine {
+func NewMonthlyStatsLine(id ID, month string, repositoryID UUID, authorID ID, committerID ID, projectID *UUID) *MonthlyStatsLine {
 	return &MonthlyStatsLine{
 		ID:           id,
 		Month:        month,

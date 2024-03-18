@@ -1432,7 +1432,7 @@ func toSqlRepositoryCommit(r *model.Repository, c *model.RepositoryCommit) *sqlR
 	}
 }
 
-func toSqlRepositoryCommitPerson(commit *model.RepositoryCommit, personID model.UUID, role CommitRole, order int) *sqlRepositoryCommitPerson {
+func toSqlRepositoryCommitPerson(commit *model.RepositoryCommit, personID model.ID, role CommitRole, order int) *sqlRepositoryCommitPerson {
 	return &sqlRepositoryCommitPerson{
 		CommitID: commit.ID,
 		PersonID: personID,

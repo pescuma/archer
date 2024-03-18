@@ -13,8 +13,8 @@ type sqlFileLine struct {
 	ProjectID    *model.UUID
 	RepositoryID *model.UUID
 	CommitID     *model.UUID
-	AuthorID     *model.UUID
-	CommitterID  *model.UUID
+	AuthorID     *model.ID
+	CommitterID  *model.ID
 	Date         time.Time
 
 	Type model.FileLineType

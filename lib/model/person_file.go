@@ -3,14 +3,14 @@ package model
 import "time"
 
 type PersonFile struct {
-	PersonID UUID
+	PersonID ID
 	FileID   ID
 
 	FirstSeen time.Time
 	LastSeen  time.Time
 }
 
-func NewPersonFile(personID UUID, fileID ID) *PersonFile {
+func NewPersonFile(personID ID, fileID ID) *PersonFile {
 	return &PersonFile{
 		PersonID: personID,
 		FileID:   fileID,

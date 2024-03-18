@@ -72,15 +72,13 @@ func (s *server) filterPeople(col []*model.Person, params *Filters) ([]*model.Pe
 	}), nil
 }
 
-func (s *server) createPersonFilter(person string, id string) (func(*model.Person) bool, error) {
+func (s *server) createPersonFilter(person string, id model.ID) (func(*model.Person) bool, error) {
 	person = prepareToSearch(person)
-	id = prepareToSearch(id)
 
 	switch {
-	case id != "":
-		uuid := model.NewUUID(id)
+	case id != 0:
 		return func(p *model.Person) bool {
-			return p.ID == uuid
+			return p.ID == id
 		}, nil
 
 	case person != "":
@@ -103,14 +101,13 @@ func (s *server) createPersonFilter(person string, id string) (func(*model.Perso
 	}
 }
 
-func (s *server) listPersonIDsOrNil(person string, id string) (map[model.UUID]bool, error) {
+func (s *server) listPersonIDsOrNil(person string, id model.ID) (map[model.ID]bool, error) {
 	person = prepareToSearch(person)
-	id = prepareToSearch(id)
 
 	switch {
-	case id != "":
-		result := make(map[model.UUID]bool, 1)
-		result[model.UUID(id)] = true
+	case id != 0:
+		result := make(map[model.ID]bool, 1)
+		result[id] = true
 		return result, nil
 
 	case person != "":
@@ -119,7 +116,7 @@ func (s *server) listPersonIDsOrNil(person string, id string) (map[model.UUID]bo
 			return nil, err
 		}
 
-		result := make(map[model.UUID]bool, len(people))
+		result := make(map[model.ID]bool, len(people))
 		for _, p := range people {
 			result[p.ID] = true
 		}
@@ -180,7 +177,7 @@ func (s *server) toPerson(p *model.Person) gin.H {
 	}
 }
 
-func (s *server) toPersonReference(id *model.UUID) gin.H {
+func (s *server) toPersonReference(id *model.ID) gin.H {
 	if id == nil {
 		return nil
 	}

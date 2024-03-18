@@ -102,8 +102,8 @@ type sqlMonthLines struct {
 
 	Month        string
 	RepositoryID model.UUID
-	AuthorID     model.UUID
-	CommitterID  model.UUID
+	AuthorID     model.ID
+	CommitterID  model.ID
 	ProjectID    *model.UUID
 
 	Changes *sqlChanges `gorm:"embedded;embeddedPrefix:changes_"`
@@ -118,7 +118,7 @@ func (s *sqlMonthLines) CacheKey() string {
 }
 
 type sqlPerson struct {
-	ID   model.UUID
+	ID   model.ID
 	Name string
 
 	Names     []string          `gorm:"serializer:json"`
@@ -141,7 +141,7 @@ func (s *sqlPerson) CacheKey() string {
 }
 
 type sqlPersonRepository struct {
-	PersonID     model.UUID `gorm:"primaryKey"`
+	PersonID     model.ID   `gorm:"primaryKey"`
 	RepositoryID model.UUID `gorm:"primaryKey"`
 
 	FirstSeen time.Time
@@ -156,8 +156,8 @@ func (s *sqlPersonRepository) CacheKey() string {
 }
 
 type sqlPersonFile struct {
-	PersonID model.UUID `gorm:"primaryKey"`
-	FileID   model.ID   `gorm:"primaryKey"`
+	PersonID model.ID `gorm:"primaryKey"`
+	FileID   model.ID `gorm:"primaryKey"`
 
 	FirstSeen time.Time
 	LastSeen  time.Time
@@ -257,7 +257,7 @@ func (r CommitRole) String() string {
 
 type sqlRepositoryCommitPerson struct {
 	CommitID model.UUID `gorm:"primaryKey"`
-	PersonID model.UUID `gorm:"primaryKey"`
+	PersonID model.ID   `gorm:"primaryKey"`
 	Role     CommitRole `gorm:"primaryKey"`
 	Order    int
 

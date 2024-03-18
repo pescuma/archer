@@ -5,31 +5,33 @@ import (
 )
 
 type People struct {
-	peopleByID         map[UUID]*Person
+	personMaxID ID
+	peopleByID  map[ID]*Person
+
 	productAreasByName map[string]*ProductArea
 	productAreasByID   map[UUID]*ProductArea
 }
 
 func NewPeople() *People {
 	return &People{
-		peopleByID:         map[UUID]*Person{},
+		peopleByID:         map[ID]*Person{},
 		productAreasByName: map[string]*ProductArea{},
 		productAreasByID:   map[UUID]*ProductArea{},
 	}
 }
 
-func (ps *People) GetPersonByID(id UUID) *Person {
+func (ps *People) GetPersonByID(id ID) *Person {
 	return ps.peopleByID[id]
 }
 
-func (ps *People) GetOrCreatePerson(id *UUID) *Person {
+func (ps *People) GetOrCreatePerson(id *ID) *Person {
 	if id != nil {
 		if result, ok := ps.peopleByID[*id]; ok {
 			return result
 		}
 	}
 
-	result := NewPerson(id)
+	result := NewPerson(createID(&ps.personMaxID, id))
 	ps.peopleByID[result.ID] = result
 	return result
 }

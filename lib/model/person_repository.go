@@ -3,14 +3,14 @@ package model
 import "time"
 
 type PersonRepository struct {
-	PersonID     UUID
+	PersonID     ID
 	RepositoryID UUID
 
 	FirstSeen time.Time
 	LastSeen  time.Time
 }
 
-func NewPersonRepository(personID UUID, repositoryID UUID) *PersonRepository {
+func NewPersonRepository(personID ID, repositoryID UUID) *PersonRepository {
 	return &PersonRepository{
 		PersonID:     personID,
 		RepositoryID: repositoryID,
