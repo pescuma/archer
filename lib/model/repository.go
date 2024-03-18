@@ -7,10 +7,10 @@ import (
 )
 
 type Repository struct {
+	ID      ID
 	Name    string
 	RootDir string
 	VCS     string
-	ID      UUID
 
 	Branch string
 
@@ -26,17 +26,10 @@ type Repository struct {
 	commitsByID   map[UUID]*RepositoryCommit
 }
 
-func NewRepository(rootDir string, id *UUID) *Repository {
-	var uuid UUID
-	if id == nil {
-		uuid = NewUUID("r")
-	} else {
-		uuid = *id
-	}
-
+func NewRepository(id ID, rootDir string) *Repository {
 	return &Repository{
+		ID:            id,
 		RootDir:       rootDir,
-		ID:            uuid,
 		Data:          map[string]string{},
 		FilesTotal:    -1,
 		FilesHead:     -1,

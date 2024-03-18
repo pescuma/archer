@@ -11,7 +11,7 @@ type sqlFileLine struct {
 	Line   int      `gorm:"primaryKey"`
 
 	ProjectID    *model.ID
-	RepositoryID *model.UUID
+	RepositoryID *model.ID
 	CommitID     *model.UUID
 	AuthorID     *model.ID
 	CommitterID  *model.ID

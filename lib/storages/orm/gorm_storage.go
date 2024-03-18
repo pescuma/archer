@@ -569,14 +569,7 @@ func (s *gormStorage) WritePeopleRelations() error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	var rs []*sqlPersonRepository
-	for _, r := range s.peopleRelations.ListRepositories() {
-		pr := toSqlPersonRepository(r)
-		if prepareChange(&s.sqlPersonRepos, pr) {
-			rs = append(rs, pr)
-		}
-	}
-
+	rs := prepareChanges(s.peopleRelations.ListRepositories(), newSqlPersonRepository, &s.sqlPersonRepos)
 	fs := prepareChanges(s.peopleRelations.ListFiles(), newSqlPersonFile, &s.sqlPersonFiles)
 
 	now := time.Now().Local()
@@ -713,13 +706,7 @@ func (s *gormStorage) writeRepositories(repos []*model.Repository) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	var sqlRepos []*sqlRepository
-	for _, repo := range repos {
-		sr := toSqlRepository(repo)
-		if prepareChange(&s.sqlRepos, sr) {
-			sqlRepos = append(sqlRepos, sr)
-		}
-	}
+	sqlRepos := prepareChanges(repos, newSqlRepository, &s.sqlRepos)
 
 	var sqlCommits []*sqlRepositoryCommit
 	var sqlCommitPeople []*sqlRepositoryCommitPerson
@@ -1244,31 +1231,6 @@ func cloneMap[K comparable, V any](m map[K]V) map[K]V {
 		result[k] = v
 	}
 	return result
-}
-
-func toSqlPersonRepository(r *model.PersonRepository) *sqlPersonRepository {
-	return &sqlPersonRepository{
-		PersonID:     r.PersonID,
-		RepositoryID: r.RepositoryID,
-		FirstSeen:    r.FirstSeen,
-		LastSeen:     r.LastSeen,
-	}
-}
-
-func toSqlRepository(r *model.Repository) *sqlRepository {
-	return &sqlRepository{
-		ID:           r.ID,
-		Name:         r.Name,
-		RootDir:      r.RootDir,
-		VCS:          r.VCS,
-		Branch:       r.Branch,
-		Data:         encodeMap(r.Data),
-		FirstSeen:    r.FirstSeen,
-		LastSeen:     r.LastSeen,
-		CommitsTotal: r.CountCommits(),
-		FilesTotal:   encodeMetric(r.FilesTotal),
-		FilesHead:    encodeMetric(r.FilesHead),
-	}
 }
 
 func toSqlRepositoryCommit(r *model.Repository, c *model.RepositoryCommit) *sqlRepositoryCommit {

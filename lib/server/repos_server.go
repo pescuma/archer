@@ -10,7 +10,7 @@ import (
 )
 
 type CommitPatchParams struct {
-	RepoID   model.UUID `uri:"repoID"`
+	RepoID   model.ID   `uri:"repoID"`
 	CommitID model.UUID `uri:"commitID"`
 	Ignore   *bool      `json:"ignore"`
 }

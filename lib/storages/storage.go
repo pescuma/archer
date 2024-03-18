@@ -47,7 +47,7 @@ type Factory = func(path string) (Storage, error)
 type BlamePerAuthor struct {
 	AuthorID     model.ID
 	CommitterID  model.ID
-	RepositoryID model.UUID
+	RepositoryID model.ID
 	CommitID     model.UUID
 	FileID       model.ID
 	LineType     model.FileLineType

@@ -10,9 +10,9 @@ type sqlFile struct {
 	ID   model.ID
 	Name string
 
-	ProjectID          *model.ID   `gorm:"index"`
-	ProjectDirectoryID *model.ID   `gorm:"index"`
-	RepositoryID       *model.UUID `gorm:"index"`
+	ProjectID          *model.ID `gorm:"index"`
+	ProjectDirectoryID *model.ID `gorm:"index"`
+	RepositoryID       *model.ID `gorm:"index"`
 
 	ProductAreaID *model.ID `gorm:"index"`
 

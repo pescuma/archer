@@ -3,12 +3,12 @@ package model
 import "github.com/samber/lo"
 
 type RepositoryCommitFiles struct {
-	RepositoryID UUID
+	RepositoryID ID
 	CommitID     UUID
 	byID         map[ID]*RepositoryCommitFile
 }
 
-func NewRepositoryCommitFiles(repositoryID UUID, commitID UUID) *RepositoryCommitFiles {
+func NewRepositoryCommitFiles(repositoryID ID, commitID UUID) *RepositoryCommitFiles {
 	return &RepositoryCommitFiles{
 		RepositoryID: repositoryID,
 		CommitID:     commitID,

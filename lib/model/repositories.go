@@ -7,14 +7,15 @@ import (
 )
 
 type Repositories struct {
+	repoMaxID ID
 	byRootDir map[string]*Repository
-	byID      map[UUID]*Repository
+	byID      map[ID]*Repository
 }
 
 func NewRepositories() *Repositories {
 	return &Repositories{
 		byRootDir: map[string]*Repository{},
-		byID:      map[UUID]*Repository{},
+		byID:      map[ID]*Repository{},
 	}
 }
 
@@ -26,7 +27,7 @@ func (s *Repositories) GetOrCreate(rootDir string) *Repository {
 	return s.GetOrCreateEx(rootDir, nil)
 }
 
-func (s *Repositories) GetOrCreateEx(rootDir string, id *UUID) *Repository {
+func (s *Repositories) GetOrCreateEx(rootDir string, id *ID) *Repository {
 	if len(rootDir) == 0 {
 		panic("empty rootDir not supported")
 	}
@@ -34,7 +35,7 @@ func (s *Repositories) GetOrCreateEx(rootDir string, id *UUID) *Repository {
 	result, ok := s.byRootDir[rootDir]
 
 	if !ok {
-		result = NewRepository(rootDir, id)
+		result = NewRepository(createID(&s.repoMaxID, id), rootDir)
 		s.byRootDir[rootDir] = result
 		s.byID[result.ID] = result
 	}
@@ -42,7 +43,7 @@ func (s *Repositories) GetOrCreateEx(rootDir string, id *UUID) *Repository {
 	return result
 }
 
-func (s *Repositories) GetByID(id UUID) *Repository {
+func (s *Repositories) GetByID(id ID) *Repository {
 	return s.byID[id]
 }
 

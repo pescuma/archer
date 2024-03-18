@@ -24,51 +24,9 @@ func (s *sqlConfig) CacheKey() string {
 	return s.Key
 }
 
-type sqlPersonRepository struct {
-	PersonID     model.ID   `gorm:"primaryKey"`
-	RepositoryID model.UUID `gorm:"primaryKey"`
-
-	FirstSeen time.Time
-	LastSeen  time.Time
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
-func (s *sqlPersonRepository) CacheKey() string {
-	return compositeKey(s.PersonID.String(), string(s.RepositoryID))
-}
-
-type sqlRepository struct {
-	ID      model.UUID
-	Name    string
-	RootDir string `gorm:"uniqueIndex"`
-	VCS     string
-	Branch  string
-
-	CommitsTotal int
-	FilesTotal   *int
-	FilesHead    *int
-
-	Data      map[string]string `gorm:"serializer:json"`
-	FirstSeen time.Time
-	LastSeen  time.Time
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
-
-	Commits []sqlRepositoryCommit `gorm:"foreignKey:RepositoryID"`
-	Files   []sqlFile             `gorm:"foreignKey:RepositoryID"`
-	People  []sqlPersonRepository `gorm:"foreignKey:RepositoryID"`
-}
-
-func (s *sqlRepository) CacheKey() string {
-	return string(s.ID)
-}
-
 type sqlRepositoryCommit struct {
 	ID           model.UUID
-	RepositoryID model.UUID `gorm:"index"`
+	RepositoryID model.ID `gorm:"index"`
 	Name         string
 	Message      string
 	Parents      []model.UUID `gorm:"serializer:json"`

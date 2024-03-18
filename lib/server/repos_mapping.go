@@ -105,7 +105,7 @@ func (s *server) createRepoFilter(repo string) (func(*model.Repository) bool, er
 	}
 }
 
-func (s *server) listRepoIDsOrNil(repo string) (map[model.UUID]bool, error) {
+func (s *server) listRepoIDsOrNil(repo string) (map[model.ID]bool, error) {
 	repo = prepareToSearch(repo)
 
 	switch {
@@ -115,7 +115,7 @@ func (s *server) listRepoIDsOrNil(repo string) (map[model.UUID]bool, error) {
 			return nil, err
 		}
 
-		result := make(map[model.UUID]bool, len(repos))
+		result := make(map[model.ID]bool, len(repos))
 		for _, p := range repos {
 			result[p.ID] = true
 		}
@@ -171,7 +171,7 @@ func (s *server) toRepo(r *model.Repository) gin.H {
 	}
 }
 
-func (s *server) toRepoReference(id *model.UUID) gin.H {
+func (s *server) toRepoReference(id *model.ID) gin.H {
 	if id == nil {
 		return nil
 	}

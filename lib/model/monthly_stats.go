@@ -17,11 +17,11 @@ func NewMonthlyStats() *MonthlyStats {
 		lines: make(map[string]*MonthlyStatsLine),
 	}
 }
-func (s *MonthlyStats) GetOrCreateLines(month string, repositoryID UUID, authorID ID, committerID ID, projectID *ID) *MonthlyStatsLine {
+func (s *MonthlyStats) GetOrCreateLines(month string, repositoryID ID, authorID ID, committerID ID, projectID *ID) *MonthlyStatsLine {
 	return s.GetOrCreateLinesEx(nil, month, repositoryID, authorID, committerID, projectID)
 }
 
-func (s *MonthlyStats) GetOrCreateLinesEx(id *ID, month string, repositoryID UUID, authorID ID, committerID ID, projectID *ID) *MonthlyStatsLine {
+func (s *MonthlyStats) GetOrCreateLinesEx(id *ID, month string, repositoryID ID, authorID ID, committerID ID, projectID *ID) *MonthlyStatsLine {
 	key := s.createKey(month, repositoryID, authorID, committerID, projectID)
 
 	line, ok := s.lines[key]
@@ -37,11 +37,11 @@ func (s *MonthlyStats) ListLines() []*MonthlyStatsLine {
 	return lo.Values(s.lines)
 }
 
-func (s *MonthlyStats) createKey(month string, repositoryID UUID, authorID ID, committerID ID, projectID *ID) string {
+func (s *MonthlyStats) createKey(month string, repositoryID ID, authorID ID, committerID ID, projectID *ID) string {
 	pid := ""
 	if projectID != nil {
 		pid = projectID.String()
 	}
 
-	return strings.Join([]string{month, string(repositoryID), authorID.String(), committerID.String(), pid}, "\n")
+	return strings.Join([]string{month, repositoryID.String(), authorID.String(), committerID.String(), pid}, "\n")
 }

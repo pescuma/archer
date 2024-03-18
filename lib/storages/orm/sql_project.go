@@ -16,7 +16,7 @@ type sqlProject struct {
 	RootDir     string
 	ProjectFile string
 
-	RepositoryID *model.UUID `gorm:"index"`
+	RepositoryID *model.ID `gorm:"index"`
 
 	Sizes     map[string]*sqlSize  `gorm:"serializer:json"`
 	Size      *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`

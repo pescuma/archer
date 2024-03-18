@@ -10,7 +10,7 @@ type sqlMonthLines struct {
 	ID model.ID `gorm:"primaryKey"`
 
 	Month        string
-	RepositoryID model.UUID
+	RepositoryID model.ID
 	AuthorID     model.ID
 	CommitterID  model.ID
 	ProjectID    *model.ID

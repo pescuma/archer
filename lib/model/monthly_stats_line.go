@@ -4,7 +4,7 @@ type MonthlyStatsLine struct {
 	ID ID
 
 	Month        string
-	RepositoryID UUID
+	RepositoryID ID
 	AuthorID     ID
 	CommitterID  ID
 	ProjectID    *ID
@@ -13,7 +13,7 @@ type MonthlyStatsLine struct {
 	Blame   *Blame
 }
 
-func NewMonthlyStatsLine(id ID, month string, repositoryID UUID, authorID ID, committerID ID, projectID *ID) *MonthlyStatsLine {
+func NewMonthlyStatsLine(id ID, month string, repositoryID ID, authorID ID, committerID ID, projectID *ID) *MonthlyStatsLine {
 	return &MonthlyStatsLine{
 		ID:           id,
 		Month:        month,
