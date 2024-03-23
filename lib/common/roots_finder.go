@@ -136,7 +136,7 @@ func (r *RootDir) WalkDir(cb func(proj *model.Project, file *model.File, path st
 				return nil
 			}
 
-			file := r.filesDB.GetOrCreateFile(path)
+			file := r.filesDB.GetOrCreate(path)
 
 			return cb(r.Project, file, path)
 		})
@@ -144,7 +144,7 @@ func (r *RootDir) WalkDir(cb func(proj *model.Project, file *model.File, path st
 	} else {
 		globsMatch := r.createGlobsMatcher(r.Project.RootDir)
 
-		for _, file := range r.filesDB.ListFilesByProject(r.Project) {
+		for _, file := range r.filesDB.ListByProject(r.Project) {
 			match, err := globsMatch(file.Path)
 			if err != nil {
 				return err

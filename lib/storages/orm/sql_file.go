@@ -16,7 +16,9 @@ type sqlFile struct {
 
 	ProductAreaID *model.ID `gorm:"index"`
 
-	Exists    bool
+	Exists bool
+	Ignore bool
+
 	Size      *sqlSize          `gorm:"embedded;embeddedPrefix:size_"`
 	Changes   *sqlChanges       `gorm:"embedded;embeddedPrefix:changes_"`
 	Metrics   *sqlMetrics       `gorm:"embedded"`
@@ -40,12 +42,32 @@ func newSqlFile(f *model.File) *sqlFile {
 		RepositoryID:       f.RepositoryID,
 		ProductAreaID:      f.ProductAreaID,
 		Exists:             f.Exists,
+		Ignore:             f.Ignore,
 		Size:               newSqlSize(f.Size),
 		Changes:            newSqlChanges(f.Changes),
 		Metrics:            newSqlMetrics(f.Metrics),
 		Data:               encodeMap(f.Data),
 		FirstSeen:          f.FirstSeen,
 		LastSeen:           f.LastSeen,
+	}
+}
+
+func (s *sqlFile) ToModel() *model.File {
+	return &model.File{
+		ID:                 s.ID,
+		Path:               s.Name,
+		ProjectID:          s.ProjectID,
+		ProjectDirectoryID: s.ProjectDirectoryID,
+		RepositoryID:       s.RepositoryID,
+		ProductAreaID:      s.ProductAreaID,
+		Exists:             s.Exists,
+		Ignore:             s.Ignore,
+		Size:               s.Size.ToModel(),
+		Changes:            s.Changes.ToModel(),
+		Metrics:            s.Metrics.toModel(),
+		Data:               decodeMap(s.Data),
+		FirstSeen:          s.FirstSeen,
+		LastSeen:           s.LastSeen,
 	}
 }
 

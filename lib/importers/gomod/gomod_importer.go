@@ -82,7 +82,7 @@ func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path s
 	dir.Type = model.SourceDir
 	dir.SeenAt(time.Now())
 
-	projFile := filesDB.GetOrCreateFile(path)
+	projFile := filesDB.GetOrCreate(path)
 	projFile.ProjectID = &proj.ID
 	projFile.ProjectDirectoryID = &dir.ID
 	projFile.SeenAt(time.Now())

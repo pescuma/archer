@@ -8,13 +8,13 @@ type IgnoreRule struct {
 	Rule string
 
 	Deleted   bool
-	DeletedAt time.Time
+	DeletedAt *time.Time
 }
 
 type IgnoreRuleType int
 
 const (
 	UnknownRule IgnoreRuleType = iota
-	CommitRule
 	FileRule
+	CommitRule
 )

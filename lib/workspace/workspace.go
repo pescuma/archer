@@ -218,6 +218,15 @@ func (w *Workspace) IgnoreAddCommitRule(rule string) error {
 	return ignored.AddCommitRule(rule)
 }
 
+func (w *Workspace) IgnoreAddFileRule(rule string) error {
+	ignored, err := ignore_rules.New(w.console, w.storage)
+	if err != nil {
+		return err
+	}
+
+	return ignored.AddFileRule(rule)
+}
+
 func (w *Workspace) RunGit(args ...string) error {
 	repos, err := w.storage.LoadRepositories()
 	if err != nil {

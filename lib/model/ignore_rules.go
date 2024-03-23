@@ -14,7 +14,7 @@ func (i *IgnoreRules) ListRules() []*IgnoreRule {
 	return i.rules
 }
 
-func (i *IgnoreRules) AddRuleEx(rule *IgnoreRule) {
+func (i *IgnoreRules) AddFromStorage(rule *IgnoreRule) {
 	if rule.ID > i.maxID {
 		i.maxID = rule.ID
 	}

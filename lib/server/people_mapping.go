@@ -50,7 +50,7 @@ func (s *server) filterPeople(col []*model.Person, params *Filters) ([]*model.Pe
 			fs := s.peopleRelations.ListFilesByPerson(i.ID)
 			found := false
 			for _, pf := range fs {
-				f := s.files.GetFileByID(pf.FileID)
+				f := s.files.GetByID(pf.FileID)
 				if f != nil && f.ProjectID != nil && projIDs[*f.ProjectID] {
 					found = true
 					break

@@ -76,7 +76,7 @@ func (c *Computer) Compute() error {
 			}
 		}
 	}
-	for _, f := range filesDB.ListFiles() {
+	for _, f := range filesDB.List() {
 		if f.RepositoryID == nil {
 			f.Changes.Reset()
 		} else {
@@ -141,7 +141,7 @@ func (c *Computer) Compute() error {
 					addLinesFactor(c, 1)
 				}
 
-				file := filesDB.GetFileByID(cf.FileID)
+				file := filesDB.GetByID(cf.FileID)
 				files[file] = true
 
 				addChanges(file.Changes)

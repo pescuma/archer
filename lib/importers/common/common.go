@@ -119,7 +119,7 @@ func CreateFileFilter(rootDir string, gitignore bool,
 func MarkDeletedFilesAndUnmarkExistingOnes(filesDB *model.Files, proj *model.Project, dir *model.ProjectDirectory, filter func(path string, isDir bool) bool) error {
 	rootDir := proj.RootDir + string(filepath.Separator)
 
-	for _, file := range filesDB.ListFiles() {
+	for _, file := range filesDB.List() {
 		if !strings.HasPrefix(file.Path, rootDir) {
 			continue
 		}
@@ -160,7 +160,7 @@ func AddFiles(filesDB *model.Files, proj *model.Project, dir *model.ProjectDirec
 			}
 
 			if filter(path, entry.IsDir()) {
-				file := filesDB.GetOrCreateFile(path)
+				file := filesDB.GetOrCreate(path)
 				file.ProjectID = &proj.ID
 				file.ProjectDirectoryID = &dir.ID
 				file.SeenAt(time.Now())

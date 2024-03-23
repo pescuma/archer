@@ -283,18 +283,7 @@ func (s *gormStorage) LoadFiles() (*model.Files, error) {
 	s.sqlFiles = createCache(files)
 
 	for _, sf := range files {
-		f := result.GetOrCreateFileEx(sf.Name, &sf.ID)
-		f.ProjectID = sf.ProjectID
-		f.ProjectDirectoryID = sf.ProjectDirectoryID
-		f.RepositoryID = sf.RepositoryID
-		f.ProductAreaID = sf.ProductAreaID
-		f.Exists = sf.Exists
-		f.Size = sf.Size.ToModel()
-		f.Changes = sf.Changes.ToModel()
-		f.Metrics = sf.Metrics.toModel()
-		f.Data = decodeMap(sf.Data)
-		f.FirstSeen = sf.FirstSeen
-		f.LastSeen = sf.LastSeen
+		result.AddFromStorage(sf.ToModel())
 	}
 
 	s.files = result
@@ -306,7 +295,7 @@ func (s *gormStorage) WriteFiles() error {
 		return nil
 	}
 
-	return s.writeFiles(s.files.ListFiles())
+	return s.writeFiles(s.files.List())
 }
 
 func (s *gormStorage) WriteFile(file *model.File) error {
@@ -1053,7 +1042,7 @@ func (s *gormStorage) LoadIgnoreRules() (*model.IgnoreRules, error) {
 	s.sqlIgnoreRules = createCache(sqlIgnoreRules)
 
 	for _, sr := range sqlIgnoreRules {
-		result.AddRuleEx(sr.ToModel())
+		result.AddFromStorage(sr.ToModel())
 	}
 
 	s.ignoreRules = result

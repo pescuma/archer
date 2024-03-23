@@ -50,7 +50,7 @@ func (c *Computer) Compute() error {
 		a.Metrics.Clear()
 	}
 
-	filesByDir := filesDB.GroupFilesByDirectory()
+	filesByDir := filesDB.GroupByDirectory()
 
 	for _, proj := range projectsDB.ListProjects(model.FilterExcludeExternal) {
 		for _, dir := range proj.Dirs {

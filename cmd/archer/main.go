@@ -44,6 +44,7 @@ var cli struct {
 
 	Ignore struct {
 		Add struct {
+			File   IgnoreAddFileCmd   `cmd:"" help:"Add a file ignore rule."`
 			Commit IgnoreAddCommitCmd `cmd:"" help:"Add a commit ignore rule."`
 		} `cmd:""`
 	} `cmd:""`

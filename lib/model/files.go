@@ -22,11 +22,18 @@ func NewFiles() *Files {
 	}
 }
 
-func (fs *Files) GetOrCreateFile(path string) *File {
-	return fs.GetOrCreateFileEx(path, nil)
+func (fs *Files) AddFromStorage(file *File) *File {
+	if file.ID > fs.maxID {
+		fs.maxID = file.ID
+	}
+
+	fs.filesByPath[file.Path] = file
+	fs.filesByID[file.ID] = file
+
+	return file
 }
 
-func (fs *Files) GetOrCreateFileEx(path string, id *ID) *File {
+func (fs *Files) GetOrCreate(path string) *File {
 	if len(path) == 0 {
 		panic("empty path not supported")
 	}
@@ -37,7 +44,8 @@ func (fs *Files) GetOrCreateFileEx(path string, id *ID) *File {
 	result, ok := fs.filesByPath[path]
 
 	if !ok {
-		result = NewFile(path, createID(&fs.maxID, id))
+		fs.maxID++
+		result = NewFile(path, fs.maxID)
 		fs.filesByPath[path] = result
 		fs.filesByID[result.ID] = result
 	}
@@ -45,21 +53,21 @@ func (fs *Files) GetOrCreateFileEx(path string, id *ID) *File {
 	return result
 }
 
-func (fs *Files) GetFile(path string) *File {
+func (fs *Files) Get(path string) *File {
 	fs.mutex.RLock()
 	defer fs.mutex.RUnlock()
 
 	return fs.filesByPath[path]
 }
 
-func (fs *Files) GetFileByID(id ID) *File {
+func (fs *Files) GetByID(id ID) *File {
 	fs.mutex.RLock()
 	defer fs.mutex.RUnlock()
 
 	return fs.filesByID[id]
 }
 
-func (fs *Files) ListFiles() []*File {
+func (fs *Files) List() []*File {
 	fs.mutex.RLock()
 	defer fs.mutex.RUnlock()
 
@@ -70,11 +78,11 @@ func (fs *Files) ListFiles() []*File {
 	return result
 }
 
-func (fs *Files) ListFilesByProject(proj *Project) []*File {
-	return fs.ListFilesByProjects([]*Project{proj})
+func (fs *Files) ListByProject(proj *Project) []*File {
+	return fs.ListByProjects([]*Project{proj})
 }
 
-func (fs *Files) ListFilesByProjects(ps []*Project) []*File {
+func (fs *Files) ListByProjects(ps []*Project) []*File {
 	fs.mutex.RLock()
 	defer fs.mutex.RUnlock()
 
@@ -92,9 +100,9 @@ func (fs *Files) ListFilesByProjects(ps []*Project) []*File {
 	return result
 }
 
-func (fs *Files) GroupFilesByDirectory() map[ID][]*File {
+func (fs *Files) GroupByDirectory() map[ID][]*File {
 	return lo.GroupBy(
-		lo.Filter(fs.ListFiles(), func(f *File, _ int) bool { return f.ProjectDirectoryID != nil }),
+		lo.Filter(fs.List(), func(f *File, _ int) bool { return f.ProjectDirectoryID != nil }),
 		func(f *File) ID { return *f.ProjectDirectoryID },
 	)
 }

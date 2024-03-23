@@ -131,7 +131,7 @@ func (i *Importer) importBasicInfo(rootDir string, projsDB *model.Projects, file
 	proj.ProjectFile = projFileName
 	proj.SeenAt(time.Now())
 
-	projFile := filesDB.GetOrCreateFile(projFileName)
+	projFile := filesDB.GetOrCreate(projFileName)
 	projFile.ProjectID = &proj.ID
 	projFile.SeenAt(time.Now())
 
@@ -210,7 +210,7 @@ func (i *Importer) importDirectory(files *model.Files, proj *model.Project, dirP
 			dir.SeenAt(time.Now())
 		}
 
-		file := files.GetOrCreateFile(path)
+		file := files.GetOrCreate(path)
 		file.ProjectID = &proj.ID
 		file.ProjectDirectoryID = &dir.ID
 		file.SeenAt(time.Now())

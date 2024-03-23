@@ -86,7 +86,7 @@ func (i *Computer) Compute() error {
 		pa := peopleDB.GetPersonByID(blame.AuthorID)
 		add(pa.Blame, blame)
 
-		file := filesDB.GetFileByID(blame.FileID)
+		file := filesDB.GetByID(blame.FileID)
 
 		s := statsDB.GetOrCreateLines(c.Date.Format("2006-01"), blame.RepositoryID,
 			blame.AuthorID, blame.CommitterID, file.ProjectID)

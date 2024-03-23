@@ -40,7 +40,7 @@ func (c *Computer) Compute() error {
 		a.Size.Clear()
 	}
 
-	filesByDir := filesDB.GroupFilesByDirectory()
+	filesByDir := filesDB.GroupByDirectory()
 
 	for _, proj := range projectsDB.ListProjects(model.FilterExcludeExternal) {
 		proj.ClearSizes()

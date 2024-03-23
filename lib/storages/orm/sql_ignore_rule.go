@@ -14,7 +14,7 @@ type sqlIgnoreRule struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
-	DeletedAt time.Time
+	DeletedAt *time.Time
 }
 
 func newSqlIgnoreRule(r *model.IgnoreRule) *sqlIgnoreRule {

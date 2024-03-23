@@ -26,6 +26,8 @@ type File struct {
 
 	Classes   map[string]*Class
 	Functions map[string]*Function
+
+	Ignore bool
 }
 
 func NewFile(path string, id ID) *File {

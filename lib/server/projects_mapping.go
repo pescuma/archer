@@ -68,7 +68,7 @@ func (s *server) createProjectsExternalFilters(params *Filters) (func(*model.Pro
 
 	filesPerProject := make(map[model.ID]map[model.ID]bool)
 	if fileIDs != nil || personIDs != nil {
-		for _, f := range s.files.ListFiles() {
+		for _, f := range s.files.List() {
 			if f.ProjectID == nil {
 				continue
 			}

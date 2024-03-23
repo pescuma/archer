@@ -129,7 +129,7 @@ func (c *blameCacheImpl) loadCommit(hash plumbing.Hash) (*BlameCommitCache, erro
 	result.Order = c.indexes[repoCommit.ID]
 
 	getFilename := func(fileID model.ID) (string, error) {
-		f := c.filesDB.GetFileByID(fileID)
+		f := c.filesDB.GetByID(fileID)
 
 		rel, err := filepath.Rel(c.repo.RootDir, f.Path)
 		if err != nil {

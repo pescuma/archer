@@ -85,7 +85,7 @@ func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path s
 	dir.Type = model.SourceDir
 	dir.SeenAt(time.Now())
 
-	projFile := filesDB.GetOrCreateFile(path)
+	projFile := filesDB.GetOrCreate(path)
 	projFile.ProjectID = &proj.ID
 	projFile.ProjectDirectoryID = &dir.ID
 	projFile.SeenAt(time.Now())
@@ -242,7 +242,7 @@ func (i *Importer) addFiles(filesDB *model.Files, proj *model.Project, dir *mode
 				end := file[len(proj.RootDir)+1:]
 
 				if g.Match(end) && !excludes.Contains(file) {
-					file := filesDB.GetOrCreateFile(file)
+					file := filesDB.GetOrCreate(file)
 					file.ProjectID = &proj.ID
 					file.ProjectDirectoryID = &dir.ID
 					file.SeenAt(time.Now())
@@ -257,7 +257,7 @@ func (i *Importer) addFiles(filesDB *model.Files, proj *model.Project, dir *mode
 			return err
 		}
 
-		file := filesDB.GetOrCreateFile(path)
+		file := filesDB.GetOrCreate(path)
 		file.ProjectID = &proj.ID
 		file.ProjectDirectoryID = &dir.ID
 		file.SeenAt(time.Now())

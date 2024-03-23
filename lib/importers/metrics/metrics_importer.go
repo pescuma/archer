@@ -58,9 +58,9 @@ func (i *Importer) Import(filter []string, opts *Options) error {
 
 	var candidates []*model.File
 	if len(filter) == 0 {
-		candidates = filesDB.ListFiles()
+		candidates = filesDB.List()
 	} else {
-		candidates = filesDB.ListFilesByProjects(ps)
+		candidates = filesDB.ListByProjects(ps)
 	}
 
 	type work struct {

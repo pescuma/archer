@@ -12,7 +12,7 @@ import (
 )
 
 func (s *server) listFiles(params *Filters) ([]*model.File, error) {
-	return s.filterFiles(s.files.ListFiles(), params)
+	return s.filterFiles(s.files.List(), params)
 }
 
 func (s *server) filterFiles(col []*model.File, params *Filters) ([]*model.File, error) {

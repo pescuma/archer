@@ -168,7 +168,7 @@ func (i *BlameImporter) listToDelete(filesDB *model.Files, repo *model.Repositor
 
 	result := make(map[string]*model.File)
 
-	for _, file := range filesDB.ListFiles() {
+	for _, file := range filesDB.List() {
 		if file.RepositoryID == nil || *file.RepositoryID != repo.ID {
 			continue
 		}
@@ -246,7 +246,7 @@ func (i *BlameImporter) listToCompute(filesDB *model.Files, repo *model.Reposito
 			return err
 		}
 
-		file := filesDB.GetFile(path)
+		file := filesDB.Get(path)
 		if file == nil {
 			return fmt.Errorf("file not found in repo %v: %v", repo.Name, path)
 		}
@@ -430,7 +430,7 @@ func (i *BlameImporter) propagateChangesToParents(filesDB *model.Files, peopleDB
 	for _, blame := range blames {
 		c := commits[blame.CommitID]
 		pa := peopleDB.GetPersonByID(blame.AuthorID)
-		file := filesDB.GetFileByID(blame.FileID)
+		file := filesDB.GetByID(blame.FileID)
 
 		s := statsDB.GetOrCreateLines(c.Date.Format("2006-01"), blame.RepositoryID, blame.AuthorID, blame.CommitterID, file.ProjectID)
 

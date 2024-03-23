@@ -441,7 +441,7 @@ func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Pro
 				commit.LinesDeleted += cf.LinesDeleted
 			}
 
-			file := filesDB.GetFileByID(cf.FileID)
+			file := filesDB.GetByID(cf.FileID)
 			file.RepositoryID = &repo.ID
 			file.SeenAt(commit.Date, commit.DateAuthored)
 
@@ -452,7 +452,7 @@ func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Pro
 			}
 
 			for _, of := range cf.OldIDs {
-				oldFile := filesDB.GetFileByID(of)
+				oldFile := filesDB.GetByID(of)
 				oldFile.RepositoryID = &repo.ID
 				oldFile.SeenAt(commit.Date, commit.DateAuthored)
 
@@ -552,7 +552,7 @@ func (i *HistoryImporter) computeChangesMergeCommit(filesDB *model.Files, repo *
 	}
 
 	for filePath, parentCommits := range changesPerFile {
-		file := filesDB.GetOrCreateFile(filePath)
+		file := filesDB.GetOrCreate(filePath)
 		cf := commitFiles.GetOrCreate(file.ID)
 		var minChange *gitFileChange
 
@@ -614,7 +614,7 @@ func (i *HistoryImporter) computeChangesSimpleCommit(filesDB *model.Files, repo 
 				return err
 			}
 
-			file := filesDB.GetOrCreateFile(filePath)
+			file := filesDB.GetOrCreate(filePath)
 
 			cf := commitFiles.GetOrCreate(file.ID)
 
@@ -651,7 +651,7 @@ func (i *HistoryImporter) fillHashesAndIDS(cf *model.RepositoryCommitFile, gitFi
 			return err
 		}
 
-		oldFile := filesDB.GetOrCreateFile(oldFilePath)
+		oldFile := filesDB.GetOrCreate(oldFilePath)
 
 		cf.OldIDs[parentCommit.ID] = oldFile.ID
 	}
@@ -673,7 +673,7 @@ func (i *HistoryImporter) computeChangesRootCommit(filesDB *model.Files, repo *m
 			return err
 		}
 
-		file := filesDB.GetOrCreateFile(filePath)
+		file := filesDB.GetOrCreate(filePath)
 
 		gitLines, err := gitFile.Lines()
 		if err != nil {

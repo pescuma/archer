@@ -42,7 +42,7 @@ func (s *server) filterRepos(col []*model.Repository, params *Filters) ([]*model
 
 		if projIDs != nil {
 			found := false
-			for _, f := range s.files.ListFiles() {
+			for _, f := range s.files.List() {
 				if f.RepositoryID != nil && *f.RepositoryID == i.ID && f.ProjectID != nil && projIDs[*f.ProjectID] {
 					found = true
 					break
@@ -55,7 +55,7 @@ func (s *server) filterRepos(col []*model.Repository, params *Filters) ([]*model
 
 		if fileIDs != nil {
 			found := false
-			for _, f := range s.files.ListFiles() {
+			for _, f := range s.files.List() {
 				if f.RepositoryID != nil && *f.RepositoryID == i.ID && fileIDs[f.ID] {
 					found = true
 					break
@@ -68,7 +68,7 @@ func (s *server) filterRepos(col []*model.Repository, params *Filters) ([]*model
 
 		if personIDs != nil {
 			found := false
-			for _, f := range s.files.ListFiles() {
+			for _, f := range s.files.List() {
 				if f.RepositoryID != nil && *f.RepositoryID == i.ID {
 					ps := s.peopleRelations.ListPeopleByFile(f.ID)
 					if utils.MapKeysHaveIntersection(ps, personIDs) {
