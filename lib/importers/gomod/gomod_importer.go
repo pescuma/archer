@@ -99,12 +99,16 @@ func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path s
 		i.addDep(projsDB, proj, rep.New)
 	}
 
-	filter, _ := common.CreateFileFilter(proj.RootDir, opts.RespectGitignore,
+	filter, err := common.CreateFileFilter(proj.RootDir, opts.RespectGitignore,
 		func(path string) bool {
 			name := filepath.Base(path)
 			return name == "go.mod" || strings.HasSuffix(name, ".go")
 		},
-		nil)
+		func(path string, isDir bool) bool {
+			name := filepath.Base(path)
+			return strings.HasPrefix(name, ".") || name == "node_modules"
+		},
+	)
 	if err != nil {
 		return err
 	}

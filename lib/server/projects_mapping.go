@@ -200,7 +200,7 @@ func (s *server) toProject(p *model.Project) gin.H {
 	return gin.H{
 		"id":          p.ID,
 		"name":        p.Name,
-		"nameParts":   p.Groups,
+		"groups":      p.Groups,
 		"type":        p.Type.String(),
 		"rootDir":     p.RootDir,
 		"projectFile": p.ProjectFile,

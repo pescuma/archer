@@ -35,6 +35,10 @@ func (s *server) filterFiles(col []*model.File, params *Filters) ([]*model.File,
 	}
 
 	return lo.Filter(col, func(i *model.File, index int) bool {
+		if i.Ignore {
+			return false
+		}
+
 		if !fileFilter(i) {
 			return false
 		}

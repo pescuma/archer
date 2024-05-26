@@ -2,9 +2,6 @@ package server
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/samber/lo"
-
-	"github.com/pescuma/archer/lib/model"
 )
 
 func (s *server) initFiles(r *gin.Engine) {
@@ -46,9 +43,22 @@ func (s *server) statsCountFiles(params *StatsParams) (any, error) {
 		return nil, err
 	}
 
+	exists := 0
+	deleted := 0
+	lines := 0
+	for _, file := range files {
+		if file.Exists {
+			lines += file.Size.Lines
+			exists++
+		} else {
+			deleted++
+		}
+	}
+
 	return gin.H{
-		"total":   len(files),
-		"deleted": lo.CountBy(files, func(file *model.File) bool { return !file.Exists }),
+		"exists":  exists,
+		"deleted": deleted,
+		"lines":   lines,
 	}, nil
 }
 

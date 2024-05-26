@@ -164,7 +164,7 @@ function refresh() {
           labels: {
             padding: 4,
             formatter: function (value) {
-              return Math.abs(value).toLocaleString()
+              return value.toLocaleString()
             },
           },
         },

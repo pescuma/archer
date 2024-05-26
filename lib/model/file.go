@@ -31,6 +31,9 @@ type File struct {
 }
 
 func NewFile(path string, id ID) *File {
+	if strings.Contains(path, "node_modules") {
+		println("a")
+	}
 	return &File{
 		Path:    path,
 		ID:      id,

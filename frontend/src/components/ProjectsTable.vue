@@ -17,21 +17,6 @@ const grid = ref(null)
 
 const columns = [
   {
-    name: 'Root',
-    field: 'root',
-    type: 'text',
-    size: 'l',
-    actions: [
-      {
-        name: 'Filter',
-        icon: 'filter',
-        onClick: (v) => {
-          filters.data.proj = 'root:' + v.root
-        },
-      },
-    ],
-  },
-  {
     name: 'Name',
     field: 'name',
     type: 'text',

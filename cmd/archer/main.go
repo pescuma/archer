@@ -89,5 +89,7 @@ func run(ctx *kong.Context) error {
 		return err
 	}
 
+	ws.Console().Printf("Done\n")
+
 	return nil
 }

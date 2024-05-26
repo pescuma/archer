@@ -54,10 +54,10 @@ func ImportFiles(queue []string, process func(string) error) error {
 
 func CreateFileFilter(rootDir string, gitignore bool,
 	defaultMatcher func(path string) bool,
-	excludes func(path string) bool,
+	excludes func(path string, isDir bool) bool,
 ) (func(path string, isDir bool) bool, error) {
 	if excludes == nil {
-		excludes = func(path string) bool {
+		excludes = func(path string, isDir bool) bool {
 			return false
 		}
 	}
@@ -67,13 +67,7 @@ func CreateFileFilter(rootDir string, gitignore bool,
 			return true
 		}
 
-		if excludes(path) {
-			return false
-		}
-
-		name := filepath.Base(path)
-
-		if strings.HasPrefix(name, ".") {
+		if excludes(path, isDir) {
 			return false
 		}
 
@@ -95,7 +89,7 @@ func CreateFileFilter(rootDir string, gitignore bool,
 				return true
 			}
 
-			if excludes(path) {
+			if excludes(path, isDir) {
 				return false
 			}
 

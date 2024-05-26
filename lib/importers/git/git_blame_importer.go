@@ -405,56 +405,6 @@ func (i *BlameImporter) computeLOC(name string, contents string) ([]model.FileLi
 	return result, nil
 }
 
-func (i *BlameImporter) propagateChangesToParents(filesDB *model.Files, peopleDB *model.People, reposDB *model.Repositories, statsDB *model.MonthlyStats) error {
-	blames, err := i.storage.QueryBlamePerAuthor()
-	if err != nil {
-		return err
-	}
-
-	commits := make(map[model.ID]*model.RepositoryCommit)
-	for _, r := range reposDB.List() {
-		for _, c := range r.ListCommits() {
-			commits[c.ID] = c
-			c.Blame.Clear()
-		}
-	}
-
-	for _, p := range peopleDB.ListPeople() {
-		p.Blame.Clear()
-	}
-
-	for _, s := range statsDB.ListLines() {
-		s.Blame.Clear()
-	}
-
-	for _, blame := range blames {
-		c := commits[blame.CommitID]
-		pa := peopleDB.GetPersonByID(blame.AuthorID)
-		file := filesDB.GetByID(blame.FileID)
-
-		s := statsDB.GetOrCreateLines(c.Date.Format("2006-01"), blame.RepositoryID, blame.AuthorID, blame.CommitterID, file.ProjectID)
-
-		switch blame.LineType {
-		case model.CodeFileLine:
-			c.Blame.Code += blame.Lines
-			pa.Blame.Code += blame.Lines
-			s.Blame.Code += blame.Lines
-		case model.CommentFileLine:
-			c.Blame.Comment += blame.Lines
-			pa.Blame.Comment += blame.Lines
-			s.Blame.Comment += blame.Lines
-		case model.BlankFileLine:
-			c.Blame.Blank += blame.Lines
-			pa.Blame.Blank += blame.Lines
-			s.Blame.Blank += blame.Lines
-		default:
-			panic(blame.LineType)
-		}
-	}
-
-	return nil
-}
-
 func (i *BlameImporter) checkImportedHistory(repo *model.Repository, gitRepo *git.Repository, gitRevision plumbing.Hash) (bool, error) {
 	if repo == nil {
 		return false, nil

@@ -14,8 +14,8 @@ const data = reactive({
 function refresh() {
   let f = filters.toQueryString()
   card.value.request(`/api/stats/count/files?${f}`, function (response) {
-    data.text = response.total.toLocaleString() + ' Files'
-    data.details = response.deleted.toLocaleString() + ' deleted'
+    data.text = response.lines.toLocaleString() + ' LOC'
+    data.details = response.exists.toLocaleString() + ' files'
   })
 }
 

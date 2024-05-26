@@ -100,7 +100,11 @@ func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path s
 		func(path string) bool {
 			return strings.HasSuffix(path, ".csproj") || strings.HasSuffix(path, ".cs")
 		},
-		excludes.Contains)
+		func(path string, isDir bool) bool {
+			name := filepath.Base(path)
+			return strings.HasPrefix(name, ".") || name == "node_modules" || excludes.Contains(path)
+		},
+	)
 	if err != nil {
 		return err
 	}
