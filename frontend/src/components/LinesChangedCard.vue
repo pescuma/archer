@@ -6,7 +6,7 @@ import { filters } from '@/utils/filters'
 import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
 
 const props = defineProps({
-  personId: String,
+  personId: Number,
 })
 
 const card = ref(null)

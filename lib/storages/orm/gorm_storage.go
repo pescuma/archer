@@ -871,23 +871,23 @@ func (s *gormStorage) QueryCommits(file string, proj string, repo string, person
 	err := s.db.Raw(`
 select distinct c.id
 from repository_commits c
-         join repositories r
-              on r.id = c.repository_id
-         join people pa
-              on pa.id = c.author_id
-         join people pc
-              on pc.id = c.committer_id
-         join repository_commit_files cf
-              on cf.commit_id = c.id
-         join files f
-              on f.id = cf.file_id
-         left join projects p
-              on p.id = f.project_id
+	 join repositories r
+		  on r.id = c.repository_id
+	 left join repository_commit_people cp
+		  on cp.commit_id = c.id
+	 left join  people pe
+		  on pe.id = cp.person_id
+	 left join repository_commit_files cf
+		  on cf.commit_id = c.id
+	 left join files f
+		  on f.id = cf.file_id
+	 left join projects p
+		  on p.id = f.project_id
 where c.ignore = 0
   and (@proj = '' or p.name like @proj)
   and (@file = '' or f.name like @file)
   and (@repo = '' or r.name like @repo)
-  and (@person = '' or pc.names like @person or pc.emails like @person or pa.names like @person or pa.emails like @person)
+  and (@person = '' or pe.names like @person or pe.emails like @person)
 		`,
 		sql.Named("proj", "%"+proj+"%"),
 		sql.Named("file", "%"+file+"%"),
