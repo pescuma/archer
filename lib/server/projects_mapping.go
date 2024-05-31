@@ -21,7 +21,25 @@ func (s *server) filterProjects(col []*model.Project, params *Filters) ([]*model
 		return nil, err
 	}
 
-	return filters.FilterProjects(filter, col), nil
+	externalFilter, err := s.createProjectsExternalFilters(params)
+	if err != nil {
+		return nil, err
+	}
+
+	projs := filters.FilterProjects(filter, col)
+
+	var result []*model.Project
+
+	if externalFilter == nil {
+		result = projs
+
+	} else {
+		result = lo.Filter(projs, func(proj *model.Project, index int) bool {
+			return externalFilter(proj)
+		})
+	}
+
+	return result, nil
 }
 
 func (s *server) createProjectAndDepsFilter(params *Filters) (filters.ProjectFilter, error) {
@@ -33,16 +51,6 @@ func (s *server) createProjectAndDepsFilter(params *Filters) (filters.ProjectFil
 	}
 
 	fs = append(fs, fi)
-
-	pf, err := s.createProjectsExternalFilters(params)
-	if err != nil {
-		return nil, err
-	}
-
-	if pf != nil {
-		fs = append(fs, filters.LiftProjAndDepFilters(pf, nil, filters.Include))
-	}
-
 	fs = append(fs, filters.CreateIgnoreExternalDependenciesFilter())
 
 	return filters.UnliftProjectFilter(filters.GroupProjectFilters(fs...)), nil

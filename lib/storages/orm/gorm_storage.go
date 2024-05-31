@@ -1,7 +1,6 @@
 package orm
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -47,6 +46,7 @@ type gormStorage struct {
 	sqlAreas            map[string]*sqlProductArea
 	sqlRepos            map[string]*sqlRepository
 	sqlRepoCommits      map[string]*sqlRepositoryCommit
+	sqlRepoCommitFiles  map[string]*sqlRepositoryCommitFile
 	sqlRepoCommitPeople map[string]*sqlRepositoryCommitPerson
 	monthLines          map[string]*sqlMonthLines
 	sqlIgnoreRules      map[string]*sqlIgnoreRule
@@ -76,7 +76,10 @@ func NewGormStorage(d gorm.Dialector, console consoles.Console) (storages.Storag
 		&sqlProject{}, &sqlProjectDependency{}, &sqlProjectDirectory{},
 		&sqlFile{},
 		&sqlPerson{}, &sqlPersonRepository{}, &sqlPersonFile{}, &sqlProductArea{},
-		&sqlRepository{}, &sqlRepositoryCommit{}, &sqlRepositoryCommitFile{}, &sqlRepositoryCommitPerson{},
+		&sqlRepository{},
+		&sqlRepositoryCommit{},
+		&sqlRepositoryCommitFile{}, &sqlRepositoryCommitFileDetails{},
+		&sqlRepositoryCommitPerson{},
 		&sqlMonthLines{},
 		&sqlFileLine{},
 		&sqlIgnoreRule{},
@@ -610,13 +613,21 @@ func (s *gormStorage) LoadRepositories() (*model.Repositories, error) {
 
 	s.sqlRepoCommits = createCache(commits)
 
-	var cps []*sqlRepositoryCommitPerson
-	err = s.db.Find(&cps).Error
+	var scfs []*sqlRepositoryCommitFile
+	err = s.db.Find(&scfs).Error
 	if err != nil {
 		return nil, err
 	}
 
-	s.sqlRepoCommitPeople = createCache(cps)
+	s.sqlRepoCommitFiles = createCache(scfs)
+
+	var scps []*sqlRepositoryCommitPerson
+	err = s.db.Find(&scps).Error
+	if err != nil {
+		return nil, err
+	}
+
+	s.sqlRepoCommitPeople = createCache(scps)
 
 	for _, sr := range repos {
 		r := result.GetOrCreateEx(sr.RootDir, &sr.ID)
@@ -652,19 +663,31 @@ func (s *gormStorage) LoadRepositories() (*model.Repositories, error) {
 		commitsById[c.ID] = c
 	}
 
-	sort.Slice(cps, func(i, j int) bool {
-		return cps[i].Order < cps[j].Order
-	})
-	for _, cp := range cps {
-		commit := commitsById[cp.CommitID]
+	for _, scf := range scfs {
+		commit := commitsById[scf.CommitID]
 
-		switch cp.Role {
+		cf := model.NewRepositoryCommitFile(scf.FileID)
+		cf.Change = scf.Change
+		cf.LinesModified = decodeMetric(scf.LinesModified)
+		cf.LinesAdded = decodeMetric(scf.LinesAdded)
+		cf.LinesDeleted = decodeMetric(scf.LinesDeleted)
+
+		commit.Files[scf.FileID] = cf
+	}
+
+	sort.Slice(scps, func(i, j int) bool {
+		return scps[i].Order < scps[j].Order
+	})
+	for _, scp := range scps {
+		commit := commitsById[scp.CommitID]
+
+		switch scp.Role {
 		case CommitRoleAuthor:
-			commit.AuthorIDs = append(commit.AuthorIDs, cp.PersonID)
+			commit.AuthorIDs = append(commit.AuthorIDs, scp.PersonID)
 		case CommitRoleCommitter:
-			commit.CommitterID = cp.PersonID
+			commit.CommitterID = scp.PersonID
 		default:
-			panic(fmt.Sprintf("invalid role: %v", cp.Role))
+			panic(fmt.Sprintf("invalid role: %v", scp.Role))
 		}
 	}
 
@@ -695,12 +718,20 @@ func (s *gormStorage) writeRepositories(repos []*model.Repository) error {
 	sqlRepos := prepareChanges(repos, newSqlRepository, &s.sqlRepos)
 
 	var sqlCommits []*sqlRepositoryCommit
+	var sqlCommitFiles []*sqlRepositoryCommitFile
 	var sqlCommitPeople []*sqlRepositoryCommitPerson
 	for _, repo := range repos {
 		for _, c := range repo.ListCommits() {
 			sc := newSqlRepositoryCommit(repo, c)
 			if prepareChange(&s.sqlRepoCommits, sc) {
 				sqlCommits = append(sqlCommits, sc)
+			}
+
+			for _, f := range c.Files {
+				cf := newSqlRepositoryCommitFile(c, f)
+				if prepareChange(&s.sqlRepoCommitFiles, cf) {
+					sqlCommitFiles = append(sqlCommitFiles, cf)
+				}
 			}
 
 			cp := newSqlRepositoryCommitPerson(c, c.CommitterID, CommitRoleCommitter, 1)
@@ -737,6 +768,13 @@ func (s *gormStorage) writeRepositories(repos []*model.Repository) error {
 
 	addList(&s.sqlRepoCommits, sqlCommits)
 
+	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommitFiles).Error
+	if err != nil {
+		return err
+	}
+
+	addList(&s.sqlRepoCommitFiles, sqlCommitFiles)
+
 	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommitPeople).Error
 	if err != nil {
 		return err
@@ -758,11 +796,19 @@ func (s *gormStorage) WriteCommit(repo *model.Repository, commit *model.Reposito
 	defer s.mutex.Unlock()
 
 	var sqlCommits []*sqlRepositoryCommit
+	var sqlCommitFiles []*sqlRepositoryCommitFile
 	var sqlCommitPeople []*sqlRepositoryCommitPerson
 
 	sc := newSqlRepositoryCommit(repo, commit)
 	if prepareChange(&s.sqlRepoCommits, sc) {
 		sqlCommits = append(sqlCommits, sc)
+	}
+
+	for _, f := range commit.Files {
+		cf := newSqlRepositoryCommitFile(commit, f)
+		if prepareChange(&s.sqlRepoCommitFiles, cf) {
+			sqlCommitFiles = append(sqlCommitFiles, cf)
+		}
 	}
 
 	cp := newSqlRepositoryCommitPerson(commit, commit.CommitterID, CommitRoleCommitter, 1)
@@ -790,6 +836,13 @@ func (s *gormStorage) WriteCommit(repo *model.Repository, commit *model.Reposito
 
 	addList(&s.sqlRepoCommits, sqlCommits)
 
+	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommitFiles).Error
+	if err != nil {
+		return err
+	}
+
+	addList(&s.sqlRepoCommitFiles, sqlCommitFiles)
+
 	err = db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommitPeople).Error
 	if err != nil {
 		return err
@@ -802,7 +855,7 @@ func (s *gormStorage) WriteCommit(repo *model.Repository, commit *model.Reposito
 	return nil
 }
 
-func (s *gormStorage) LoadRepositoryCommitFiles(repo *model.Repository, commit *model.RepositoryCommit) (*model.RepositoryCommitFiles, error) {
+func (s *gormStorage) LoadRepositoryCommitDetails(repo *model.Repository, commit *model.RepositoryCommit) (*model.RepositoryCommitDetails, error) {
 	if s.repos == nil {
 		return nil, errors.New("repos not loaded")
 	}
@@ -810,35 +863,31 @@ func (s *gormStorage) LoadRepositoryCommitFiles(repo *model.Repository, commit *
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
-	var commitFiles []*sqlRepositoryCommitFile
+	var commitFiles []*sqlRepositoryCommitFileDetails
 	err := s.db.Where("commit_id = ?", commit.ID).Find(&commitFiles).Error
 	if err != nil {
 		return nil, err
 	}
 
-	result := model.NewRepositoryCommitFiles(repo.ID, commit.ID)
+	result := model.NewRepositoryCommitDetails(repo.ID, commit.ID)
 	for _, sf := range commitFiles {
-		file := result.GetOrCreate(sf.FileID)
+		file := result.GetOrCreateFile(sf.FileID)
 		file.Hash = sf.Hash
-		file.Change = sf.Change
 		file.OldIDs = decodeOldFileIDs(sf.OldIDs)
 		file.OldHashes = decodeOldFileHashes(sf.OldHashes)
-		file.LinesModified = decodeMetric(sf.LinesModified)
-		file.LinesAdded = decodeMetric(sf.LinesAdded)
-		file.LinesDeleted = decodeMetric(sf.LinesDeleted)
 	}
 	return result, nil
 }
 
-func (s *gormStorage) WriteRepositoryCommitFiles(files []*model.RepositoryCommitFiles) error {
+func (s *gormStorage) WriteRepositoryCommitDetails(details []*model.RepositoryCommitDetails) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	var sqlCommitFiles []*sqlRepositoryCommitFile
-	for _, fs := range files {
-		for _, f := range fs.List() {
-			sf := newSqlRepositoryCommitFile(fs.CommitID, f)
-			sqlCommitFiles = append(sqlCommitFiles, sf)
+	var sqlFiles []*sqlRepositoryCommitFileDetails
+	for _, d := range details {
+		for _, f := range d.ListFiles() {
+			sf := newSqlRepositoryCommitFileDetails(d.CommitID, f)
+			sqlFiles = append(sqlFiles, sf)
 		}
 	}
 
@@ -848,7 +897,7 @@ func (s *gormStorage) WriteRepositoryCommitFiles(files []*model.RepositoryCommit
 		CreateBatchSize: 300,
 	})
 
-	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlCommitFiles).Error
+	err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&sqlFiles).Error
 	if err != nil {
 		return err
 	}
@@ -856,49 +905,6 @@ func (s *gormStorage) WriteRepositoryCommitFiles(files []*model.RepositoryCommit
 	// TODO delete
 
 	return nil
-}
-
-func (s *gormStorage) QueryCommits(file string, proj string, repo string, person string) ([]model.ID, error) {
-	if s.repos == nil {
-		return nil, errors.New("repos not loaded")
-	}
-
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
-
-	var result []model.ID
-
-	err := s.db.Raw(`
-select distinct c.id
-from repository_commits c
-	 join repositories r
-		  on r.id = c.repository_id
-	 left join repository_commit_people cp
-		  on cp.commit_id = c.id
-	 left join  people pe
-		  on pe.id = cp.person_id
-	 left join repository_commit_files cf
-		  on cf.commit_id = c.id
-	 left join files f
-		  on f.id = cf.file_id
-	 left join projects p
-		  on p.id = f.project_id
-where c.ignore = 0
-  and (@proj = '' or p.name like @proj)
-  and (@file = '' or f.name like @file)
-  and (@repo = '' or r.name like @repo)
-  and (@person = '' or pe.names like @person or pe.emails like @person)
-		`,
-		sql.Named("proj", "%"+proj+"%"),
-		sql.Named("file", "%"+file+"%"),
-		sql.Named("repo", "%"+repo+"%"),
-		sql.Named("person", "%"+person+"%"),
-	).Scan(&result).Error
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
 }
 
 func (s *gormStorage) LoadMonthlyStats() (*model.MonthlyStats, error) {

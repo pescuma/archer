@@ -338,9 +338,9 @@ func (i *HistoryImporter) listChangesToImport(repo *model.Repository, gitRepo *g
 }
 
 type changeWork struct {
-	gitCommit   *object.Commit
-	commit      *model.RepositoryCommit
-	commitFiles *model.RepositoryCommitFiles
+	gitCommit *object.Commit
+	commit    *model.RepositoryCommit
+	details   *model.RepositoryCommitDetails
 }
 
 func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Projects,
@@ -358,7 +358,7 @@ func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Pro
 
 	i.console.Printf("%v: Importing changes...\n", repo.Name)
 
-	writeResults := func(commitFiles []*model.RepositoryCommitFiles) error {
+	writeResults := func(details []*model.RepositoryCommitDetails) error {
 		i.console.Printf("%v: Writing results...\n", repo.Name)
 
 		err := i.storage.WriteFiles()
@@ -376,7 +376,7 @@ func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Pro
 			return err
 		}
 
-		err = i.storage.WriteRepositoryCommitFiles(commitFiles)
+		err = i.storage.WriteRepositoryCommitDetails(details)
 		if err != nil {
 			return err
 		}
@@ -391,7 +391,7 @@ func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Pro
 
 	bar := utils.NewProgressBar(len(toProcess))
 	start := time.Now()
-	var commitFilesToWrite []*model.RepositoryCommitFiles
+	var detailsToWrite []*model.RepositoryCommitDetails
 	for _, w := range toProcess {
 		bar.Describe(w.gitCommit.Committer.When.Format("2006-01-02 15"))
 
@@ -401,13 +401,13 @@ func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Pro
 		}
 
 		commit := w.commit
-		commitFiles := w.commitFiles
+		details := w.details
 
 		commit.FilesModified = 0
 		commit.FilesCreated = 0
 		commit.FilesDeleted = 0
 
-		if lo.SomeBy(commitFiles.List(), func(i *model.RepositoryCommitFile) bool {
+		if lo.SomeBy(lo.Values(commit.Files), func(i *model.RepositoryCommitFile) bool {
 			return i.LinesModified != -1
 		}) {
 			commit.LinesModified = 0
@@ -419,7 +419,7 @@ func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Pro
 			commit.LinesDeleted = -1
 		}
 
-		for _, cf := range commitFiles.List() {
+		for _, cf := range commit.Files {
 			switch cf.Change {
 			case model.FileNotChanged:
 				// Nothing to do
@@ -451,7 +451,8 @@ func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Pro
 				proj.RepositoryID = &repo.ID
 			}
 
-			for _, of := range cf.OldIDs {
+			cfd := details.GetOrCreateFile(cf.FileID)
+			for _, of := range cfd.OldIDs {
 				oldFile := filesDB.GetByID(of)
 				oldFile.RepositoryID = &repo.ID
 				oldFile.SeenAt(commit.Date, commit.DateAuthored)
@@ -464,24 +465,24 @@ func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Pro
 			}
 		}
 
-		commitFilesToWrite = append(commitFilesToWrite, commitFiles)
+		detailsToWrite = append(detailsToWrite, details)
 
 		if opts.SaveEvery != nil && time.Since(start) >= *opts.SaveEvery {
 			_ = bar.Clear()
 
-			err = writeResults(commitFilesToWrite)
+			err = writeResults(detailsToWrite)
 			if err != nil {
 				return err
 			}
 
-			commitFilesToWrite = nil
+			detailsToWrite = nil
 			start = time.Now()
 		}
 
 		_ = bar.Add(1)
 	}
 
-	err = writeResults(commitFilesToWrite)
+	err = writeResults(detailsToWrite)
 	if err != nil {
 		return err
 	}
@@ -492,19 +493,19 @@ func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Pro
 func (i *HistoryImporter) importCommitChanges(filesDB *model.Files, repo *model.Repository, w *changeWork) error {
 	commit := repo.GetCommit(w.gitCommit.Hash.String())
 
-	commitFiles, err := i.storage.LoadRepositoryCommitFiles(repo, commit)
+	details, err := i.storage.LoadRepositoryCommitDetails(repo, commit)
 	if err != nil {
 		return err
 	}
 
 	if len(commit.Parents) == 0 {
-		err = i.computeChangesRootCommit(filesDB, repo, commitFiles, w.gitCommit)
+		err = i.computeChangesRootCommit(filesDB, repo, commit, details, w.gitCommit)
 
 	} else if len(commit.Parents) == 1 {
-		err = i.computeChangesSimpleCommit(filesDB, repo, commitFiles, w.gitCommit)
+		err = i.computeChangesSimpleCommit(filesDB, repo, commit, details, w.gitCommit)
 
 	} else if len(commit.Parents) > 1 {
-		err = i.computeChangesMergeCommit(filesDB, repo, commitFiles, w.gitCommit)
+		err = i.computeChangesMergeCommit(filesDB, repo, commit, details, w.gitCommit)
 	}
 	if err != nil {
 		return err
@@ -512,12 +513,13 @@ func (i *HistoryImporter) importCommitChanges(filesDB *model.Files, repo *model.
 
 	w.gitCommit = nil
 	w.commit = commit
-	w.commitFiles = commitFiles
+	w.details = details
 	return nil
 }
 
 func (i *HistoryImporter) computeChangesMergeCommit(filesDB *model.Files, repo *model.Repository,
-	commitFiles *model.RepositoryCommitFiles, gitCommit *object.Commit,
+	commit *model.RepositoryCommit, details *model.RepositoryCommitDetails,
+	gitCommit *object.Commit,
 ) error {
 	changesPerFile := make(map[string]map[*object.Commit]*gitFileChange)
 	parents := 0
@@ -553,13 +555,14 @@ func (i *HistoryImporter) computeChangesMergeCommit(filesDB *model.Files, repo *
 
 	for filePath, parentCommits := range changesPerFile {
 		file := filesDB.GetOrCreate(filePath)
-		cf := commitFiles.GetOrCreate(file.ID)
+		cf := commit.GetOrCreateFile(file.ID)
+		cfd := details.GetOrCreateFile(file.ID)
 		var minChange *gitFileChange
 
 		for gitParent, gitFile := range parentCommits {
 			repoParent := repo.GetCommit(gitParent.Hash.String())
 
-			err = i.fillHashesAndIDS(cf, gitFile, repoParent, repo, filesDB)
+			err = i.fillHashesAndIDS(cfd, gitFile, repoParent, repo, filesDB)
 			if err != nil {
 				return err
 			}
@@ -598,7 +601,8 @@ func (i *HistoryImporter) computeChangesMergeCommit(filesDB *model.Files, repo *
 }
 
 func (i *HistoryImporter) computeChangesSimpleCommit(filesDB *model.Files, repo *model.Repository,
-	commitFiles *model.RepositoryCommitFiles, gitCommit *object.Commit,
+	commit *model.RepositoryCommit, details *model.RepositoryCommitDetails,
+	gitCommit *object.Commit,
 ) error {
 	return gitCommit.Parents().ForEach(func(gitParent *object.Commit) error {
 		repoParent := repo.GetCommit(gitParent.Hash.String())
@@ -616,9 +620,10 @@ func (i *HistoryImporter) computeChangesSimpleCommit(filesDB *model.Files, repo 
 
 			file := filesDB.GetOrCreate(filePath)
 
-			cf := commitFiles.GetOrCreate(file.ID)
+			cf := commit.GetOrCreateFile(file.ID)
+			cfd := details.GetOrCreateFile(file.ID)
 
-			err = i.fillHashesAndIDS(cf, gitFile, repoParent, repo, filesDB)
+			err = i.fillHashesAndIDS(cfd, gitFile, repoParent, repo, filesDB)
 			if err != nil {
 				return err
 			}
@@ -633,16 +638,16 @@ func (i *HistoryImporter) computeChangesSimpleCommit(filesDB *model.Files, repo 
 	})
 }
 
-func (i *HistoryImporter) fillHashesAndIDS(cf *model.RepositoryCommitFile, gitFile *gitFileChange,
+func (i *HistoryImporter) fillHashesAndIDS(cfd *model.RepositoryCommitFileDetails, gitFile *gitFileChange,
 	parentCommit *model.RepositoryCommit,
 	repo *model.Repository, filesDB *model.Files,
 ) error {
-	cf.Hash = gitFile.File.Hash.String()
+	cfd.Hash = gitFile.File.Hash.String()
 
 	if gitFile.Type == model.FileCreated {
-		cf.OldHashes[parentCommit.ID] = "-"
+		cfd.OldHashes[parentCommit.ID] = "-"
 	} else if gitFile.File.Hash != gitFile.OldFile.Hash {
-		cf.OldHashes[parentCommit.ID] = gitFile.OldFile.Hash.String()
+		cfd.OldHashes[parentCommit.ID] = gitFile.OldFile.Hash.String()
 	}
 
 	if gitFile.OldFile.Name != gitFile.File.Name {
@@ -653,14 +658,15 @@ func (i *HistoryImporter) fillHashesAndIDS(cf *model.RepositoryCommitFile, gitFi
 
 		oldFile := filesDB.GetOrCreate(oldFilePath)
 
-		cf.OldIDs[parentCommit.ID] = oldFile.ID
+		cfd.OldIDs[parentCommit.ID] = oldFile.ID
 	}
 
 	return nil
 }
 
 func (i *HistoryImporter) computeChangesRootCommit(filesDB *model.Files, repo *model.Repository,
-	commitFiles *model.RepositoryCommitFiles, gitCommit *object.Commit,
+	commit *model.RepositoryCommit, details *model.RepositoryCommitDetails,
+	gitCommit *object.Commit,
 ) error {
 	gitTree, err := gitCommit.Tree()
 	if err != nil {
@@ -680,8 +686,10 @@ func (i *HistoryImporter) computeChangesRootCommit(filesDB *model.Files, repo *m
 			return err
 		}
 
-		cf := commitFiles.GetOrCreate(file.ID)
-		cf.Hash = gitFile.Hash.String()
+		cf := commit.GetOrCreateFile(file.ID)
+		cfd := details.GetOrCreateFile(file.ID)
+
+		cfd.Hash = gitFile.Hash.String()
 		cf.Change = model.FileCreated
 		cf.LinesModified = 0
 		cf.LinesAdded = len(gitLines)

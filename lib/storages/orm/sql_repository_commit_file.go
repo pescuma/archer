@@ -1,29 +1,35 @@
 package orm
 
-import "github.com/pescuma/archer/lib/model"
+import (
+	"time"
+
+	"github.com/pescuma/archer/lib/model"
+)
 
 type sqlRepositoryCommitFile struct {
-	CommitID      model.ID `gorm:"primaryKey"`
-	FileID        model.ID `gorm:"primaryKey"`
-	Hash          string
+	CommitID model.ID `gorm:"primaryKey"`
+	FileID   model.ID `gorm:"primaryKey"`
+
 	Change        model.FileChangeType
-	OldIDs        string
-	OldHashes     string
 	LinesModified *int
 	LinesAdded    *int
 	LinesDeleted  *int
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
-func newSqlRepositoryCommitFile(c model.ID, f *model.RepositoryCommitFile) *sqlRepositoryCommitFile {
+func newSqlRepositoryCommitFile(commit *model.RepositoryCommit, f *model.RepositoryCommitFile) *sqlRepositoryCommitFile {
 	return &sqlRepositoryCommitFile{
-		CommitID:      c,
+		CommitID:      commit.ID,
 		FileID:        f.FileID,
-		Hash:          f.Hash,
 		Change:        f.Change,
-		OldIDs:        encodeOldFileIDs(f.OldIDs),
-		OldHashes:     encodeOldFileHashes(f.OldHashes),
 		LinesModified: encodeMetric(f.LinesModified),
 		LinesAdded:    encodeMetric(f.LinesAdded),
 		LinesDeleted:  encodeMetric(f.LinesDeleted),
 	}
+}
+
+func (s *sqlRepositoryCommitFile) CacheKey() string {
+	return compositeKey(s.CommitID.String(), s.FileID.String())
 }

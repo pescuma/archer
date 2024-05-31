@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hashicorp/go-set/v2"
 	"github.com/samber/lo"
 
 	"github.com/pescuma/archer/lib/filters"
@@ -189,45 +188,60 @@ type RepoAndCommit struct {
 	Commit *model.RepositoryCommit
 }
 
-func (s *server) listReposAndCommits(file string, proj string, repo string, person string) ([]RepoAndCommit, error) {
-	commits := lo.FlatMap(s.repos.List(), func(i *model.Repository, index int) []RepoAndCommit {
-		return lo.Map(i.ListCommits(), func(c *model.RepositoryCommit, _ int) RepoAndCommit {
-			return RepoAndCommit{
-				Repo:   i,
-				Commit: c,
-			}
-		})
-	})
+func (s *server) listReposAndCommits(params *Filters) ([]RepoAndCommit, error) {
+	var result []RepoAndCommit
 
-	return s.filterCommits(commits, file, proj, repo, person)
-}
-
-func (s *server) filterCommits(col []RepoAndCommit, file string, proj string, repo string, person string) ([]RepoAndCommit, error) {
-	file = prepareToSearch(file)
-	proj = prepareToSearch(proj)
-	repo = prepareToSearch(repo)
-	person = prepareToSearch(person)
-
-	var ids *set.Set[model.ID]
-	if file != "" || proj != "" || repo != "" || person != "" {
-		r, err := s.storage.QueryCommits(file, proj, repo, person)
-		if err != nil {
-			return nil, err
-		}
-		ids = set.From(r)
+	repoFilter, err := s.createRepoFilter(params.FilterRepo)
+	if err != nil {
+		return nil, err
 	}
 
-	return lo.Filter(col, func(i RepoAndCommit, index int) bool {
-		if i.Commit.Ignore {
-			return false
+	fileIDs, err := s.listFileIDsOrNil(params.FilterFile)
+	if err != nil {
+		return nil, err
+	}
+	projIDs, err := s.listProjectIDsOrNil(params.FilterProject)
+	if err != nil {
+		return nil, err
+	}
+	personIDs, err := s.listPersonIDsOrNil(params.FilterPerson, params.FilterPersonID)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, repo := range s.repos.List() {
+		if !repoFilter(repo) {
+			continue
 		}
 
-		if ids != nil && !ids.Contains(i.Commit.ID) {
-			return false
-		}
+		for _, commit := range repo.ListCommits() {
+			if personIDs != nil && !personIDs[commit.CommitterID] && !lo.SomeBy(commit.AuthorIDs, func(i model.ID) bool {
+				return personIDs[i]
+			}) {
+				continue
+			}
 
-		return true
-	}), nil
+			if fileIDs != nil && !lo.SomeBy(lo.Values(commit.Files), func(f *model.RepositoryCommitFile) bool {
+				return fileIDs[f.FileID]
+			}) {
+				continue
+			}
+
+			if projIDs != nil && !lo.SomeBy(lo.Values(commit.Files), func(f *model.RepositoryCommitFile) bool {
+				file := s.files.GetByID(f.FileID)
+				return file.ProjectID != nil && projIDs[*file.ProjectID]
+			}) {
+				continue
+			}
+
+			result = append(result, RepoAndCommit{
+				Repo:   repo,
+				Commit: commit,
+			})
+		}
+	}
+
+	return result, nil
 }
 
 func (s *server) sortCommits(col []RepoAndCommit, field string, asc *bool) error {

@@ -13,6 +13,7 @@ func main() {
 		"linux/amd64",
 		//"windows/386", go-sqlite does not compile
 		"windows/amd64",
+		"windows/arm64",
 	}
 
 	b, err := build.NewBuilder(cfg)

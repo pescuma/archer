@@ -2,8 +2,8 @@ package server
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/samber/lo"
 
-	"github.com/pescuma/archer/lib/filters"
 	"github.com/pescuma/archer/lib/model"
 )
 
@@ -12,22 +12,24 @@ func (s *server) initArch(r *gin.Engine) {
 }
 
 func (s *server) archList(params *Filters) (any, error) {
-	filter, err := s.createProjectAndDepsFilter(params)
+	projs, err := s.listProjects(params)
 	if err != nil {
 		return nil, err
 	}
 
 	var result []gin.H
 
-	for _, proj := range filters.FilterProjects(filter, s.projects.ListProjects(model.FilterExcludeExternal)) {
+	projIDs := lo.Associate(projs, func(proj *model.Project) (model.ID, bool) {
+		return proj.ID, true
+	})
+
+	for _, proj := range projs {
 		result = append(result, s.toProject(proj))
 
-		for _, dep := range filters.FilterDependencies(filter, proj.Dependencies) {
-			if !filter.FilterDependency(dep) {
-				continue
+		for _, dep := range proj.Dependencies {
+			if projIDs[dep.Source.ID] && projIDs[dep.Target.ID] {
+				result = append(result, s.toDependency(dep))
 			}
-
-			result = append(result, s.toDependency(dep))
 		}
 	}
 

@@ -27,6 +27,8 @@ type RepositoryCommit struct {
 	Blame *Blame
 
 	Ignore bool
+
+	Files map[ID]*RepositoryCommitFile
 }
 
 func NewRepositoryCommit(id ID, hash string) *RepositoryCommit {
@@ -40,7 +42,20 @@ func NewRepositoryCommit(id ID, hash string) *RepositoryCommit {
 		LinesAdded:    -1,
 		LinesDeleted:  -1,
 		Blame:         NewBlame(),
+		Ignore:        false,
+		Files:         map[ID]*RepositoryCommitFile{},
 	}
 
 	return result
+}
+
+func (c *RepositoryCommit) GetOrCreateFile(fileID ID) *RepositoryCommitFile {
+	file, ok := c.Files[fileID]
+
+	if !ok {
+		file = NewRepositoryCommitFile(fileID)
+		c.Files[fileID] = file
+	}
+
+	return file
 }

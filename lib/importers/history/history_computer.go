@@ -120,7 +120,7 @@ func (c *Computer) Compute() error {
 			}
 			peopleRelationsDB.GetOrCreatePersonRepo(commit.CommitterID, repo.ID).SeenAt(commit.Date, commit.DateAuthored)
 
-			commitFiles, err := c.storage.LoadRepositoryCommitFiles(repo, commit)
+			commitDetails, err := c.storage.LoadRepositoryCommitDetails(repo, commit)
 			if err != nil {
 				return err
 			}
@@ -129,7 +129,7 @@ func (c *Computer) Compute() error {
 			dirs := make(map[*model.ProjectDirectory]bool)
 			areas := make(map[*model.ProductArea]bool)
 			msls := make(map[*model.MonthlyStatsLine]bool)
-			for _, cf := range commitFiles.List() {
+			for _, cf := range commit.Files {
 				addLinesFactor := func(c *model.Changes, factor int) {
 					if cf.LinesModified != -1 {
 						c.LinesModified += cf.LinesModified / factor
@@ -179,7 +179,8 @@ func (c *Computer) Compute() error {
 				}
 				peopleRelationsDB.GetOrCreatePersonFile(commit.CommitterID, file.ID).SeenAt(commit.Date, commit.DateAuthored)
 
-				for _, of := range cf.OldIDs {
+				cfd := commitDetails.GetOrCreateFile(cf.FileID)
+				for _, of := range cfd.OldIDs {
 					for _, a := range commit.AuthorIDs {
 						peopleRelationsDB.GetOrCreatePersonFile(a, of).SeenAt(commit.Date, commit.DateAuthored)
 					}

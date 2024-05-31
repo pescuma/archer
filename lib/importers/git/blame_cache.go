@@ -140,12 +140,10 @@ func (c *blameCacheImpl) loadCommit(hash plumbing.Hash) (*BlameCommitCache, erro
 		return rel, nil
 	}
 
-	files, err := c.storage.LoadRepositoryCommitFiles(c.repo, repoCommit)
+	details, err := c.storage.LoadRepositoryCommitDetails(c.repo, repoCommit)
 	if err != nil {
 		return nil, err
 	}
-
-	filesList := files.List()
 
 	for _, repoParentID := range repoCommit.Parents {
 		repoParent := c.repo.GetCommitByID(repoParentID)
@@ -157,23 +155,25 @@ func (c *blameCacheImpl) loadCommit(hash plumbing.Hash) (*BlameCommitCache, erro
 
 		result.Parents[gitParent.Hash] = &BlameParentCache{
 			Commit:     gitParent,
-			Renames:    make(map[string]string, len(filesList)),
-			FileHashes: make(map[string]plumbing.Hash, len(filesList)),
+			Renames:    make(map[string]string, len(repoCommit.Files)),
+			FileHashes: make(map[string]plumbing.Hash, len(repoCommit.Files)),
 		}
 	}
 
-	for _, commitFile := range filesList {
+	for _, commitFile := range repoCommit.Files {
+		commitFileDetails := details.GetOrCreateFile(commitFile.FileID)
+
 		filename, err := getFilename(commitFile.FileID)
 		if err != nil {
 			return nil, err
 		}
 
 		result.Changes[filename] = &BlameFileCache{
-			Hash:    plumbing.NewHash(commitFile.Hash),
+			Hash:    plumbing.NewHash(commitFileDetails.Hash),
 			Created: commitFile.Change == model.FileCreated,
 		}
 
-		for repoParentID, oldFileID := range commitFile.OldIDs {
+		for repoParentID, oldFileID := range commitFileDetails.OldIDs {
 			oldFilename, err := getFilename(oldFileID)
 			if err != nil {
 				return nil, err
@@ -185,7 +185,7 @@ func (c *blameCacheImpl) loadCommit(hash plumbing.Hash) (*BlameCommitCache, erro
 			parentCache.Renames[filename] = oldFilename
 		}
 
-		for repoParentID, oldFileHash := range commitFile.OldHashes {
+		for repoParentID, oldFileHash := range commitFileDetails.OldHashes {
 			repoParent := c.repo.GetCommitByID(repoParentID)
 
 			parentCache := result.Parents[plumbing.NewHash(repoParent.Hash)]

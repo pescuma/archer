@@ -69,7 +69,7 @@ func (s *server) repoGet() (any, error) {
 }
 
 func (s *server) commitsList(params *ListParams) (any, error) {
-	commits, err := s.listReposAndCommits(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	commits, err := s.listReposAndCommits(&params.Filters)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +141,10 @@ func (s *server) statsSeenRepos(params *StatsParams) (any, error) {
 }
 
 func (s *server) statsSeenCommits(params *StatsParams) (any, error) {
-	commits, _ := s.listReposAndCommits(params.FilterFile, params.FilterProject, params.FilterRepo, params.FilterPerson)
+	commits, err := s.listReposAndCommits(&params.Filters)
+	if err != nil {
+		return nil, err
+	}
 
 	s3 := lo.GroupBy(commits, func(i RepoAndCommit) string {
 		y, m, _ := i.Commit.Date.Date()

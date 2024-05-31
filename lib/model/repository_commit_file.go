@@ -1,13 +1,8 @@
 package model
 
 type RepositoryCommitFile struct {
-	FileID ID
-	Hash   string
-
-	Change    FileChangeType
-	OldIDs    map[ID]ID
-	OldHashes map[ID]string
-
+	FileID        ID
+	Change        FileChangeType
 	LinesModified int
 	LinesAdded    int
 	LinesDeleted  int
@@ -28,8 +23,6 @@ func NewRepositoryCommitFile(fileID ID) *RepositoryCommitFile {
 	return &RepositoryCommitFile{
 		FileID:        fileID,
 		Change:        FileChangeUnknown,
-		OldIDs:        make(map[ID]ID),
-		OldHashes:     make(map[ID]string),
 		LinesModified: -1,
 		LinesAdded:    -1,
 		LinesDeleted:  -1,
