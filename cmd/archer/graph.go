@@ -253,7 +253,7 @@ func (o *output) addLineDistinct(s any) {
 	l := fmt.Sprint(s)
 
 	if !o.prev[l] {
-		o.addLine(l)
+		o.addLine("%s", l)
 		o.prev[l] = true
 	}
 }
