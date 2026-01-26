@@ -10,8 +10,7 @@ type sqlPersonFile struct {
 	PersonID model.ID `gorm:"primaryKey"`
 	FileID   model.ID `gorm:"primaryKey"`
 
-	FirstSeen time.Time
-	LastSeen  time.Time
+	SeenAt *sqlSeenAt `gorm:"embedded"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -19,10 +18,9 @@ type sqlPersonFile struct {
 
 func newSqlPersonFile(f *model.PersonFile) *sqlPersonFile {
 	return &sqlPersonFile{
-		PersonID:  f.PersonID,
-		FileID:    f.FileID,
-		FirstSeen: f.FirstSeen,
-		LastSeen:  f.LastSeen,
+		PersonID: f.PersonID,
+		FileID:   f.FileID,
+		SeenAt:   newSqlSeenAt(f.SeenAt),
 	}
 }
 

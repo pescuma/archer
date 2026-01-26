@@ -53,9 +53,6 @@ func (c *Computer) Compute() error {
 					continue
 				}
 
-				proj.SeenAt(file.FirstSeen, file.LastSeen)
-				dir.SeenAt(file.FirstSeen, file.LastSeen)
-
 				dir.Size.Add(file.Size)
 
 				if file.ProductAreaID != nil {

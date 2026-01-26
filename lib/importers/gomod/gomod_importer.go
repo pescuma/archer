@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/rogpeppe/go-internal/modfile"
 	"golang.org/x/mod/module"
@@ -76,16 +75,13 @@ func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path s
 	proj.RootDir = filepath.Dir(path)
 	proj.ProjectFile = path
 	proj.Dependencies = make(map[string]*model.ProjectDependency)
-	proj.SeenAt(time.Now())
 
 	dir := proj.GetDirectory(".")
 	dir.Type = model.SourceDir
-	dir.SeenAt(time.Now())
 
 	projFile := filesDB.GetOrCreate(path)
 	projFile.ProjectID = &proj.ID
 	projFile.ProjectDirectoryID = &dir.ID
-	projFile.SeenAt(time.Now())
 
 	if projFile.RepositoryID == nil {
 		proj.RepositoryID = projFile.RepositoryID

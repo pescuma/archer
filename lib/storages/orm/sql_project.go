@@ -18,13 +18,12 @@ type sqlProject struct {
 
 	RepositoryID *model.ID `gorm:"index"`
 
-	Sizes     map[string]*sqlSize  `gorm:"serializer:json"`
-	Size      *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
-	Changes   *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
-	Metrics   *sqlMetricsAggregate `gorm:"embedded"`
-	Data      map[string]string    `gorm:"serializer:json"`
-	FirstSeen time.Time
-	LastSeen  time.Time
+	Sizes   map[string]*sqlSize  `gorm:"serializer:json"`
+	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
+	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
+	Metrics *sqlMetricsAggregate `gorm:"embedded"`
+	SeenAt  *sqlSeenAt           `gorm:"embedded"`
+	Data    map[string]string    `gorm:"serializer:json"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -49,9 +48,8 @@ func newSqlProject(p *model.Project) *sqlProject {
 		Size:         newSqlSize(p.Size),
 		Changes:      newSqlChanges(p.Changes),
 		Metrics:      newSqlMetricsAggregate(p.Metrics, p.Size),
+		SeenAt:       newSqlSeenAt(p.SeenAt),
 		Data:         encodeMap(p.Data),
-		FirstSeen:    p.FirstSeen,
-		LastSeen:     p.LastSeen,
 	}
 
 	for k, v := range p.Sizes {

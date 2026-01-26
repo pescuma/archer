@@ -130,13 +130,8 @@ func (s *server) statsSeenRepos(params *StatsParams) (any, error) {
 
 	result := make(map[string]map[string]int)
 	for _, f := range repos {
-		y, m, _ := f.FirstSeen.Date()
-		s.incSeenStats(result, y, m, "firstSeen")
-
-		y, m, _ = f.LastSeen.Date()
-		s.incSeenStats(result, y, m, "lastSeen")
+		s.incSeenAtStats(result, f.SeenAt)
 	}
-
 	return result, nil
 }
 
@@ -145,6 +140,10 @@ func (s *server) statsSeenCommits(params *StatsParams) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	commits = lo.Filter(commits, func(i RepoAndCommit, _ int) bool {
+		return !i.Commit.Ignore
+	})
 
 	s3 := lo.GroupBy(commits, func(i RepoAndCommit) string {
 		y, m, _ := i.Commit.Date.Date()

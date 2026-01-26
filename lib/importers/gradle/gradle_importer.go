@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/samber/lo"
 
@@ -111,7 +110,8 @@ func (i *Importer) Import(rootDir string) error {
 	return nil
 }
 
-func (i *Importer) importBasicInfo(rootDir string, projsDB *model.Projects, filesDB *model.Files, projName string, rootProj string) error {
+func (i *Importer) importBasicInfo(rootDir string, projsDB *model.Projects, filesDB *model.Files, projName string,
+	rootProj string) error {
 	projDir, err := i.getProjectDir(rootDir, projName)
 	if err != nil {
 		return err
@@ -129,11 +129,9 @@ func (i *Importer) importBasicInfo(rootDir string, projsDB *model.Projects, file
 	proj.Type = model.CodeType
 	proj.RootDir = projDir
 	proj.ProjectFile = projFileName
-	proj.SeenAt(time.Now())
 
 	projFile := filesDB.GetOrCreate(projFileName)
 	projFile.ProjectID = &proj.ID
-	projFile.SeenAt(time.Now())
 
 	if projFile.RepositoryID != nil {
 		proj.RepositoryID = projFile.RepositoryID
@@ -174,7 +172,8 @@ func (i *Importer) importDirectories(files *model.Files, proj *model.Project) er
 	return nil
 }
 
-func (i *Importer) importDirectory(files *model.Files, proj *model.Project, dirPath string, dirType model.ProjectDirectoryType, recursive bool) error {
+func (i *Importer) importDirectory(files *model.Files, proj *model.Project, dirPath string,
+	dirType model.ProjectDirectoryType, recursive bool) error {
 	dirPath, err := utils.PathAbs(dirPath)
 	if err != nil {
 		return nil
@@ -207,13 +206,11 @@ func (i *Importer) importDirectory(files *model.Files, proj *model.Project, dirP
 
 			dir = proj.GetDirectory(rootRel)
 			dir.Type = dirType
-			dir.SeenAt(time.Now())
 		}
 
 		file := files.GetOrCreate(path)
 		file.ProjectID = &proj.ID
 		file.ProjectDirectoryID = &dir.ID
-		file.SeenAt(time.Now())
 
 		return nil
 	})
@@ -251,7 +248,8 @@ func (i *Importer) getProjectFile(rootDir, projName string) (string, error) {
 	return "", nil
 }
 
-func (i *Importer) loadDependencies(rootDir string, projs *model.Projects, projNamesToImport []string, rootProj string, projsInsideRoot map[string]bool) error {
+func (i *Importer) loadDependencies(rootDir string, projs *model.Projects, projNamesToImport []string, rootProj string,
+	projsInsideRoot map[string]bool) error {
 	args := make([]string, 0, 3*len(projNamesToImport))
 	for _, projName := range projNamesToImport {
 		var target string

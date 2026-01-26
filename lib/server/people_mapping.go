@@ -156,9 +156,9 @@ func (s *server) sortPeople(col []*model.Person, field string, asc *bool) error 
 	case "changes.linesDeleted":
 		return sortBy(col, func(r *model.Person) int { return r.Changes.LinesDeleted }, *asc)
 	case "firstSeen":
-		return sortBy(col, func(r *model.Person) int64 { return r.FirstSeen.UnixMilli() }, *asc)
+		return sortBy(col, func(r *model.Person) int64 { return r.SeenAt.FirstSeen.UnixMilli() }, *asc)
 	case "lastSeen":
-		return sortBy(col, func(r *model.Person) int64 { return r.LastSeen.UnixMilli() }, *asc)
+		return sortBy(col, func(r *model.Person) int64 { return r.SeenAt.LastSeen.UnixMilli() }, *asc)
 	default:
 		return fmt.Errorf("unknown sort field: %s", field)
 	}
@@ -172,8 +172,8 @@ func (s *server) toPerson(p *model.Person) gin.H {
 		"emails":    p.ListEmails(),
 		"blame":     s.toBlame(p.Blame),
 		"changes":   s.toChanges(p.Changes),
-		"firstSeen": encodeDate(p.FirstSeen),
-		"lastSeen":  encodeDate(p.LastSeen),
+		"firstSeen": encodeDate(p.SeenAt.FirstSeen),
+		"lastSeen":  encodeDate(p.SeenAt.LastSeen),
 	}
 }
 

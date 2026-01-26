@@ -13,6 +13,7 @@ type sqlProductArea struct {
 	Size    *sqlSize             `gorm:"embedded;embeddedPrefix:size_"`
 	Changes *sqlChanges          `gorm:"embedded;embeddedPrefix:changes_"`
 	Metrics *sqlMetricsAggregate `gorm:"embedded"`
+	SeenAt  *sqlSeenAt           `gorm:"embedded"`
 	Data    map[string]string    `gorm:"serializer:json"`
 
 	CreatedAt time.Time
@@ -26,6 +27,7 @@ func newSqlProductArea(a *model.ProductArea) *sqlProductArea {
 		Size:    newSqlSize(a.Size),
 		Changes: newSqlChanges(a.Changes),
 		Metrics: newSqlMetricsAggregate(a.Metrics, a.Size),
+		SeenAt:  newSqlSeenAt(a.SeenAt),
 		Data:    encodeMap(a.Data),
 	}
 }

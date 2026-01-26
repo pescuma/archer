@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/gobwas/glob"
 	"github.com/hashicorp/go-set/v2"
@@ -79,16 +78,13 @@ func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path s
 	proj.RootDir = filepath.Dir(path)
 	proj.ProjectFile = path
 	proj.Dependencies = make(map[string]*model.ProjectDependency)
-	proj.SeenAt(time.Now())
 
 	dir := proj.GetDirectory(".")
 	dir.Type = model.SourceDir
-	dir.SeenAt(time.Now())
 
 	projFile := filesDB.GetOrCreate(path)
 	projFile.ProjectID = &proj.ID
 	projFile.ProjectDirectoryID = &dir.ID
-	projFile.SeenAt(time.Now())
 
 	if projFile.RepositoryID != nil {
 		proj.RepositoryID = projFile.RepositoryID
@@ -213,7 +209,8 @@ func (i *Importer) addProjDep(projsDB *model.Projects, proj *model.Project, path
 	return nil
 }
 
-func (i *Importer) addFiles(filesDB *model.Files, proj *model.Project, dir *model.ProjectDirectory, excludes *set.Set[string], path string) error {
+func (i *Importer) addFiles(filesDB *model.Files, proj *model.Project, dir *model.ProjectDirectory,
+	excludes *set.Set[string], path string) error {
 	if path == "" {
 		return nil
 	}
@@ -249,7 +246,6 @@ func (i *Importer) addFiles(filesDB *model.Files, proj *model.Project, dir *mode
 					file := filesDB.GetOrCreate(file)
 					file.ProjectID = &proj.ID
 					file.ProjectDirectoryID = &dir.ID
-					file.SeenAt(time.Now())
 				}
 				return nil
 			}
@@ -264,7 +260,6 @@ func (i *Importer) addFiles(filesDB *model.Files, proj *model.Project, dir *mode
 		file := filesDB.GetOrCreate(path)
 		file.ProjectID = &proj.ID
 		file.ProjectDirectoryID = &dir.ID
-		file.SeenAt(time.Now())
 	}
 
 	return nil

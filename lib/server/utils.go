@@ -128,6 +128,14 @@ func prepareToSearch(s string) string {
 	return s
 }
 
+func (s *server) incSeenAtStats(result map[string]map[string]int, seen *model.SeenAt) {
+	y, m, _ := seen.FirstSeen.Date()
+	s.incSeenStats(result, y, m, "firstSeen")
+
+	y, m, _ = seen.LastSeen.Date()
+	s.incSeenStats(result, y, m, "lastSeen")
+}
+
 func (s *server) incSeenStats(result map[string]map[string]int, y int, m time.Month, field string) {
 	ym := fmt.Sprintf("%04d-%02d", y, m)
 

@@ -153,9 +153,9 @@ func (s *server) sortFiles(col []*model.File, field string, asc *bool) error {
 	case "metrics.focusedComplexity":
 		return sortBy(col, func(r *model.File) int { return r.Metrics.FocusedComplexity }, *asc)
 	case "firstSeen":
-		return sortBy(col, func(r *model.File) int64 { return r.FirstSeen.UnixMilli() }, *asc)
+		return sortBy(col, func(r *model.File) int64 { return r.SeenAt.FirstSeen.UnixMilli() }, *asc)
 	case "lastSeen":
-		return sortBy(col, func(r *model.File) int64 { return r.LastSeen.UnixMilli() }, *asc)
+		return sortBy(col, func(r *model.File) int64 { return r.SeenAt.LastSeen.UnixMilli() }, *asc)
 	default:
 		return fmt.Errorf("unknown sort field: %s", field)
 	}
@@ -173,7 +173,7 @@ func (s *server) toFile(f *model.File) gin.H {
 		"size":      s.toSize(f.Size),
 		"changes":   s.toChanges(f.Changes),
 		"metrics":   s.toMetrics(f.Metrics),
-		"firstSeen": encodeDate(f.FirstSeen),
-		"lastSeen":  encodeDate(f.LastSeen),
+		"firstSeen": encodeDate(f.SeenAt.FirstSeen),
+		"lastSeen":  encodeDate(f.SeenAt.LastSeen),
 	}
 }

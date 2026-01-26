@@ -1,8 +1,6 @@
 package model
 
 import (
-	"time"
-
 	"github.com/samber/lo"
 )
 
@@ -17,10 +15,8 @@ type Repository struct {
 	FilesTotal int
 	FilesHead  int
 
-	Data map[string]string
-
-	FirstSeen time.Time
-	LastSeen  time.Time
+	SeenAt *SeenAt
+	Data   map[string]string
 
 	commitsByHash map[string]*RepositoryCommit
 	commitsByID   map[ID]*RepositoryCommit
@@ -32,6 +28,7 @@ func NewRepository(id ID, rootDir string, repositories *Repositories) *Repositor
 	return &Repository{
 		ID:            id,
 		RootDir:       rootDir,
+		SeenAt:        NewSeenAt(),
 		Data:          map[string]string{},
 		FilesTotal:    -1,
 		FilesHead:     -1,
@@ -76,19 +73,4 @@ func (r *Repository) ListCommits() []*RepositoryCommit {
 
 func (r *Repository) CountCommits() int {
 	return len(r.commitsByHash)
-}
-
-func (r *Repository) SeenAt(ts ...time.Time) {
-	empty := time.Time{}
-
-	for _, t := range ts {
-		t = t.UTC().Round(time.Second)
-
-		if r.FirstSeen == empty || t.Before(r.FirstSeen) {
-			r.FirstSeen = t
-		}
-		if r.LastSeen == empty || t.After(r.LastSeen) {
-			r.LastSeen = t
-		}
-	}
 }

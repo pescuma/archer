@@ -7,6 +7,7 @@ type ProductArea struct {
 	Size    *Size
 	Changes *Changes
 	Metrics *Metrics
+	SeenAt  *SeenAt
 	Data    map[string]string
 }
 
@@ -17,6 +18,7 @@ func NewProductArea(name string, id ID) *ProductArea {
 		Size:    NewSize(),
 		Changes: NewChanges(),
 		Metrics: NewMetrics(),
+		SeenAt:  NewSeenAt(),
 		Data:    map[string]string{},
 	}
 }

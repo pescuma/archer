@@ -17,9 +17,8 @@ type sqlRepository struct {
 	FilesTotal   *int
 	FilesHead    *int
 
-	Data      map[string]string `gorm:"serializer:json"`
-	FirstSeen time.Time
-	LastSeen  time.Time
+	SeenAt *sqlSeenAt        `gorm:"embedded"`
+	Data   map[string]string `gorm:"serializer:json"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -36,9 +35,8 @@ func newSqlRepository(r *model.Repository) *sqlRepository {
 		RootDir:      r.RootDir,
 		VCS:          r.VCS,
 		Branch:       r.Branch,
+		SeenAt:       newSqlSeenAt(r.SeenAt),
 		Data:         encodeMap(r.Data),
-		FirstSeen:    r.FirstSeen,
-		LastSeen:     r.LastSeen,
 		CommitsTotal: r.CountCommits(),
 		FilesTotal:   encodeMetric(r.FilesTotal),
 		FilesHead:    encodeMetric(r.FilesHead),

@@ -148,9 +148,9 @@ func (s *server) sortRepos(col []*model.Repository, field string, asc *bool) err
 	case "filesHead":
 		return sortBy(col, func(r *model.Repository) int { return r.FilesHead }, *asc)
 	case "firstSeen":
-		return sortBy(col, func(r *model.Repository) int64 { return r.FirstSeen.UnixMilli() }, *asc)
+		return sortBy(col, func(r *model.Repository) int64 { return r.SeenAt.FirstSeen.UnixMilli() }, *asc)
 	case "lastSeen":
-		return sortBy(col, func(r *model.Repository) int64 { return r.LastSeen.UnixMilli() }, *asc)
+		return sortBy(col, func(r *model.Repository) int64 { return r.SeenAt.LastSeen.UnixMilli() }, *asc)
 	default:
 		return fmt.Errorf("unknown sort field: %s", field)
 	}
@@ -165,8 +165,8 @@ func (s *server) toRepo(r *model.Repository) gin.H {
 		"commitsTotal": r.CountCommits(),
 		"filesTotal":   encodeMetric(r.FilesTotal),
 		"filesHead":    encodeMetric(r.FilesHead),
-		"firstSeen":    encodeDate(r.FirstSeen),
-		"lastSeen":     encodeDate(r.LastSeen),
+		"firstSeen":    encodeDate(r.SeenAt.FirstSeen),
+		"lastSeen":     encodeDate(r.SeenAt.LastSeen),
 	}
 }
 

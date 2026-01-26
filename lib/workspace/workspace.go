@@ -22,6 +22,7 @@ import (
 	"github.com/pescuma/archer/lib/importers/metrics"
 	"github.com/pescuma/archer/lib/importers/mysql"
 	"github.com/pescuma/archer/lib/importers/owners"
+	"github.com/pescuma/archer/lib/importers/seen"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/storages"
 	"github.com/pescuma/archer/lib/storages/orm"
@@ -171,6 +172,11 @@ func (w *Workspace) ImportGitBlame(dirs []string, opts *git.BlameOptions) error 
 
 func (w *Workspace) ComputeBlame() error {
 	computer := blame.NewComputer(w.console, w.storage)
+	return computer.Compute()
+}
+
+func (w *Workspace) ComputeSeen() error {
+	computer := seen.NewComputer(w.console, w.storage)
 	return computer.Compute()
 }
 

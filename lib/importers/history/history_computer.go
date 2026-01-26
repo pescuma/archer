@@ -37,11 +37,6 @@ func (c *Computer) Compute() error {
 		return err
 	}
 
-	peopleRelationsDB, err := c.storage.LoadPeopleRelations()
-	if err != nil {
-		return err
-	}
-
 	reposDB, err := c.storage.LoadRepositories()
 	if err != nil {
 		return err
@@ -115,14 +110,6 @@ func (c *Computer) Compute() error {
 				author := peopleDB.GetPersonByID(a)
 
 				addChanges(author.Changes)
-
-				peopleRelationsDB.GetOrCreatePersonRepo(a, repo.ID).SeenAt(commit.Date, commit.DateAuthored)
-			}
-			peopleRelationsDB.GetOrCreatePersonRepo(commit.CommitterID, repo.ID).SeenAt(commit.Date, commit.DateAuthored)
-
-			commitDetails, err := c.storage.LoadRepositoryCommitDetails(repo, commit)
-			if err != nil {
-				return err
 			}
 
 			projs := make(map[*model.Project]bool)
@@ -168,23 +155,13 @@ func (c *Computer) Compute() error {
 					author := peopleDB.GetPersonByID(a)
 					addLinesFactor(author.Changes, len(commit.AuthorIDs))
 
-					s := statsDB.GetOrCreateLines(commit.Date.Format("2006-01"), repo.ID, author.ID, commit.CommitterID, file.ProjectID)
+					s := statsDB.GetOrCreateLines(commit.Date.Format("2006-01"), repo.ID, author.ID, commit.CommitterID,
+						file.ProjectID)
 					if s.Changes.IsEmpty() {
 						s.Changes.Clear()
 					}
 					addLinesFactor(s.Changes, len(commit.AuthorIDs))
 					msls[s] = true
-
-					peopleRelationsDB.GetOrCreatePersonFile(a, file.ID).SeenAt(commit.Date, commit.DateAuthored)
-				}
-				peopleRelationsDB.GetOrCreatePersonFile(commit.CommitterID, file.ID).SeenAt(commit.Date, commit.DateAuthored)
-
-				cfd := commitDetails.GetOrCreateFile(cf.FileID)
-				for _, of := range cfd.OldIDs {
-					for _, a := range commit.AuthorIDs {
-						peopleRelationsDB.GetOrCreatePersonFile(a, of).SeenAt(commit.Date, commit.DateAuthored)
-					}
-					peopleRelationsDB.GetOrCreatePersonFile(commit.CommitterID, of).SeenAt(commit.Date, commit.DateAuthored)
 				}
 			}
 

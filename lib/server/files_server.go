@@ -2,6 +2,9 @@ package server
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/samber/lo"
+
+	"github.com/pescuma/archer/lib/model"
 )
 
 func (s *server) initFiles(r *gin.Engine) {
@@ -72,14 +75,13 @@ func (s *server) statsSeenFiles(params *StatsParams) (any, error) {
 		return nil, err
 	}
 
+	files = lo.Filter(files, func(i *model.File, _ int) bool {
+		return !i.Ignore
+	})
+
 	result := make(map[string]map[string]int)
 	for _, f := range files {
-		y, m, _ := f.FirstSeen.Date()
-		s.incSeenStats(result, y, m, "firstSeen")
-
-		y, m, _ = f.LastSeen.Date()
-		s.incSeenStats(result, y, m, "lastSeen")
+		s.incSeenAtStats(result, f.SeenAt)
 	}
-
 	return result, nil
 }

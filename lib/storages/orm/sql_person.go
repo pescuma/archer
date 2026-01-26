@@ -10,13 +10,12 @@ type sqlPerson struct {
 	ID   model.ID
 	Name string
 
-	Names     []string          `gorm:"serializer:json"`
-	Emails    []string          `gorm:"serializer:json"`
-	Changes   *sqlChanges       `gorm:"embedded;embeddedPrefix:changes_"`
-	Blame     *sqlBlame         `gorm:"embedded;embeddedPrefix:blame_"`
-	Data      map[string]string `gorm:"serializer:json"`
-	FirstSeen time.Time
-	LastSeen  time.Time
+	Names   []string          `gorm:"serializer:json"`
+	Emails  []string          `gorm:"serializer:json"`
+	Changes *sqlChanges       `gorm:"embedded;embeddedPrefix:changes_"`
+	Blame   *sqlBlame         `gorm:"embedded;embeddedPrefix:blame_"`
+	SeenAt  *sqlSeenAt        `gorm:"embedded"`
+	Data    map[string]string `gorm:"serializer:json"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -27,15 +26,14 @@ type sqlPerson struct {
 
 func newSqlPerson(p *model.Person) *sqlPerson {
 	return &sqlPerson{
-		ID:        p.ID,
-		Name:      p.Name,
-		Names:     p.ListNames(),
-		Emails:    p.ListEmails(),
-		Changes:   newSqlChanges(p.Changes),
-		Blame:     newSqlBlame(p.Blame),
-		Data:      encodeMap(p.Data),
-		FirstSeen: p.FirstSeen,
-		LastSeen:  p.LastSeen,
+		ID:      p.ID,
+		Name:    p.Name,
+		Names:   p.ListNames(),
+		Emails:  p.ListEmails(),
+		Changes: newSqlChanges(p.Changes),
+		Blame:   newSqlBlame(p.Blame),
+		SeenAt:  newSqlSeenAt(p.SeenAt),
+		Data:    encodeMap(p.Data),
 	}
 }
 

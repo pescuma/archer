@@ -40,6 +40,7 @@ var cli struct {
 		Metrics ComputeMetricsCmd `cmd:"" help:"Compute code metrics based on imported files."`
 		History ComputeHistoryCmd `cmd:"" help:"Compute history based on imported files."`
 		Blame   ComputeBlameCmd   `cmd:"" help:"Compute blame based on imported files."`
+		Seen    ComputeSeenCmd    `cmd:"" help:"Compute seen at information based on imported repositories."`
 	} `cmd:""`
 
 	Ignore struct {

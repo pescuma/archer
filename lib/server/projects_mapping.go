@@ -196,9 +196,9 @@ func (s *server) sortProjects(col []*model.Project, field string, asc *bool) err
 	case "metrics.focusedComplexity":
 		return sortBy(col, func(r *model.Project) int { return r.Metrics.FocusedComplexity }, *asc)
 	case "firstSeen":
-		return sortBy(col, func(r *model.Project) int64 { return r.FirstSeen.UnixMilli() }, *asc)
+		return sortBy(col, func(r *model.Project) int64 { return r.SeenAt.FirstSeen.UnixMilli() }, *asc)
 	case "lastSeen":
-		return sortBy(col, func(r *model.Project) int64 { return r.LastSeen.UnixMilli() }, *asc)
+		return sortBy(col, func(r *model.Project) int64 { return r.SeenAt.LastSeen.UnixMilli() }, *asc)
 	default:
 		return fmt.Errorf("unknown sort field: %s", field)
 	}
@@ -219,8 +219,8 @@ func (s *server) toProject(p *model.Project) gin.H {
 		"size":      s.toSize(p.Size),
 		"changes":   s.toChanges(p.Changes),
 		"metrics":   s.toMetrics(p.Metrics),
-		"firstSeen": encodeDate(p.FirstSeen),
-		"lastSeen":  encodeDate(p.LastSeen),
+		"firstSeen": encodeDate(p.SeenAt.FirstSeen),
+		"lastSeen":  encodeDate(p.SeenAt.LastSeen),
 	}
 }
 

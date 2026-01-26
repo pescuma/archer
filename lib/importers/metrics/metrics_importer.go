@@ -89,8 +89,6 @@ func (i *Importer) Import(filter []string, opts *Options) error {
 		if err != nil {
 			file.Exists = false
 			continue
-		} else {
-			file.SeenAt(time.Now(), stat.ModTime())
 		}
 
 		modTime := stat.ModTime().String()

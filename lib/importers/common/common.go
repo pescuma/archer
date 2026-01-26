@@ -4,14 +4,14 @@ import (
 	"io/fs"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/pescuma/archer/lib/consoles"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/utils"
 )
 
-func FindAndImportFiles(console consoles.Console, name string, dirs []string, matcher func(string) bool, process func(string) error) error {
+func FindAndImportFiles(console consoles.Console, name string, dirs []string, matcher func(string) bool,
+	process func(string) error) error {
 	console.Printf("Finding %v...\n", name)
 
 	var queue []string
@@ -52,8 +52,7 @@ func ImportFiles(queue []string, process func(string) error) error {
 	return nil
 }
 
-func CreateFileFilter(rootDir string, gitignore bool,
-	defaultMatcher func(path string) bool,
+func CreateFileFilter(rootDir string, gitignore bool, defaultMatcher func(path string) bool,
 	excludes func(path string, isDir bool) bool,
 ) (func(path string, isDir bool) bool, error) {
 	if excludes == nil {
@@ -110,7 +109,8 @@ func CreateFileFilter(rootDir string, gitignore bool,
 	return result, nil
 }
 
-func MarkDeletedFilesAndUnmarkExistingOnes(filesDB *model.Files, proj *model.Project, dir *model.ProjectDirectory, filter func(path string, isDir bool) bool) error {
+func MarkDeletedFilesAndUnmarkExistingOnes(filesDB *model.Files, proj *model.Project, dir *model.ProjectDirectory,
+	filter func(path string, isDir bool) bool) error {
 	rootDir := proj.RootDir + string(filepath.Separator)
 
 	for _, file := range filesDB.List() {
@@ -138,7 +138,8 @@ func MarkDeletedFilesAndUnmarkExistingOnes(filesDB *model.Files, proj *model.Pro
 	return nil
 }
 
-func AddFiles(filesDB *model.Files, proj *model.Project, dir *model.ProjectDirectory, filter func(path string, isDir bool) bool) error {
+func AddFiles(filesDB *model.Files, proj *model.Project, dir *model.ProjectDirectory,
+	filter func(path string, isDir bool) bool) error {
 	return filepath.WalkDir(proj.RootDir, func(path string, entry fs.DirEntry, err error) error {
 		switch {
 		case err != nil:
@@ -157,7 +158,6 @@ func AddFiles(filesDB *model.Files, proj *model.Project, dir *model.ProjectDirec
 				file := filesDB.GetOrCreate(path)
 				file.ProjectID = &proj.ID
 				file.ProjectDirectoryID = &dir.ID
-				file.SeenAt(time.Now())
 			}
 			return nil
 		}

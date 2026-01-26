@@ -57,9 +57,6 @@ func (c *Computer) Compute() error {
 			for _, file := range filesByDir[dir.ID] {
 				file.Metrics.FocusedComplexity = computeFocusedComplexity(file.Size, file.Changes, file.Metrics)
 
-				proj.SeenAt(file.FirstSeen, file.LastSeen)
-				dir.SeenAt(file.FirstSeen, file.LastSeen)
-
 				dir.Metrics.Add(file.Metrics)
 
 				if file.ProductAreaID != nil {

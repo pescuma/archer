@@ -160,9 +160,8 @@ func (s *gormStorage) LoadProjects() (*model.Projects, error) {
 		p.Size = sp.Size.ToModel()
 		p.Changes = sp.Changes.ToModel()
 		p.Metrics = sp.Metrics.ToModel()
+		p.SeenAt = sp.SeenAt.ToModel()
 		p.Data = decodeMap(sp.Data)
-		p.FirstSeen = sp.FirstSeen
-		p.LastSeen = sp.LastSeen
 	}
 
 	for _, sd := range deps {
@@ -182,9 +181,8 @@ func (s *gormStorage) LoadProjects() (*model.Projects, error) {
 		d.Size = sd.Size.ToModel()
 		d.Changes = sd.Changes.ToModel()
 		d.Metrics = sd.Metrics.ToModel()
+		d.SeenAt = sd.SeenAt.ToModel()
 		d.Data = decodeMap(sd.Data)
-		d.FirstSeen = sd.FirstSeen
-		d.LastSeen = sd.LastSeen
 	}
 
 	s.projects = result
@@ -455,9 +453,8 @@ func (s *gormStorage) LoadPeople() (*model.People, error) {
 		}
 		p.Blame = sp.Blame.ToModel()
 		p.Changes = sp.Changes.ToModel()
+		p.SeenAt = sp.SeenAt.ToModel()
 		p.Data = decodeMap(sp.Data)
-		p.FirstSeen = sp.FirstSeen
-		p.LastSeen = sp.LastSeen
 	}
 
 	for _, sa := range areas {
@@ -465,6 +462,7 @@ func (s *gormStorage) LoadPeople() (*model.People, error) {
 		a.Size = sa.Size.ToModel()
 		a.Changes = sa.Changes.ToModel()
 		a.Metrics = sa.Metrics.ToModel()
+		a.SeenAt = sa.SeenAt.ToModel()
 		a.Data = decodeMap(sa.Data)
 	}
 
@@ -536,14 +534,12 @@ func (s *gormStorage) LoadPeopleRelations() (*model.PeopleRelations, error) {
 
 	for _, r := range rs {
 		pr := result.GetOrCreatePersonRepo(r.PersonID, r.RepositoryID)
-		pr.FirstSeen = r.FirstSeen
-		pr.LastSeen = r.LastSeen
+		pr.SeenAt = r.SeenAt.ToModel()
 	}
 
 	for _, f := range fs {
-		pr := result.GetOrCreatePersonFile(f.PersonID, f.FileID)
-		pr.FirstSeen = f.FirstSeen
-		pr.LastSeen = f.LastSeen
+		pf := result.GetOrCreatePersonFile(f.PersonID, f.FileID)
+		pf.SeenAt = f.SeenAt.ToModel()
 	}
 
 	s.peopleRelations = result
@@ -634,9 +630,8 @@ func (s *gormStorage) LoadRepositories() (*model.Repositories, error) {
 		r.Name = sr.Name
 		r.VCS = sr.VCS
 		r.Branch = sr.Branch
+		r.SeenAt = sr.SeenAt.ToModel()
 		r.Data = decodeMap(sr.Data)
-		r.FirstSeen = sr.FirstSeen
-		r.LastSeen = sr.LastSeen
 		r.FilesTotal = decodeMetric(sr.FilesTotal)
 		r.FilesHead = decodeMetric(sr.FilesHead)
 	}
@@ -855,7 +850,8 @@ func (s *gormStorage) WriteCommit(repo *model.Repository, commit *model.Reposito
 	return nil
 }
 
-func (s *gormStorage) LoadRepositoryCommitDetails(repo *model.Repository, commit *model.RepositoryCommit) (*model.RepositoryCommitDetails, error) {
+func (s *gormStorage) LoadRepositoryCommitDetails(repo *model.Repository,
+	commit *model.RepositoryCommit) (*model.RepositoryCommitDetails, error) {
 	if s.repos == nil {
 		return nil, errors.New("repos not loaded")
 	}

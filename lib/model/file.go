@@ -2,7 +2,6 @@ package model
 
 import (
 	"strings"
-	"time"
 )
 
 type File struct {
@@ -16,13 +15,12 @@ type File struct {
 
 	ProductAreaID *ID
 
-	Exists    bool
-	Size      *Size
-	Changes   *Changes
-	Metrics   *Metrics
-	Data      map[string]string
-	FirstSeen time.Time
-	LastSeen  time.Time
+	Exists  bool
+	Size    *Size
+	Changes *Changes
+	Metrics *Metrics
+	SeenAt  *SeenAt
+	Data    map[string]string
 
 	Classes   map[string]*Class
 	Functions map[string]*Function
@@ -41,6 +39,7 @@ func NewFile(path string, id ID) *File {
 		Size:    NewSize(),
 		Changes: NewChanges(),
 		Metrics: NewMetrics(),
+		SeenAt:  NewSeenAt(),
 		Data:    map[string]string{},
 	}
 }
@@ -73,19 +72,4 @@ func (f *File) GetOrCreateFunction(name string, args []string) *Function {
 	}
 
 	return result
-}
-
-func (f *File) SeenAt(ts ...time.Time) {
-	empty := time.Time{}
-
-	for _, t := range ts {
-		t = t.UTC().Round(time.Second)
-
-		if f.FirstSeen == empty || t.Before(f.FirstSeen) {
-			f.FirstSeen = t
-		}
-		if f.LastSeen == empty || t.After(f.LastSeen) {
-			f.LastSeen = t
-		}
-	}
 }

@@ -69,3 +69,10 @@ type ComputeBlameCmd struct {
 func (c *ComputeBlameCmd) Run(ctx *context) error {
 	return ctx.ws.ComputeBlame()
 }
+
+type ComputeSeenCmd struct {
+}
+
+func (c *ComputeSeenCmd) Run(ctx *context) error {
+	return ctx.ws.ComputeSeen()
+}

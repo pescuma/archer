@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/hhatto/gocloc"
 	"github.com/pkg/errors"
@@ -67,7 +66,6 @@ func (i *Importer) Import(filter []string, opts *Options) error {
 		stat, err := os.Stat(file.Path)
 		if err == nil && !stat.IsDir() {
 			file.Exists = true
-			file.SeenAt(time.Now(), stat.ModTime())
 
 			modTime := stat.ModTime().String()
 

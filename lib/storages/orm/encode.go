@@ -2,10 +2,23 @@ package orm
 
 import (
 	"strings"
+	"time"
 
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/utils"
 )
+
+func encodeTime(v time.Time) *time.Time {
+	empty := time.Time{}
+	return utils.IIf(v == empty, nil, &v)
+}
+func decodeTime(v *time.Time) time.Time {
+	if v == nil {
+		return time.Time{}
+	} else {
+		return *v
+	}
+}
 
 func encodeMetric(v int) *int {
 	return utils.IIf(v == -1, nil, &v)

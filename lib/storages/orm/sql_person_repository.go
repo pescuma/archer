@@ -10,8 +10,7 @@ type sqlPersonRepository struct {
 	PersonID     model.ID `gorm:"primaryKey"`
 	RepositoryID model.ID `gorm:"primaryKey"`
 
-	FirstSeen time.Time
-	LastSeen  time.Time
+	SeenAt *sqlSeenAt `gorm:"embedded"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -21,8 +20,7 @@ func newSqlPersonRepository(r *model.PersonRepository) *sqlPersonRepository {
 	return &sqlPersonRepository{
 		PersonID:     r.PersonID,
 		RepositoryID: r.RepositoryID,
-		FirstSeen:    r.FirstSeen,
-		LastSeen:     r.LastSeen,
+		SeenAt:       newSqlSeenAt(r.SeenAt),
 	}
 }
 

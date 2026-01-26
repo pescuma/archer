@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -108,8 +107,6 @@ func (i *BlameImporter) Import(dirs []string, opts *BlameOptions) error {
 			continue
 		}
 
-		repo.SeenAt(time.Now())
-
 		_, err = i.importBlame(filesDB, repo, gitRepo, gitTree, gitCommit, opts)
 		if err != nil {
 			return err
@@ -149,7 +146,8 @@ func (i *BlameImporter) deleteBlame(filesDB *model.Files, repo *model.Repository
 	return nil
 }
 
-func (i *BlameImporter) listToDelete(filesDB *model.Files, repo *model.Repository, gitTree *object.Tree) (map[string]*model.File, error) {
+func (i *BlameImporter) listToDelete(filesDB *model.Files, repo *model.Repository,
+	gitTree *object.Tree) (map[string]*model.File, error) {
 	existing := set.New[string](1000)
 
 	err := gitTree.Files().ForEach(func(file *object.File) error {
@@ -233,7 +231,8 @@ func (i *BlameImporter) importBlame(filesDB *model.Files,
 	return len(toProcess), nil
 }
 
-func (i *BlameImporter) listToCompute(filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository, gitTree *object.Tree, gitCommit *object.Commit, opts *BlameOptions) ([]*blameWork, error) {
+func (i *BlameImporter) listToCompute(filesDB *model.Files, repo *model.Repository, gitRepo *git.Repository,
+	gitTree *object.Tree, gitCommit *object.Commit, opts *BlameOptions) ([]*blameWork, error) {
 	var result []*blameWork
 
 	err := gitTree.Files().ForEach(func(gitFile *object.File) error {
@@ -329,7 +328,8 @@ func (i *BlameImporter) computeFileBlame(w *blameWork, cache BlameCache) error {
 
 		commit := w.repo.GetCommit(bl.CommitHash)
 		if commit == nil {
-			return fmt.Errorf("missing commit '%v':'%v'. run 'import git history' before importing blame", w.repo.Name, bl.CommitHash)
+			return fmt.Errorf("missing commit '%v':'%v'. run 'import git history' before importing blame", w.repo.Name,
+				bl.CommitHash)
 		}
 
 		fileLine.ProjectID = w.file.ProjectID
@@ -405,7 +405,8 @@ func (i *BlameImporter) computeLOC(name string, contents string) ([]model.FileLi
 	return result, nil
 }
 
-func (i *BlameImporter) checkImportedHistory(repo *model.Repository, gitRepo *git.Repository, gitRevision plumbing.Hash) (bool, error) {
+func (i *BlameImporter) checkImportedHistory(repo *model.Repository, gitRepo *git.Repository,
+	gitRevision plumbing.Hash) (bool, error) {
 	if repo == nil {
 		return false, nil
 	}

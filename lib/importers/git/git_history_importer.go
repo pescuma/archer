@@ -257,10 +257,6 @@ func (i *HistoryImporter) importCommits(
 
 		commit.Ignore = ignored.IgnoreCommit(repo, commit)
 
-		repo.SeenAt(commit.Date, commit.DateAuthored)
-		author.SeenAt(commit.Date, commit.DateAuthored)
-		committer.SeenAt(commit.Date, commit.DateAuthored)
-
 		return nil
 	})
 	if err != nil {
@@ -443,11 +439,9 @@ func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Pro
 
 			file := filesDB.GetByID(cf.FileID)
 			file.RepositoryID = &repo.ID
-			file.SeenAt(commit.Date, commit.DateAuthored)
 
 			if file.ProjectID != nil {
 				proj := projsDB.GetByID(*file.ProjectID)
-				proj.SeenAt(commit.Date, commit.DateAuthored)
 				proj.RepositoryID = &repo.ID
 			}
 
@@ -455,11 +449,9 @@ func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Pro
 			for _, of := range cfd.OldIDs {
 				oldFile := filesDB.GetByID(of)
 				oldFile.RepositoryID = &repo.ID
-				oldFile.SeenAt(commit.Date, commit.DateAuthored)
 
 				if oldFile.ProjectID != nil {
 					proj := projsDB.GetByID(*oldFile.ProjectID)
-					proj.SeenAt(commit.Date, commit.DateAuthored)
 					proj.RepositoryID = &repo.ID
 				}
 			}
