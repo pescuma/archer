@@ -72,7 +72,7 @@ func (c *Computer) Compute() error {
 		}
 	}
 	for _, f := range filesDB.List() {
-		if f.RepositoryID == nil {
+		if f.Ignore || f.RepositoryID == nil {
 			f.Changes.Reset()
 		} else {
 			f.Changes.Clear()
@@ -96,6 +96,13 @@ func (c *Computer) Compute() error {
 		files := make(map[*model.File]bool)
 
 		for _, commit := range repo.ListCommits() {
+			commit.FilesModified = 0
+			commit.FilesCreated = 0
+			commit.FilesDeleted = 0
+			commit.LinesModified = 0
+			commit.LinesAdded = 0
+			commit.LinesDeleted = 0
+
 			if commit.Ignore {
 				continue
 			}
@@ -106,17 +113,37 @@ func (c *Computer) Compute() error {
 				c.Total++
 			}
 
-			for _, a := range commit.AuthorIDs {
-				author := peopleDB.GetPersonByID(a)
-
-				addChanges(author.Changes)
-			}
-
 			projs := make(map[*model.Project]bool)
 			dirs := make(map[*model.ProjectDirectory]bool)
 			areas := make(map[*model.ProductArea]bool)
 			msls := make(map[*model.MonthlyStatsLine]bool)
 			for _, cf := range commit.Files {
+				file := filesDB.GetByID(cf.FileID)
+				if file.Ignore {
+					continue
+				}
+
+				switch cf.Change {
+				case model.FileNotChanged:
+					// Nothing to do
+				case model.FileModified:
+					commit.FilesModified++
+				case model.FileRenamed:
+					commit.FilesModified++
+				case model.FileCreated:
+					commit.FilesCreated++
+				case model.FileDeleted:
+					commit.FilesDeleted++
+				default:
+					panic("unhandled default case")
+				}
+
+				if cf.LinesModified != -1 {
+					commit.LinesModified += cf.LinesModified
+					commit.LinesAdded += cf.LinesAdded
+					commit.LinesDeleted += cf.LinesDeleted
+				}
+
 				addLinesFactor := func(c *model.Changes, factor int) {
 					if cf.LinesModified != -1 {
 						c.LinesModified += cf.LinesModified / factor
@@ -128,11 +155,9 @@ func (c *Computer) Compute() error {
 					addLinesFactor(c, 1)
 				}
 
-				file := filesDB.GetByID(cf.FileID)
-				files[file] = true
-
 				addChanges(file.Changes)
 				addLines(file.Changes)
+				files[file] = true
 
 				if file.ProjectID != nil {
 					p := projectsDB.GetByID(*file.ProjectID)
@@ -163,6 +188,11 @@ func (c *Computer) Compute() error {
 					addLinesFactor(s.Changes, len(commit.AuthorIDs))
 					msls[s] = true
 				}
+			}
+
+			for _, a := range commit.AuthorIDs {
+				author := peopleDB.GetPersonByID(a)
+				addChanges(author.Changes)
 			}
 
 			for p := range projs {

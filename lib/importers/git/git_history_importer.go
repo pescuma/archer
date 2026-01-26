@@ -182,7 +182,8 @@ func (i *HistoryImporter) countFilesAtHEAD(gitRepo *git.Repository) (int, error)
 	return result, nil
 }
 
-func (i *HistoryImporter) countCommitsToImport(repo *model.Repository, gitRepo *git.Repository, gitRevision plumbing.Hash, opts *HistoryOptions) (int, error) {
+func (i *HistoryImporter) countCommitsToImport(repo *model.Repository, gitRepo *git.Repository,
+	gitRevision plumbing.Hash, opts *HistoryOptions) (int, error) {
 	commitsIter, err := log(gitRepo, gitRevision)
 	if err != nil {
 		return 0, err
@@ -294,7 +295,8 @@ func (i *HistoryImporter) importCommits(
 	return imported, nil
 }
 
-func (i *HistoryImporter) listChangesToImport(repo *model.Repository, gitRepo *git.Repository, gitRevision plumbing.Hash, opts *HistoryOptions) ([]*changeWork, error) {
+func (i *HistoryImporter) listChangesToImport(repo *model.Repository, gitRepo *git.Repository,
+	gitRevision plumbing.Hash, opts *HistoryOptions) ([]*changeWork, error) {
 	commitsIter, err := log(gitRepo, gitRevision)
 	if err != nil {
 		return nil, err
@@ -399,44 +401,7 @@ func (i *HistoryImporter) importChanges(filesDB *model.Files, projsDB *model.Pro
 		commit := w.commit
 		details := w.details
 
-		commit.FilesModified = 0
-		commit.FilesCreated = 0
-		commit.FilesDeleted = 0
-
-		if lo.SomeBy(lo.Values(commit.Files), func(i *model.RepositoryCommitFile) bool {
-			return i.LinesModified != -1
-		}) {
-			commit.LinesModified = 0
-			commit.LinesAdded = 0
-			commit.LinesDeleted = 0
-		} else {
-			commit.LinesModified = -1
-			commit.LinesAdded = -1
-			commit.LinesDeleted = -1
-		}
-
 		for _, cf := range commit.Files {
-			switch cf.Change {
-			case model.FileNotChanged:
-				// Nothing to do
-			case model.FileModified:
-				commit.FilesModified++
-			case model.FileRenamed:
-				commit.FilesModified++
-			case model.FileCreated:
-				commit.FilesCreated++
-			case model.FileDeleted:
-				commit.FilesDeleted++
-			default:
-				panic("unhandled default case")
-			}
-
-			if cf.LinesModified != -1 {
-				commit.LinesModified += cf.LinesModified
-				commit.LinesAdded += cf.LinesAdded
-				commit.LinesDeleted += cf.LinesDeleted
-			}
-
 			file := filesDB.GetByID(cf.FileID)
 			file.RepositoryID = &repo.ID
 
@@ -691,7 +656,8 @@ func (i *HistoryImporter) computeChangesRootCommit(filesDB *model.Files, repo *m
 	})
 }
 
-func (i *HistoryImporter) computeChangesNoLines(commit *object.Commit, parent *object.Commit) ([]*gitFileChange, error) {
+func (i *HistoryImporter) computeChangesNoLines(commit *object.Commit, parent *object.Commit) ([]*gitFileChange,
+	error) {
 	commitTree, err := commit.Tree()
 	if err != nil {
 		return nil, err
