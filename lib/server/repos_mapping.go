@@ -215,9 +215,14 @@ func (s *server) listReposAndCommits(params *Filters) ([]RepoAndCommit, error) {
 		}
 
 		for _, commit := range repo.ListCommits() {
-			if personIDs != nil && !personIDs[commit.CommitterID] && !lo.SomeBy(commit.AuthorIDs, func(i model.ID) bool {
-				return personIDs[i]
-			}) {
+			if commit.Ignore {
+				continue
+			}
+
+			if personIDs != nil && !personIDs[commit.CommitterID] && !lo.SomeBy(commit.AuthorIDs,
+				func(i model.ID) bool {
+					return personIDs[i]
+				}) {
 				continue
 			}
 
@@ -263,11 +268,13 @@ func (s *server) sortCommits(col []RepoAndCommit, field string, asc *bool) error
 	case "date":
 		return sortBy(col, func(r RepoAndCommit) int64 { return r.Commit.Date.UnixMilli() }, *asc)
 	case "committer.name":
-		return sortBy(col, func(r RepoAndCommit) string { return s.people.GetPersonByID(r.Commit.CommitterID).Name }, *asc)
+		return sortBy(col, func(r RepoAndCommit) string { return s.people.GetPersonByID(r.Commit.CommitterID).Name },
+			*asc)
 	case "dateAuthored":
 		return sortBy(col, func(r RepoAndCommit) int64 { return r.Commit.DateAuthored.UnixMilli() }, *asc)
 	case "authors.name":
-		return sortBy(col, func(r RepoAndCommit) string { return s.people.GetPersonByID(r.Commit.AuthorIDs[0]).Name }, *asc)
+		return sortBy(col, func(r RepoAndCommit) string { return s.people.GetPersonByID(r.Commit.AuthorIDs[0]).Name },
+			*asc)
 	case "modifiedLines":
 		return sortBy(col, func(r RepoAndCommit) int { return r.Commit.LinesModified }, *asc)
 	case "addedLines":

@@ -46,6 +46,18 @@ func (i *IgnoreRules) AddFileRule(rule string) error {
 		return err
 	}
 
+	files, err := i.storage.LoadFiles()
+	if err != nil {
+		return err
+	}
+
+	before := 0
+	for _, file := range files.List() {
+		if file.Ignore {
+			before++
+		}
+	}
+
 	changed, err := i.addFileRule(rule)
 	if err != nil {
 		return err
@@ -56,16 +68,19 @@ func (i *IgnoreRules) AddFileRule(rule string) error {
 		return nil
 	}
 
-	files, err := i.storage.LoadFiles()
-	if err != nil {
-		return err
-	}
-
 	i.console.Printf("Updating files with new ignore information...\n")
 
+	after := 0
 	for _, file := range files.List() {
 		file.Ignore = i.IgnoreFile(file)
+
+		if file.Ignore {
+			after++
+		}
 	}
+
+	i.console.Printf("Ignored %d new files (%d ignored before, %d ignored after)\n",
+		after-before, before, after)
 
 	return nil
 }
@@ -92,6 +107,20 @@ func (i *IgnoreRules) AddCommitRule(rule string) error {
 		return err
 	}
 
+	repos, err := i.storage.LoadRepositories()
+	if err != nil {
+		return err
+	}
+
+	before := 0
+	for _, repo := range repos.List() {
+		for _, commit := range repo.ListCommits() {
+			if commit.Ignore {
+				before++
+			}
+		}
+	}
+
 	changed, err := i.addCommitRule(rule)
 	if err != nil {
 		return err
@@ -102,18 +131,20 @@ func (i *IgnoreRules) AddCommitRule(rule string) error {
 		return nil
 	}
 
-	repos, err := i.storage.LoadRepositories()
-	if err != nil {
-		return err
-	}
-
 	i.console.Printf("Updating commits with new ignore information...\n")
 
+	after := 0
 	for _, repo := range repos.List() {
 		for _, commit := range repo.ListCommits() {
 			commit.Ignore = i.IgnoreCommit(repo, commit)
+			if commit.Ignore {
+				after++
+			}
 		}
 	}
+
+	i.console.Printf("Ignored %d new commits (%d ignored before, %d ignored after)\n",
+		after-before, before, after)
 
 	return nil
 }

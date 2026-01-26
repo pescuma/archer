@@ -141,10 +141,6 @@ func (s *server) statsSeenCommits(params *StatsParams) (any, error) {
 		return nil, err
 	}
 
-	commits = lo.Filter(commits, func(i RepoAndCommit, _ int) bool {
-		return !i.Commit.Ignore
-	})
-
 	s3 := lo.GroupBy(commits, func(i RepoAndCommit) string {
 		y, m, _ := i.Commit.Date.Date()
 		return fmt.Sprintf("%04d-%02d", y, m)
