@@ -184,6 +184,8 @@ func (i *Importer) addPkgDep(projsDB *model.Projects, proj *model.Project, pkg s
 		return
 	}
 
+	pkg = strings.Split(pkg, ",")[0]
+
 	dp := projsDB.GetOrCreate(pkg)
 
 	dep := proj.GetOrCreateDependency(dp)

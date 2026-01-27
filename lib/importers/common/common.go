@@ -146,7 +146,7 @@ func AddFiles(filesDB *model.Files, proj *model.Project, dir *model.ProjectDirec
 			return nil
 
 		case entry.IsDir():
-			return utils.IIf(filter(path, entry.IsDir()), nil, filepath.SkipDir)
+			return utils.IIf(filter(path, true), nil, filepath.SkipDir)
 
 		default:
 			path, err := utils.PathAbs(path)
@@ -154,7 +154,7 @@ func AddFiles(filesDB *model.Files, proj *model.Project, dir *model.ProjectDirec
 				return err
 			}
 
-			if filter(path, entry.IsDir()) {
+			if filter(path, false) {
 				file := filesDB.GetOrCreate(path)
 				file.ProjectID = &proj.ID
 				file.ProjectDirectoryID = &dir.ID

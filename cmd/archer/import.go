@@ -4,6 +4,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/samber/lo"
+
 	"github.com/pescuma/archer/lib/importers/csproj"
 	"github.com/pescuma/archer/lib/importers/git"
 	"github.com/pescuma/archer/lib/importers/gomod"
@@ -26,10 +28,13 @@ type ImportAllCmd struct {
 func (c *ImportAllCmd) Run(ctx *context) error {
 	ws := ctx.ws
 
+	groups := strings.Split(c.Group, ":")
+	groups = lo.Filter(groups, func(i string, _ int) bool { return i != "" })
+
 	ws.Console().PushPrefix("gomod: ")
 
 	err := ws.ImportGoMod(c.Paths, &gomod.Options{
-		Groups:           strings.Split(c.Group, ":"),
+		Groups:           groups,
 		RespectGitignore: c.Gitignore,
 	})
 	if err != nil {
@@ -37,10 +42,16 @@ func (c *ImportAllCmd) Run(ctx *context) error {
 	}
 
 	ws.Console().PopPrefix()
+
+	err = ws.Write()
+	if err != nil {
+		return err
+	}
+
 	ws.Console().PushPrefix("csproj: ")
 
 	err = ws.ImportCsproj(c.Paths, &csproj.Options{
-		Groups:           strings.Split(c.Group, ":"),
+		Groups:           groups,
 		RespectGitignore: c.Gitignore,
 	})
 	if err != nil {
@@ -48,6 +59,11 @@ func (c *ImportAllCmd) Run(ctx *context) error {
 	}
 
 	ws.Console().PopPrefix()
+
+	err = ws.Write()
+	if err != nil {
+		return err
+	}
 
 	if c.Fetch {
 		ws.Console().PushPrefix("git repos: ")
@@ -60,6 +76,12 @@ func (c *ImportAllCmd) Run(ctx *context) error {
 		}
 
 		ws.Console().PopPrefix()
+
+		err = ws.Write()
+		if err != nil {
+			return err
+		}
+
 		ws.Console().PushPrefix("git fetch: ")
 
 		err = ws.RunGit("fetch")
@@ -82,6 +104,12 @@ func (c *ImportAllCmd) Run(ctx *context) error {
 	}
 
 	ws.Console().PopPrefix()
+
+	err = ws.Write()
+	if err != nil {
+		return err
+	}
+
 	ws.Console().PushPrefix("loc: ")
 
 	err = ws.ImportLOC(nil, &loc.Options{
@@ -92,6 +120,12 @@ func (c *ImportAllCmd) Run(ctx *context) error {
 	}
 
 	ws.Console().PopPrefix()
+
+	err = ws.Write()
+	if err != nil {
+		return err
+	}
+
 	ws.Console().PushPrefix("metrics: ")
 
 	err = ws.ImportMetrics(nil, &metrics.Options{
@@ -103,6 +137,12 @@ func (c *ImportAllCmd) Run(ctx *context) error {
 	}
 
 	ws.Console().PopPrefix()
+
+	err = ws.Write()
+	if err != nil {
+		return err
+	}
+
 	ws.Console().PushPrefix("git blame: ")
 
 	err = ws.ImportGitBlame(c.Paths, &git.BlameOptions{
@@ -146,8 +186,10 @@ type ImportCsprojCmd struct {
 }
 
 func (c *ImportCsprojCmd) Run(ctx *context) error {
+	groups := strings.Split(c.Group, ":")
+	groups = lo.Filter(groups, func(i string, _ int) bool { return i != "" })
 	return ctx.ws.ImportCsproj(c.Paths, &csproj.Options{
-		Groups:           strings.Split(c.Group, ":"),
+		Groups:           groups,
 		RespectGitignore: c.Gitignore,
 	})
 }

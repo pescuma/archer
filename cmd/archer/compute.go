@@ -6,14 +6,34 @@ type ComputeAllCmd struct {
 func (c *ComputeAllCmd) Run(ctx *context) error {
 	ws := ctx.ws
 
-	ws.Console().PushPrefix("loc: ")
+	ws.Console().PushPrefix("seen: ")
 
-	err := ws.ComputeLOC()
+	err := ws.ComputeSeen()
 	if err != nil {
 		return err
 	}
 
 	ws.Console().PopPrefix()
+
+	err = ws.Write()
+	if err != nil {
+		return err
+	}
+
+	ws.Console().PushPrefix("loc: ")
+
+	err = ws.ComputeLOC()
+	if err != nil {
+		return err
+	}
+
+	ws.Console().PopPrefix()
+
+	err = ws.Write()
+	if err != nil {
+		return err
+	}
+
 	ws.Console().PushPrefix("metrics: ")
 
 	err = ws.ComputeMetrics()
@@ -22,6 +42,12 @@ func (c *ComputeAllCmd) Run(ctx *context) error {
 	}
 
 	ws.Console().PopPrefix()
+
+	err = ws.Write()
+	if err != nil {
+		return err
+	}
+
 	ws.Console().PushPrefix("history: ")
 
 	err = ws.ComputeHistory()
@@ -30,6 +56,12 @@ func (c *ComputeAllCmd) Run(ctx *context) error {
 	}
 
 	ws.Console().PopPrefix()
+
+	err = ws.Write()
+	if err != nil {
+		return err
+	}
+
 	ws.Console().PushPrefix("blame: ")
 
 	err = ws.ComputeBlame()

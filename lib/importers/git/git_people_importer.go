@@ -95,6 +95,9 @@ func importPeople(configDB *map[string]string, peopleDB *model.People, reposDB *
 
 		total := 0
 		err = commitsIter.ForEach(func(commit *object.Commit) error { total++; return nil })
+		if err != nil {
+			return nil, err
+		}
 
 		commitsIter, err = log(gitRepo, gitRevision)
 		if err != nil {
