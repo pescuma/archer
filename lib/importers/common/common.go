@@ -109,29 +109,29 @@ func CreateFileFilter(rootDir string, gitignore bool, defaultMatcher func(path s
 	return result, nil
 }
 
-func MarkDeletedFilesAndUnmarkExistingOnes(filesDB *model.Files, proj *model.Project, dir *model.ProjectDirectory,
+func MarkDeletedFilesAndUnmarkExistingOnes(filesDB *model.Files, proj *model.Project,
 	filter func(path string, isDir bool) bool) error {
 	rootDir := proj.RootDir + string(filepath.Separator)
 
 	for _, file := range filesDB.List() {
-		if !strings.HasPrefix(file.Path, rootDir) {
+		if file.ProjectID == nil || *file.ProjectID != proj.ID {
 			continue
 		}
-		if file.ProjectID != nil && *file.ProjectID != proj.ID {
-			continue
-		}
-
-		file.ProjectID = nil
-		file.ProjectDirectoryID = nil
 
 		exists, err := utils.FileExists(file.Path)
 		if err != nil {
 			return err
 		}
-		if !exists && filter(file.Path, false) {
-			file.ProjectID = &proj.ID
-			file.ProjectDirectoryID = &dir.ID
-			file.Exists = false
+
+		file.Exists = exists
+
+		if !strings.HasPrefix(file.Path, rootDir) {
+			file.ProjectID = nil
+			file.ProjectDirectoryID = nil
+
+		} else if !filter(file.Path, false) {
+			file.ProjectID = nil
+			file.ProjectDirectoryID = nil
 		}
 	}
 

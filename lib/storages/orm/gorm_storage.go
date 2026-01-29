@@ -404,7 +404,9 @@ func (s *gormStorage) QueryBlamePerAuthor() ([]*storages.BlamePerAuthor, error) 
 
 	err := s.db.Raw(`
 		select author_id, committer_id, repository_id, commit_id, file_id, type line_type, count(*) lines
-		from file_lines
+		from file_lines fl
+		where fl.file_id not in (select id from files where ignore = 1)
+		  and fl.commit_id not in (select id from repository_commits where ignore = 1)
 		group by author_id, committer_id, repository_id, commit_id, file_id, type
 	`).Scan(&result).Error
 	if err != nil {

@@ -34,7 +34,7 @@ func NewImporter(console consoles.Console, storage storages.Storage) *Importer {
 	}
 }
 
-func (i *Importer) Import(dirs []string, options *Options) error {
+func (i *Importer) Import(searchDirs []string, options *Options) error {
 	projsDB, err := i.storage.LoadProjects()
 	if err != nil {
 		return err
@@ -45,18 +45,51 @@ func (i *Importer) Import(dirs []string, options *Options) error {
 		return err
 	}
 
-	return common.FindAndImportFiles(i.console, "projects", dirs,
-		func(name string) bool {
+	allDirs := map[string]bool{}
+	for _, project := range projsDB.ListProjects(model.FilterExcludeExternal) {
+		for _, dir := range project.Dirs {
+			fullPath, err := utils.PathAbs(project.RootDir, dir.RelativePath)
+			if err != nil {
+				return err
+			}
+
+			allDirs[fullPath] = true
+		}
+	}
+
+	i.console.Printf("Finding csprojs...\n")
+
+	var queue []string
+	for _, searchDir := range searchDirs {
+		searchDir, err = utils.PathAbs(searchDir)
+		if err != nil {
+			return err
+		}
+
+		csprojs, err := utils.ListFilesRecursive(searchDir, func(name string) bool {
 			return strings.HasSuffix(strings.ToLower(name), ".csproj")
-		},
-		func(path string) error {
-			return i.process(projsDB, filesDB, path, options)
-		},
-	)
+		})
+		if err != nil {
+			return err
+		}
+
+		for _, csproj := range csprojs {
+			allDirs[filepath.Dir(csproj)] = true
+		}
+
+		queue = append(queue, csprojs...)
+	}
+
+	i.console.Printf("Importing csprojs...\n")
+
+	return common.ImportFiles(queue, func(csproj string) error {
+		return i.process(projsDB, filesDB, csproj, options, allDirs)
+	})
 }
 
-func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path string, opts *Options) error {
-	bytes, err := os.ReadFile(path)
+func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, csproj string, opts *Options,
+	allDirs map[string]bool) error {
+	bytes, err := os.ReadFile(csproj)
 	if err != nil {
 		return err
 	}
@@ -68,21 +101,23 @@ func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path s
 	}
 
 	if xmlProj.Sdk == "" && len(xmlProj.ItemGroups) == 0 {
-		i.console.Printf("Ignoring because it is an empty project: %v\n", path)
+		i.console.Printf("Ignoring because it is an empty project: %v\n", csproj)
 		return nil
 	}
 
-	proj := projsDB.GetOrCreate(i.getProjectName(path))
+	csprojDir := filepath.Dir(csproj)
+
+	proj := projsDB.GetOrCreate(i.getProjectName(csproj))
 	proj.Groups = opts.Groups
 	proj.Type = model.CodeType
-	proj.RootDir = filepath.Dir(path)
-	proj.ProjectFile = path
+	proj.RootDir = csprojDir
+	proj.ProjectFile = csproj
 	proj.Dependencies = make(map[string]*model.ProjectDependency)
 
 	dir := proj.GetDirectory(".")
 	dir.Type = model.SourceDir
 
-	projFile := filesDB.GetOrCreate(path)
+	projFile := filesDB.GetOrCreate(csproj)
 	projFile.ProjectID = &proj.ID
 	projFile.ProjectDirectoryID = &dir.ID
 
@@ -92,9 +127,9 @@ func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path s
 
 	excludes := set.New[string](10)
 
-	filter, err := common.CreateFileFilter(proj.RootDir, opts.RespectGitignore,
+	baseFilter, err := common.CreateFileFilter(proj.RootDir, opts.RespectGitignore,
 		func(path string) bool {
-			return strings.HasSuffix(path, ".csproj") || strings.HasSuffix(path, ".cs")
+			return true
 		},
 		func(path string, isDir bool) bool {
 			name := filepath.Base(path)
@@ -105,7 +140,18 @@ func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path s
 		return err
 	}
 
-	err = common.MarkDeletedFilesAndUnmarkExistingOnes(filesDB, proj, dir, filter)
+	filter := func(path string, isDir bool) bool {
+		if isDir {
+			if path == csprojDir {
+				return true
+			}
+			return !allDirs[path]
+		}
+
+		return baseFilter(path, isDir)
+	}
+
+	err = common.MarkDeletedFilesAndUnmarkExistingOnes(filesDB, proj, filter)
 	if err != nil {
 		return err
 	}

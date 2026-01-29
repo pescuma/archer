@@ -29,7 +29,8 @@ type Storage interface {
 	WriteRepositories() error
 	WriteRepository(repo *model.Repository) error
 	WriteCommit(repo *model.Repository, commit *model.RepositoryCommit) error
-	LoadRepositoryCommitDetails(repo *model.Repository, commit *model.RepositoryCommit) (*model.RepositoryCommitDetails, error)
+	LoadRepositoryCommitDetails(repo *model.Repository, commit *model.RepositoryCommit) (*model.RepositoryCommitDetails,
+		error)
 	WriteRepositoryCommitDetails(details []*model.RepositoryCommitDetails) error
 
 	LoadMonthlyStats() (*model.MonthlyStats, error)

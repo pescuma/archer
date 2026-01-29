@@ -109,7 +109,7 @@ func (i *Importer) process(projsDB *model.Projects, filesDB *model.Files, path s
 		return err
 	}
 
-	err = common.MarkDeletedFilesAndUnmarkExistingOnes(filesDB, proj, dir, filter)
+	err = common.MarkDeletedFilesAndUnmarkExistingOnes(filesDB, proj, filter)
 	if err != nil {
 		return err
 	}
