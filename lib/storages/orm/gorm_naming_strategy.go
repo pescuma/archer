@@ -37,3 +37,7 @@ func (n *NamingStrategy) CheckerName(table, column string) string {
 func (n *NamingStrategy) IndexName(table, column string) string {
 	return strings.ReplaceAll(n.inner.IndexName(table, column), "_sql_", "_")
 }
+
+func (n *NamingStrategy) UniqueName(table, column string) string {
+	return strings.ReplaceAll(n.inner.UniqueName(table, column), "_sql_", "_")
+}
