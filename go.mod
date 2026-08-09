@@ -14,7 +14,7 @@ require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-enry/go-enry/v2 v2.9.6
-	github.com/go-git/go-git/v5 v5.19.0
+	github.com/go-git/go-git/v5 v5.19.2
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/gobwas/glob v0.2.3
 	github.com/hashicorp/go-set/v2 v2.1.0
@@ -30,8 +30,8 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/teris-io/shortid v0.0.0-20220617161101-71ec9f2aa569
 	golang.org/x/exp v0.0.0-20260508232706-74f9aab9d74a
-	golang.org/x/mod v0.36.0
-	golang.org/x/text v0.37.0
+	golang.org/x/mod v0.37.0
+	golang.org/x/text v0.39.0
 	gorm.io/gorm v1.31.1
 	v.io/x/lib v0.1.21
 )
@@ -95,10 +95,10 @@ require (
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.6.0 // indirect
 	golang.org/x/arch v0.27.0 // indirect
-	golang.org/x/crypto v0.52.0 // indirect
-	golang.org/x/net v0.55.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
-	golang.org/x/term v0.43.0 // indirect
+	golang.org/x/crypto v0.53.0 // indirect
+	golang.org/x/net v0.56.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/term v0.44.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
