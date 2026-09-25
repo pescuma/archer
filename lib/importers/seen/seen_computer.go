@@ -6,6 +6,7 @@ import (
 	"github.com/pescuma/archer/lib/consoles"
 	"github.com/pescuma/archer/lib/model"
 	"github.com/pescuma/archer/lib/storages"
+	"github.com/pescuma/archer/lib/utils"
 )
 
 type Computer struct {
@@ -71,6 +72,19 @@ func (c *Computer) Compute() error {
 	}
 	for _, pa := range peopleDB.ListProductAreas() {
 		pa.SeenAt.Clear()
+	}
+
+	now := time.Now()
+	for _, file := range filesDB.List() {
+		exists, err := utils.FileExists(file.Path)
+		if err != nil {
+			return err
+		}
+
+		file.Exists = exists
+		if exists {
+			file.SeenAt.Add(now)
+		}
 	}
 
 	for _, repo := range reposDB.List() {
