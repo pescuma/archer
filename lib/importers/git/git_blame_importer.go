@@ -276,7 +276,7 @@ func (i *BlameImporter) listToCompute(filesDB *model.Files, repo *model.Reposito
 
 		return nil
 	})
-	if err != nil && err != i.abort {
+	if err != nil && !errors.Is(err, i.abort) {
 		return nil, err
 	}
 
@@ -418,13 +418,13 @@ func (i *BlameImporter) checkImportedHistory(repo *model.Repository, gitRepo *gi
 
 	err = commitsIter.ForEach(func(gitCommit *object.Commit) error {
 		repoCommit := repo.GetCommit(gitCommit.Hash.String())
-		if repoCommit == nil || repoCommit.FilesModified == -1 {
+		if repoCommit == nil {
 			return i.abort
 		}
 
 		return nil
 	})
-	if err != nil && err != i.abort {
+	if err != nil && !errors.Is(err, i.abort) {
 		return false, err
 	}
 
