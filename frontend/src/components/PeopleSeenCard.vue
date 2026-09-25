@@ -4,6 +4,7 @@ import moment from 'moment'
 import { onMounted, reactive, ref, watch } from 'vue'
 import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
 import { filters } from '@/utils/filters'
+import {tabler} from "@tabler/core";
 
 const card = ref(null)
 

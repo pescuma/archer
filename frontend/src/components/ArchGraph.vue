@@ -4,6 +4,7 @@ import cytoscape from 'cytoscape'
 import { nextTick, onMounted, ref, watch } from 'vue'
 import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
 import { filters } from '@/utils/filters'
+import {tabler} from "@tabler/core";
 
 let card = ref(null)
 let cy

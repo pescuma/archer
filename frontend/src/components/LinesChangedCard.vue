@@ -4,6 +4,7 @@ import moment from 'moment'
 import { onMounted, reactive, ref, watch } from 'vue'
 import { filters } from '@/utils/filters'
 import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
+import {tabler} from "@tabler/core";
 
 const props = defineProps({
   personId: Number,
