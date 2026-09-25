@@ -4,7 +4,7 @@ import cytoscape from 'cytoscape'
 import { nextTick, onMounted, ref, watch } from 'vue'
 import CardWithPlaceholder from '@/components/CardWithPlaceholder.vue'
 import { filters } from '@/utils/filters'
-import {tabler} from "@tabler/core";
+import { tabler } from '@tabler/core'
 
 let card = ref(null)
 let cy
@@ -45,7 +45,7 @@ function refresh() {
       els.push({ data: r })
     }
 
-    cy = cytoscape({
+    let options = {
       container: document.getElementById('cy'),
       elements: els,
       style: [
@@ -106,11 +106,17 @@ function refresh() {
           },
         },
       ],
-      layout: {
+      layout: {},
+    }
+
+    if (els.length < 100) {
+      options.layout = {
         name: 'dagre',
         nodeDimensionsIncludeLabels: true,
-      },
-    })
+      }
+    }
+
+    cy = cytoscape(options)
 
     cy.nodeHtmlLabel([
       {
