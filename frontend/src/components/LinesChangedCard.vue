@@ -57,7 +57,7 @@ function refresh() {
       if (!data.modified) data.modified = 0
       if (!data.added) data.added = 0
       if (!data.deleted) data.deleted = 0
-      sum += data.added + data.deleted + data.modified
+      sum += data.added + data.deleted
 
       modified.push(data.modified)
       added.push(data.added)
