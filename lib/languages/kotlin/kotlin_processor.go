@@ -3,7 +3,6 @@ package kotlin
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
@@ -114,6 +113,7 @@ type antlrErrorListener struct {
 	errors []string
 }
 
-func (d *antlrErrorListener) SyntaxError(_ antlr.Recognizer, _ interface{}, line, column int, msg string, _ antlr.RecognitionException) {
-	d.errors = append(d.errors, fmt.Sprintf("line "+strconv.Itoa(line)+":"+strconv.Itoa(column)+" "+msg))
+func (d *antlrErrorListener) SyntaxError(_ antlr.Recognizer, _ interface{}, line, column int, msg string,
+	_ antlr.RecognitionException) {
+	d.errors = append(d.errors, fmt.Sprintf("line %d:%d %s", line, column, msg))
 }
