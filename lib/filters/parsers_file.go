@@ -80,8 +80,9 @@ func ParseFileFilter(rule string) (FileFilter, error) {
 			return nil, fmt.Errorf("invalid file glob: %v", rule)
 		}
 
+		rule = strings.ToLower(rule)
 		return func(file *model.File) bool {
-			m, err := doublestar.PathMatch(rule, file.Path)
+			m, err := doublestar.PathMatch(rule, strings.ToLower(file.Path))
 			return err == nil && m
 		}, nil
 	}

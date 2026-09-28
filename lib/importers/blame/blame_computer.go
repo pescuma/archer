@@ -77,16 +77,19 @@ func (i *Computer) Compute() error {
 
 	for _, blame := range blames {
 		c := commits[blame.CommitID]
-		add(c.Blame, blame)
-
 		if c.Ignore {
 			continue
 		}
 
+		file := filesDB.GetByID(blame.FileID)
+		if file.Ignore {
+			continue
+		}
+
+		add(c.Blame, blame)
+
 		pa := peopleDB.GetPersonByID(blame.AuthorID)
 		add(pa.Blame, blame)
-
-		file := filesDB.GetByID(blame.FileID)
 
 		s := statsDB.GetOrCreateLines(c.Date.Format("2006-01"), blame.RepositoryID,
 			blame.AuthorID, blame.CommitterID, file.ProjectID)
